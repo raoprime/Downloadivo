@@ -1,0 +1,2073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Downloadivo — Universal Media Studio</title>
+  <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
+  <link rel="icon" type="image/png" href="/assets/icon_white.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #09090b;
+      --card-bg: rgba(18, 18, 22, 0.76);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-border-focus: rgba(255, 255, 255, 0.22);
+      --text: #f4f4f5;
+      --text-muted: #71717a;
+      --text-subtle: #a1a1aa;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --green: #10b981;
+      --red: #f43f5e;
+      --radius: 18px;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(ellipse 65% 45% at 50% -12%, rgba(59, 130, 246, 0.09), transparent 75%),
+        radial-gradient(ellipse 45% 30% at 50% 0%, rgba(255, 255, 255, 0.035), transparent 60%);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       TOP HEADER BAR
+    ════════════════════════════════════════════════════════════ */
+    .top-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(9, 9, 11, 0.75);
+      backdrop-filter: blur(16px);
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo-img {
+      height: 44px;
+      width: auto;
+      max-height: 48px;
+      object-fit: contain;
+      user-select: none;
+      display: block;
+      filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.45));
+    }
+
+    .header-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      color: var(--text-subtle);
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      font-family: inherit;
+    }
+
+    .header-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.16);
+      color: var(--text);
+    }
+
+    .kbd-shortcut {
+      font-size: 10px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       MAIN CONTAINER & HERO
+    ════════════════════════════════════════════════════════════ */
+    .main-container {
+      width: 100%;
+      max-width: 620px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 22px;
+      margin-top: 24px;
+    }
+
+    .hero-text {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .hero-logo-badge {
+      width: 92px;
+      height: 92px;
+      border-radius: 26px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02));
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      box-shadow: 
+        0 16px 36px -8px rgba(0, 0, 0, 0.6), 
+        0 0 40px rgba(255, 255, 255, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero-icon-img {
+      width: 58px;
+      height: 58px;
+      object-fit: contain;
+      user-select: none;
+      filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.4));
+    }
+
+    .hero-title {
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: -0.9px;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .hero-subtitle {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      letter-spacing: -0.1px;
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       CENTRAL UNIFIED CARD
+    ════════════════════════════════════════════════════════════ */
+    .download-card {
+      width: 100%;
+      background: var(--card-bg);
+      backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+        0 20px 48px -12px rgba(0, 0, 0, 0.65),
+        0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .download-card:focus-within {
+      border-color: var(--card-border-focus);
+      box-shadow: 
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+        0 24px 54px -10px rgba(0, 0, 0, 0.75),
+        0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 6px 8px 6px 12px;
+      transition: border-color 0.2s ease;
+    }
+
+    .input-row:focus-within {
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .platform-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-subtle);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .main-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 400;
+      min-width: 0;
+    }
+
+    .main-input::placeholder {
+      color: #52525b;
+    }
+
+    .clear-input-btn {
+      display: none;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease;
+    }
+
+    .clear-input-btn.show {
+      display: flex;
+    }
+
+    .clear-input-btn:hover {
+      color: var(--text);
+    }
+
+    .paste-badge-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--text-subtle);
+      padding: 6px 12px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .paste-badge-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+
+    /* Live Preview Bar */
+    .preview-strip {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 8px 12px;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .preview-strip.show {
+      display: flex;
+    }
+
+    .preview-thumb {
+      width: 52px;
+      height: 36px;
+      object-fit: cover;
+      border-radius: 6px;
+      background: #18181b;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      flex-shrink: 0;
+    }
+
+    .preview-meta {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .preview-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .preview-author {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    /* Format Chips (Hidden until link is entered) */
+    .options-section {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .options-section.show {
+      display: flex;
+    }
+
+    .options-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 0 2px;
+    }
+
+    .chips-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .opt-chip {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      color: var(--text-subtle);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .opt-chip:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+
+    .opt-chip.active {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.22);
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+    }
+
+    .opt-chip.chip-8k {
+      border-color: rgba(245, 158, 11, 0.35);
+      background: rgba(245, 158, 11, 0.06);
+      color: #fde68a;
+    }
+
+    .opt-chip.chip-8k:hover {
+      background: rgba(245, 158, 11, 0.14);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #fff;
+    }
+
+    .opt-chip.chip-8k.active {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: #f59e0b;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      color: #fff;
+    }
+
+    /* Card Footer & Action CTA */
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .detected-status {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .download-action-btn {
+      background: #fff;
+      color: #09090b;
+      border: none;
+      border-radius: 9px;
+      padding: 9px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+      font-family: inherit;
+    }
+
+    .download-action-btn:hover:not(:disabled) {
+      background: #e4e4e7;
+      transform: translateY(-1px);
+    }
+
+    .download-action-btn:active:not(:disabled) {
+      transform: scale(0.985);
+    }
+
+    .download-action-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       IN-CARD PROGRESS STATE
+    ════════════════════════════════════════════════════════════ */
+    .progress-box {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 14px 16px;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    .progress-box.show {
+      display: flex;
+    }
+
+    .progress-top-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .progress-title {
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 420px;
+    }
+
+    .progress-status-text {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      border-radius: 99px;
+      width: 0%;
+      transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .progress-meta-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .live-timer-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-subtle);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .done-sub-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 3px;
+    }
+
+    .done-time-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.14);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+      color: #34d399;
+      font-size: 11.5px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       POST-DOWNLOAD ACTION HUB
+    ════════════════════════════════════════════════════════════ */
+    .done-card {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+      background: rgba(16, 185, 129, 0.05);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      border-radius: 14px;
+      padding: 16px;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .done-card.show {
+      display: flex;
+    }
+
+    .done-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .done-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .done-icon-wrapper {
+      width: 32px;
+      height: 32px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--green);
+      flex-shrink: 0;
+    }
+
+    .done-text-group {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .done-filename {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 420px;
+    }
+
+    .done-subtext {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+
+    .done-actions-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-action-primary {
+      flex: 1;
+      background: #fff;
+      color: #09090b;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .btn-action-primary:hover {
+      background: #e4e4e7;
+    }
+
+    .btn-action-secondary {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .btn-action-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    a.btn-action-primary, a.btn-item-sm {
+      text-decoration: none;
+    }
+
+    .btn-item-save {
+      background: rgba(255, 255, 255, 0.16) !important;
+      color: #fff !important;
+      border-color: rgba(255, 255, 255, 0.28) !important;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .btn-item-save:hover {
+      background: #fff !important;
+      color: #09090b !important;
+    }
+
+    body.is-remote-client .local-only {
+      display: none !important;
+    }
+
+    .btn-reset {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      padding: 4px 8px;
+      transition: color 0.15s ease;
+      font-family: inherit;
+      align-self: center;
+    }
+
+    .btn-reset:hover {
+      color: var(--text);
+    }
+
+    /* ════════════════════════════════════════════════════════════
+       BATCH MODE & QUEUE STYLES
+    ════════════════════════════════════════════════════════════ */
+    .batch-pill-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-subtle);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 5px 9px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      user-select: none;
+      font-family: inherit;
+    }
+
+    .batch-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .batch-pill-btn.active {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: rgba(59, 130, 246, 0.4);
+      color: #60a5fa;
+    }
+
+    .batch-input-row {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--input-border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      transition: border-color 0.2s ease;
+    }
+
+    .batch-input-row.show {
+      display: flex;
+    }
+
+    .batch-input-row:focus-within {
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    .batch-textarea-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    .batch-header-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-subtle);
+      font-weight: 500;
+    }
+
+    .batch-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 11px;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: color 0.15s ease;
+      font-family: inherit;
+    }
+
+    .batch-close-btn:hover {
+      color: #fff;
+    }
+
+    .batch-textarea {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+      resize: vertical;
+      min-height: 76px;
+      max-height: 220px;
+    }
+
+    .batch-textarea::placeholder {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .batch-textarea-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .batch-counter {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Batch Card Queue Container */
+    .batch-card {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+      background: rgba(16, 185, 129, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px;
+      animation: fadeIn 0.25s ease-out;
+    }
+
+    .batch-card.show {
+      display: flex;
+    }
+
+    .batch-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .batch-card-title-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .batch-live-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+      animation: pulseIndicator 1.8s infinite;
+    }
+
+    @keyframes pulseIndicator {
+      0% { opacity: 0.5; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.1); }
+      100% { opacity: 0.5; transform: scale(0.9); }
+    }
+
+    .batch-main-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .batch-count-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-subtle);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .batch-overall-progress-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .batch-overall-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #34d399);
+      border-radius: 99px;
+      transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .batch-items-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 280px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+
+    .batch-items-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .batch-items-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+
+    .batch-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      padding: 10px 12px;
+      transition: background 0.15s ease;
+    }
+
+    .batch-item-row:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .batch-item-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .batch-item-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-subtle);
+      flex-shrink: 0;
+    }
+
+    .batch-item-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .batch-item-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 240px;
+    }
+
+    .batch-item-sub {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .batch-item-right {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-shrink: 0;
+    }
+
+    .batch-item-status-badge {
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .badge-queued {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .badge-downloading {
+      background: rgba(59, 130, 246, 0.12);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.25);
+    }
+
+    .badge-processing {
+      background: rgba(168, 85, 247, 0.12);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.25);
+    }
+
+    .badge-done {
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .badge-error {
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .btn-item-sm {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+
+    .btn-item-sm:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .batch-card-footer {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header Bar -->
+  <header class="top-header">
+    <div class="brand">
+      <img src="/assets/logo_white.png" alt="Downloadivo" class="brand-logo-img" />
+    </div>
+
+    <button class="header-btn" onclick="openFolder()" title="Open Downloads Directory">
+      <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span>Downloads Folder</span>
+      <span class="kbd-shortcut">Ctrl+O</span>
+    </button>
+  </header>
+
+  <!-- Main Hero & Center Container -->
+  <main class="main-container">
+    <div class="hero-text">
+      <div class="hero-logo-badge">
+        <img src="/assets/icon_white.png" alt="Downloadivo" class="hero-icon-img" />
+      </div>
+      <h1 class="hero-title">Downloadivo</h1>
+      <p class="hero-subtitle">Download high-fidelity 8K / 4K video, audio, and covers from any source</p>
+    </div>
+
+    <!-- Central Command Card -->
+    <div class="download-card">
+      <!-- Input Switcher Container -->
+      <div id="input-container">
+        <!-- Single Link Input -->
+        <div class="input-row" id="single-input-row">
+          <div class="platform-badge" id="platform-badge">
+            <span id="badge-icon-svg">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+            </span>
+            <span id="badge-text">Link</span>
+          </div>
+          <input
+            type="text"
+            id="url-input"
+            class="main-input"
+            placeholder="Paste YouTube, Instagram, Spotify, or any media link..."
+            autocomplete="off"
+            autofocus
+          />
+          <button class="clear-input-btn" id="clear-btn" onclick="clearInput()" title="Clear">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+          <button class="batch-pill-btn" id="batch-toggle-btn" onclick="toggleBatchMode()" title="Switch to Multi-Link Batch Mode">+ Batch</button>
+          <button class="paste-badge-btn" onclick="pasteLink()">Paste</button>
+        </div>
+
+        <!-- Multi-Link Batch Textarea Input -->
+        <div class="batch-input-row" id="batch-input-row">
+          <div class="batch-textarea-header">
+            <div class="batch-header-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+              <span>Batch Mode · Download Multiple Videos</span>
+            </div>
+            <button class="batch-close-btn" onclick="toggleBatchMode(false)" title="Return to Single Mode">✕ Single Link</button>
+          </div>
+          <textarea
+            id="batch-url-input"
+            class="batch-textarea"
+            rows="3"
+            placeholder="Paste multiple video/audio links (one per line) — YouTube, Instagram, Spotify, TikTok, Twitter/X..."
+          ></textarea>
+          <div class="batch-textarea-footer">
+            <span class="batch-counter" id="batch-counter">0 links detected</span>
+            <button class="paste-badge-btn" onclick="pasteBatchLinks()">Paste Links</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Metadata Strip (Reveals only after fetching URL details) -->
+      <div class="preview-strip" id="preview-strip">
+        <img class="preview-thumb" id="prev-img" src="" alt="" />
+        <div class="preview-meta">
+          <span class="preview-title" id="prev-title">Fetching metadata...</span>
+          <span class="preview-author" id="prev-author"></span>
+        </div>
+      </div>
+
+      <!-- Dynamic Format Selector (REVEALS ONLY AFTER LINK IS ENTERED!) -->
+      <div class="options-section" id="options-section">
+        <div class="options-label" id="options-label">Format / Quality</div>
+        <div class="chips-grid" id="chips-grid"></div>
+      </div>
+
+      <!-- Footer Action Bar -->
+      <div class="card-footer">
+        <div class="detected-status" id="detected-status">
+          <span>Paste any media link above</span>
+        </div>
+
+        <button class="download-action-btn" id="start-btn" onclick="triggerDownload()" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          </svg>
+          <span id="btn-text">Download</span>
+        </button>
+      </div>
+
+      <!-- Live Download Progress (Single) -->
+      <div class="progress-box" id="progress-box">
+        <div class="progress-top-line">
+          <span class="progress-title" id="progress-title">Connecting...</span>
+          <span class="progress-status-text" id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-meta">
+          <span id="progress-speed">Starting download stream...</span>
+          <div class="progress-meta-right">
+            <span class="live-timer-pill" id="live-timer-pill" title="Elapsed Time">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span id="progress-timer">0.0s</span>
+            </span>
+            <span id="progress-eta"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Post-Download Action Hub (Single) -->
+      <div class="done-card" id="done-card">
+        <div class="done-header">
+          <div class="done-meta">
+            <div class="done-icon-wrapper">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <div class="done-text-group">
+              <span class="done-filename" id="done-filename">media.mp4</span>
+              <div class="done-sub-row">
+                <span class="done-subtext" id="done-size-text">Saved to Downloadivo</span>
+                <span class="done-time-badge" id="done-time-badge">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  <span id="done-time-text">0.0s</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="done-actions-row">
+          <a class="btn-action-primary" id="btn-save-device" href="#" download>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>Save to Device</span>
+          </a>
+          <button class="btn-action-secondary local-only" onclick="openFinishedFile()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            <span>Open</span>
+          </button>
+          <button class="btn-action-secondary local-only" onclick="openFinishedFolder()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Folder</span>
+          </button>
+        </div>
+        <button class="btn-reset" onclick="resetForNewDownload()">Download another file</button>
+      </div>
+
+      <!-- Multi-Item Batch Queue Hub -->
+      <div class="batch-card" id="batch-card">
+        <div class="batch-card-header">
+          <div class="batch-card-title-group">
+            <div class="batch-live-indicator" id="batch-indicator"></div>
+            <span class="batch-main-title" id="batch-main-title">Batch Queue</span>
+            <span class="batch-count-pill" id="batch-count-pill">0 / 0</span>
+          </div>
+          <div class="batch-header-right">
+            <span class="live-timer-pill" id="batch-timer-pill">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span id="batch-timer">0.0s</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="batch-overall-progress-bar">
+          <div class="batch-overall-progress-fill" id="batch-overall-fill" style="width: 0%;"></div>
+        </div>
+
+        <!-- Scrollable queue item rows -->
+        <div class="batch-items-list" id="batch-items-list"></div>
+
+        <!-- Batch Action Footer -->
+        <div class="batch-card-footer" id="batch-card-footer" style="display: none;">
+          <div class="done-actions-row local-only">
+            <button class="btn-action-primary" onclick="openFolder()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Open Downloads Folder</span>
+            </button>
+          </div>
+          <button class="btn-reset" onclick="resetForNewDownload()">Start another batch</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let selectedFormat = 'best';
+    let currentDetectedType = 'generic';
+    let isBatchMode = false;
+    let pollInterval = null;
+    let batchPollInterval = null;
+    let lastFinishedFilename = '';
+    let lastFinishedTaskId = '';
+    let previewDebounce = null;
+    let downloadStartTs = 0;
+    let batchStartTs = 0;
+    let timerTickInterval = null;
+    let batchTimerTickInterval = null;
+    let activeBatchTasks = [];
+
+    function startLiveStopwatch() {
+      downloadStartTs = performance.now();
+      if (timerTickInterval) clearInterval(timerTickInterval);
+      const timerElem = document.getElementById('progress-timer');
+      if (timerElem) timerElem.textContent = '0.0s';
+      timerTickInterval = setInterval(() => {
+        const elapsed = (performance.now() - downloadStartTs) / 1000;
+        if (timerElem) {
+          timerElem.textContent = elapsed < 60 ? `${elapsed.toFixed(1)}s` : `${Math.floor(elapsed / 60)}m ${Math.floor(elapsed % 60)}s`;
+        }
+      }, 100);
+    }
+
+    function stopLiveStopwatch() {
+      if (timerTickInterval) {
+        clearInterval(timerTickInterval);
+        timerTickInterval = null;
+      }
+    }
+
+    function startBatchStopwatch() {
+      batchStartTs = performance.now();
+      if (batchTimerTickInterval) clearInterval(batchTimerTickInterval);
+      const timerElem = document.getElementById('batch-timer');
+      if (timerElem) timerElem.textContent = '0.0s';
+      batchTimerTickInterval = setInterval(() => {
+        const elapsed = (performance.now() - batchStartTs) / 1000;
+        if (timerElem) {
+          timerElem.textContent = elapsed < 60 ? `${elapsed.toFixed(1)}s` : `${Math.floor(elapsed / 60)}m ${Math.floor(elapsed % 60)}s`;
+        }
+      }, 100);
+    }
+
+    function stopBatchStopwatch() {
+      if (batchTimerTickInterval) {
+        clearInterval(batchTimerTickInterval);
+        batchTimerTickInterval = null;
+      }
+    }
+
+    const urlInput = document.getElementById('url-input');
+    const batchUrlInput = document.getElementById('batch-url-input');
+    const singleInputRow = document.getElementById('single-input-row');
+    const batchInputRow = document.getElementById('batch-input-row');
+    const batchToggleBtn = document.getElementById('batch-toggle-btn');
+    const batchCounter = document.getElementById('batch-counter');
+    const clearBtn = document.getElementById('clear-btn');
+    const startBtn = document.getElementById('start-btn');
+    const btnText = document.getElementById('btn-text');
+    const progressBox = document.getElementById('progress-box');
+    const doneCard = document.getElementById('done-card');
+    const batchCard = document.getElementById('batch-card');
+    const batchItemsList = document.getElementById('batch-items-list');
+    const batchCardFooter = document.getElementById('batch-card-footer');
+    const batchCountPill = document.getElementById('batch-count-pill');
+    const batchOverallFill = document.getElementById('batch-overall-fill');
+    const optionsSection = document.getElementById('options-section');
+    const chipsGrid = document.getElementById('chips-grid');
+    const badgeText = document.getElementById('badge-text');
+    const badgeIconSvg = document.getElementById('badge-icon-svg');
+    const detectedStatus = document.getElementById('detected-status');
+    const previewStrip = document.getElementById('preview-strip');
+
+    // Vector Icon Mappings (Clean monochrome SVGs)
+    const SVG_ICONS = {
+      globe: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`,
+      youtube: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>`,
+      instagram: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>`,
+      spotify: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 11.5c2.5-1 5.5-.5 8 1"/><path d="M9 14.5c2-.5 4.5 0 6.5 1"/><path d="M7 8.5c3.5-1.5 7.5-.8 11 1.2"/></svg>`,
+      twitter: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l11.733 16h4.267l-11.733 -16z"/><path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772"/></svg>`,
+      music: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`,
+      video: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`
+    };
+
+    function extractUrls(text) {
+      if (!text) return [];
+      const matches = text.match(/https?:\/\/[^\s,;"'<>]+/g) || [];
+      const cleaned = [];
+      for (let u of matches) {
+        u = u.replace(/[.,;)>\]"']+$/, '');
+        if (u && !cleaned.includes(u)) cleaned.push(u);
+      }
+      return cleaned;
+    }
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        openFolder();
+      }
+      if (e.key === 'Escape') {
+        if (doneCard.classList.contains('show') || batchCard.classList.contains('show')) {
+          resetForNewDownload();
+        }
+      }
+    });
+
+    urlInput.addEventListener('input', () => handleUrlChange());
+    urlInput.addEventListener('paste', () => setTimeout(handleUrlChange, 10));
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') triggerDownload();
+    });
+
+    batchUrlInput.addEventListener('input', () => handleBatchChange());
+    batchUrlInput.addEventListener('paste', () => setTimeout(handleBatchChange, 10));
+
+    function toggleBatchMode(forceState) {
+      isBatchMode = (forceState !== undefined) ? forceState : !isBatchMode;
+      if (isBatchMode) {
+        singleInputRow.style.display = 'none';
+        batchInputRow.classList.add('show');
+        batchToggleBtn.classList.add('active');
+        const curSingle = urlInput.value.trim();
+        if (curSingle && !batchUrlInput.value.includes(curSingle)) {
+          batchUrlInput.value = curSingle + (batchUrlInput.value ? '\n' + batchUrlInput.value : '');
+        }
+        batchUrlInput.focus();
+        handleBatchChange();
+      } else {
+        batchInputRow.classList.remove('show');
+        singleInputRow.style.display = 'flex';
+        batchToggleBtn.classList.remove('active');
+        const urls = extractUrls(batchUrlInput.value);
+        if (urls.length === 1) {
+          urlInput.value = urls[0];
+        }
+        handleUrlChange();
+        urlInput.focus();
+      }
+    }
+
+    function handleBatchChange() {
+      const urls = extractUrls(batchUrlInput.value);
+      const count = urls.length;
+      batchCounter.textContent = `${count} valid link${count === 1 ? '' : 's'} detected`;
+
+      if (count === 0) {
+        optionsSection.classList.remove('show');
+        previewStrip.classList.remove('show');
+        startBtn.disabled = true;
+        btnText.textContent = 'Download Batch';
+        detectedStatus.textContent = 'Paste multiple media links above';
+        return;
+      }
+
+      startBtn.disabled = false;
+      btnText.textContent = `Download All (${count} Items)`;
+      badgeText.textContent = `Batch (${count})`;
+      badgeIconSvg.innerHTML = SVG_ICONS.globe;
+      detectedStatus.innerHTML = `<span style="color: #60a5fa; font-weight: 500;">✦ Batch Mode: ${count} media link${count === 1 ? '' : 's'} queued</span>`;
+
+      // Render universal quality choices for the batch
+      optionsSection.classList.add('show');
+      const chips = [
+        { fmt: 'best', label: 'Best Quality (Auto / Max 8K)', active: true },
+        { fmt: '1080p', label: '1080p Full HD' },
+        { fmt: '720p', label: '720p HD' },
+        { fmt: 'mp3', label: 'MP3 Audio (320k)' },
+      ];
+      chipsGrid.innerHTML = chips.map(c => `
+        <button class="opt-chip ${c.fmt === selectedFormat ? 'active' : ''}" onclick="selectFormatChip(this, '${c.fmt}')">${c.label}</button>
+      `).join('');
+    }
+
+    function handleUrlChange() {
+      const text = urlInput.value.trim();
+      clearTimeout(previewDebounce);
+
+      if (text) {
+        clearBtn.classList.add('show');
+      } else {
+        clearBtn.classList.remove('show');
+      }
+
+      // AUTO-DETECT BATCH: If multiple URLs were pasted into single input
+      const detectedUrls = extractUrls(text);
+      if (detectedUrls.length > 1) {
+        toggleBatchMode(true);
+        batchUrlInput.value = detectedUrls.join('\n');
+        handleBatchChange();
+        return;
+      }
+
+      // If no link entered: HIDE options & reset to standby
+      if (!text) {
+        optionsSection.classList.remove('show');
+        previewStrip.classList.remove('show');
+        badgeIconSvg.innerHTML = SVG_ICONS.globe;
+        badgeText.textContent = 'Link';
+        detectedStatus.textContent = 'Paste any media link above';
+        startBtn.disabled = true;
+        btnText.textContent = 'Download';
+        selectedFormat = 'best';
+        chipsGrid.innerHTML = '';
+        return;
+      }
+
+      // Valid URL entered: enable download button & show tailored options
+      startBtn.disabled = false;
+      const media = detectMediaType(text);
+      setMediaCategory(media.type, media.label, media.iconKey);
+      optionsSection.classList.add('show');
+
+      // Fetch background metadata preview
+      previewDebounce = setTimeout(() => {
+        fetchMetadataPreview(text);
+      }, 300);
+    }
+
+    function clearInput() {
+      urlInput.value = '';
+      batchUrlInput.value = '';
+      if (isBatchMode) {
+        handleBatchChange();
+        batchUrlInput.focus();
+      } else {
+        handleUrlChange();
+        urlInput.focus();
+      }
+    }
+
+    function detectMediaType(url) {
+      const u = url.trim().toLowerCase();
+      // YouTube Community Post
+      if (u.includes('youtube.com/post/') || u.includes('community?lb=')) {
+        return { type: 'yt_post', label: 'YouTube Post', iconKey: 'youtube' };
+      }
+      // YouTube Channel Branding
+      if ((u.includes('youtube.com/@') || u.includes('youtube.com/channel/')) && !u.includes('/watch') && !u.includes('/shorts')) {
+        return { type: 'yt_channel', label: 'YouTube Channel Art', iconKey: 'youtube' };
+      }
+      if (u.includes('/shorts/')) return { type: 'yt_shorts', label: 'YouTube Shorts', iconKey: 'youtube' };
+      if (u.includes('youtube.com') || u.includes('youtu.be')) return { type: 'yt_video', label: 'YouTube Video', iconKey: 'youtube' };
+      
+      // Instagram Reels vs Posts vs Profile DP
+      if (u.includes('instagram.com/reel')) return { type: 'ig_reel', label: 'Instagram Reel', iconKey: 'instagram' };
+      if (u.includes('instagram.com/p/') || u.includes('instagram.com/tv/')) return { type: 'ig_post', label: 'Instagram Media', iconKey: 'instagram' };
+      if (u.includes('instagram.com/') || u.startsWith('@')) {
+        const m = u.match(/(?:instagram\.com\/)?@?([a-z0-9_\.]+)/);
+        if (m && !['explore', 'reels', 'direct', 'stories', 'accounts'].includes(m[1])) {
+          return { type: 'ig_profile', label: 'Instagram DP', iconKey: 'instagram' };
+        }
+      }
+
+      // Twitter / X Profile DP vs Tweet
+      if ((u.includes('twitter.com') || u.includes('x.com')) && !u.includes('/status/')) {
+        return { type: 'twitter_profile', label: 'Twitter / X DP', iconKey: 'twitter' };
+      }
+      if (u.includes('twitter.com') || u.includes('x.com')) return { type: 'twitter', label: 'X / Twitter', iconKey: 'twitter' };
+
+      if (u.includes('spotify.com')) return { type: 'spotify', label: 'Spotify Track', iconKey: 'spotify' };
+      if (u.includes('tiktok.com')) return { type: 'tiktok', label: 'TikTok Video', iconKey: 'video' };
+      if (/\.(mp3|wav|m4a|flac|aac)($|\?)/.test(u)) return { type: 'direct_audio', label: 'Audio File', iconKey: 'music' };
+      if (/\.(mp4|mkv|webm|mov)($|\?)/.test(u)) return { type: 'direct_video', label: 'Video File', iconKey: 'video' };
+      return { type: 'generic', label: 'Web Media', iconKey: 'globe' };
+    }
+
+    function setMediaCategory(type, label = 'Web Media', iconKey = 'globe') {
+      currentDetectedType = type;
+      badgeIconSvg.innerHTML = SVG_ICONS[iconKey] || SVG_ICONS.globe;
+      badgeText.textContent = label;
+      detectedStatus.textContent = `Detected ${label} · Ready`;
+
+      let chips = [];
+      if (type === 'yt_video') {
+        chips = [
+          { fmt: 'best', label: 'Best Quality (Auto / Max 8K)', active: true },
+          { fmt: '8k', label: '8K Ultra HD (4320p)', is8k: true },
+          { fmt: '4k', label: '4K Ultra HD (2160p)' },
+          { fmt: '1080p', label: '1080p Full HD' },
+          { fmt: '720p', label: '720p HD' },
+          { fmt: '480p', label: '480p SD' },
+          { fmt: 'mp3', label: 'MP3 Audio (320k)' },
+          { fmt: 'thumbnail', label: 'Cover Art' },
+        ];
+      } else if (type === 'yt_shorts' || type === 'ig_reel') {
+        chips = [
+          { fmt: 'best', label: 'Original Video (HD)', active: true },
+          { fmt: 'mp3', label: 'Audio Only (MP3)' },
+          { fmt: 'thumbnail', label: 'Cover Image' },
+        ];
+      } else if (type === 'ig_post') {
+        chips = [
+          { fmt: 'best', label: 'Original HD (Photos / Carousel + ZIP)', active: true },
+          { fmt: 'mp3', label: 'Audio (MP3 320k)' },
+          { fmt: 'thumbnail', label: 'Cover Photo' },
+        ];
+      } else if (type === 'yt_post') {
+        chips = [
+          { fmt: 'best', label: 'Original HD Images (+ ZIP)', active: true },
+          { fmt: 'thumbnail', label: 'Cover Image' },
+        ];
+      } else if (type === 'yt_channel') {
+        chips = [
+          { fmt: 'avatar', label: 'Channel Avatar (DP HD)', active: true },
+          { fmt: 'banner', label: 'Channel Banner (2560x1440 HD)' },
+          { fmt: 'best', label: 'Both (Avatar + Banner ZIP)' },
+        ];
+      } else if (type === 'ig_profile' || type === 'twitter_profile') {
+        chips = [
+          { fmt: 'best', label: 'Original HD (Profile Picture DP)', active: true },
+        ];
+      } else if (type === 'spotify') {
+        chips = [
+          { fmt: 'mp3', label: 'Full Song (MP3 320k)', active: true },
+          { fmt: 'thumbnail', label: 'Album Artwork' },
+        ];
+      } else if (type === 'direct_audio') {
+        chips = [
+          { fmt: 'mp3', label: 'Audio (MP3)', active: true },
+        ];
+      } else {
+        chips = [
+          { fmt: 'best', label: 'Full Quality Video', active: true },
+          { fmt: 'mp3', label: 'Audio (MP3)' },
+        ];
+      }
+
+      // Check if current format is valid for new chips, else default to primary active
+      const hasFmt = chips.some(c => c.fmt === selectedFormat);
+      if (!hasFmt) {
+        selectedFormat = chips.find(c => c.active)?.fmt || 'best';
+      }
+
+      chipsGrid.innerHTML = chips.map(c => `
+        <button class="opt-chip ${c.is8k ? 'chip-8k' : ''} ${c.fmt === selectedFormat ? 'active' : ''}" onclick="selectFormatChip(this, '${c.fmt}')">${c.label}</button>
+      `).join('');
+
+      updateButtonLabel();
+    }
+
+    function selectFormatChip(btn, fmt) {
+      document.querySelectorAll('.opt-chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedFormat = fmt;
+      updateButtonLabel();
+    }
+
+    function updateButtonLabel() {
+      if (isBatchMode) {
+        const count = extractUrls(batchUrlInput.value).length;
+        btnText.textContent = `Download All (${count} Items)`;
+        return;
+      }
+
+      if (selectedFormat === 'avatar') {
+        btnText.textContent = 'Download Channel Avatar (HD)';
+      } else if (selectedFormat === 'banner') {
+        btnText.textContent = 'Download Channel Banner (2560x1440)';
+      } else if (selectedFormat === 'mp3') {
+        btnText.textContent = 'Download Audio (320k)';
+      } else if (selectedFormat === 'thumbnail') {
+        btnText.textContent = 'Download Cover';
+      } else if (selectedFormat === '8k') {
+        btnText.textContent = 'Download 8K Ultra HD';
+      } else if (selectedFormat === '4k') {
+        btnText.textContent = 'Download 4K Ultra HD';
+      } else if (selectedFormat === '1080p') {
+        btnText.textContent = 'Download 1080p FHD';
+      } else if (selectedFormat === '720p') {
+        btnText.textContent = 'Download 720p HD';
+      } else if (selectedFormat === '480p') {
+        btnText.textContent = 'Download 480p SD';
+      } else if (currentDetectedType === 'yt_post') {
+        btnText.textContent = 'Download Community Post HD';
+      } else if (currentDetectedType === 'ig_profile') {
+        btnText.textContent = 'Download Instagram HD DP';
+      } else if (currentDetectedType === 'twitter_profile') {
+        btnText.textContent = 'Download Twitter / X HD DP';
+      } else if (currentDetectedType === 'yt_channel') {
+        btnText.textContent = 'Download Channel Branding ZIP';
+      } else if (currentDetectedType === 'ig_post') {
+        btnText.textContent = 'Download Instagram HD';
+      } else {
+        btnText.textContent = currentDetectedType === 'spotify' ? 'Download MP3' : 'Download Video (Max 8K)';
+      }
+    }
+
+    async function fetchMetadataPreview(url) {
+      try {
+        const res = await fetch('/info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.title) {
+          document.getElementById('prev-title').textContent = data.title;
+          let extra = '';
+          if (data.is_8k) {
+            extra = ' · 8K Ultra HD Available';
+            detectedStatus.innerHTML = '<span style="color: #f59e0b; font-weight: 500;">✦ 8K Ultra HD Available · Ready</span>';
+          } else if (data.is_4k) {
+            extra = ' · 4K UHD';
+          } else if (data.is_carousel) {
+            extra = ` · ${data.item_count} Items in Carousel`;
+            detectedStatus.innerHTML = `<span style="color: #38bdf8; font-weight: 500;">✦ Instagram Carousel (${data.item_count} Items + ZIP Bundle) · Ready</span>`;
+          } else if (data.is_post) {
+            detectedStatus.innerHTML = `<span style="color: #ef4444; font-weight: 500;">✦ YouTube Community Post · HD Image Extracted</span>`;
+          } else if (data.is_profile) {
+            detectedStatus.innerHTML = `<span style="color: #ec4899; font-weight: 500;">✦ High-Resolution Profile DP Verified · Ready</span>`;
+          } else if (data.is_channel) {
+            detectedStatus.innerHTML = `<span style="color: #f59e0b; font-weight: 500;">✦ YouTube Channel Art & Avatar Ready</span>`;
+          }
+          document.getElementById('prev-author').textContent = `${data.uploader || ''} ${data.duration ? '· ' + data.duration : ''}${extra}`;
+          if (data.thumbnail) {
+            document.getElementById('prev-img').src = data.thumbnail;
+            document.getElementById('prev-img').style.display = 'block';
+          } else {
+            document.getElementById('prev-img').style.display = 'none';
+          }
+          previewStrip.classList.add('show');
+        }
+      } catch (_) {}
+    }
+
+    async function pasteLink() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          urlInput.value = text;
+          handleUrlChange();
+        }
+      } catch (_) {
+        urlInput.focus();
+      }
+    }
+
+    async function pasteBatchLinks() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          batchUrlInput.value = (batchUrlInput.value ? batchUrlInput.value + '\n' : '') + text;
+          handleBatchChange();
+        }
+      } catch (_) {
+        batchUrlInput.focus();
+      }
+    }
+
+    function showError(msg) {
+      progressBox.classList.remove('show');
+      detectedStatus.innerHTML = `<span style="color: var(--red);">⚠️ ${msg}</span>`;
+      setTimeout(() => {
+        detectedStatus.textContent = 'Ready to download';
+      }, 5000);
+    }
+
+    // Unified download trigger: Single or Batch
+    async function triggerDownload() {
+      if (isBatchMode) {
+        const urls = extractUrls(batchUrlInput.value);
+        if (urls.length === 0) {
+          batchUrlInput.focus();
+          return;
+        }
+        startBatchDownload(urls);
+        return;
+      }
+
+      // Single input check
+      const text = urlInput.value.trim();
+      const urls = extractUrls(text);
+      if (urls.length > 1) {
+        startBatchDownload(urls);
+        return;
+      }
+      if (!text || !text.startsWith('http')) {
+        urlInput.focus();
+        return;
+      }
+
+      // Single item download
+      startBtn.disabled = true;
+      btnText.textContent = 'Starting...';
+      doneCard.classList.remove('show');
+      batchCard.classList.remove('show');
+      progressBox.classList.add('show');
+      startLiveStopwatch();
+      updateProgress(0, 'Connecting to source...', '');
+
+      try {
+        const res = await fetch('/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: text, format: selectedFormat })
+        });
+        const data = await res.json();
+        if (data.is_batch && data.tasks) {
+          progressBox.classList.remove('show');
+          stopLiveStopwatch();
+          renderAndPollBatch(data.tasks);
+        } else {
+          pollTask(data.task_id);
+        }
+      } catch (err) {
+        stopLiveStopwatch();
+        showError(err.message);
+        resetButton();
+      }
+    }
+
+    function pollTask(taskId) {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(async () => {
+        try {
+          const res = await fetch(`/status/${taskId}`);
+          if (!res.ok) return;
+          const data = await res.json();
+
+          if (data.status === 'downloading') {
+            document.getElementById('progress-title').textContent = data.filename || 'Downloading stream...';
+            updateProgress(
+              data.progress,
+              `${data.speed || ''} · ${data.downloaded_str || ''} of ${data.total_str || ''}`,
+              data.eta ? `ETA: ${data.eta}` : ''
+            );
+          } else if (data.status === 'processing') {
+            document.getElementById('progress-title').textContent = data.is_audio ? 'Converting audio stream...' : 'Merging high-fidelity media...';
+            updateProgress(98, 'Finishing up...', '');
+          } else if (data.status === 'done') {
+            clearInterval(pollInterval);
+            stopLiveStopwatch();
+            progressBox.classList.remove('show');
+            lastFinishedFilename = data.filename;
+            lastFinishedTaskId = taskId;
+
+            const finalDuration = data.elapsed_str || `${((performance.now() - downloadStartTs) / 1000).toFixed(1)}s`;
+            document.getElementById('done-filename').textContent = data.filename;
+            document.getElementById('done-size-text').textContent = `${data.size_str || 'File ready'} · Saved to Downloadivo`;
+            document.getElementById('done-time-text').textContent = `Downloaded in ${finalDuration}`;
+            const saveBtn = document.getElementById('btn-save-device');
+            if (saveBtn) {
+              saveBtn.href = `/file/${taskId}`;
+              saveBtn.setAttribute('download', data.filename || 'media.mp4');
+            }
+            doneCard.classList.add('show');
+
+            resetButton();
+          } else if (data.status === 'error') {
+            clearInterval(pollInterval);
+            stopLiveStopwatch();
+            progressBox.classList.remove('show');
+            showError(data.error);
+            resetButton();
+          }
+        } catch (_) {}
+      }, 350);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // BATCH QUEUE LOGIC
+    // ══════════════════════════════════════════════════════════════
+    async function startBatchDownload(urls) {
+      startBtn.disabled = true;
+      btnText.textContent = `Downloading Batch (${urls.length})...`;
+      progressBox.classList.remove('show');
+      doneCard.classList.remove('show');
+      batchCard.classList.add('show');
+      batchCardFooter.style.display = 'none';
+
+      startBatchStopwatch();
+
+      try {
+        const res = await fetch('/download-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: urls, format: selectedFormat })
+        });
+        const data = await res.json();
+        renderAndPollBatch(data.tasks);
+      } catch (err) {
+        stopBatchStopwatch();
+        showError(err.message);
+        resetButton();
+      }
+    }
+
+    function renderAndPollBatch(tasks) {
+      activeBatchTasks = tasks;
+      batchCountPill.textContent = `0 / ${tasks.length} Done`;
+      batchOverallFill.style.width = '0%';
+
+      // Render initial queue rows
+      batchItemsList.innerHTML = tasks.map((t, idx) => {
+        const media = detectMediaType(t.url);
+        const iconSvg = SVG_ICONS[media.iconKey] || SVG_ICONS.globe;
+        return `
+          <div class="batch-item-row" id="row-${t.task_id}">
+            <div class="batch-item-left">
+              <div class="batch-item-icon">${iconSvg}</div>
+              <div class="batch-item-info">
+                <span class="batch-item-title" id="title-${t.task_id}" title="${t.url}">${media.label} #${idx + 1}</span>
+                <span class="batch-item-sub" id="sub-${t.task_id}">In Queue · Ready</span>
+              </div>
+            </div>
+            <div class="batch-item-right" id="right-${t.task_id}">
+              <span class="batch-item-status-badge badge-queued" id="badge-${t.task_id}">Queued</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Start batch polling loop
+      if (batchPollInterval) clearInterval(batchPollInterval);
+      const taskIds = tasks.map(t => t.task_id);
+
+      batchPollInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/batch-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ task_ids: taskIds })
+          });
+          if (!res.ok) return;
+          const statusMap = await res.json();
+
+          let completedCount = 0;
+          let anyActive = false;
+
+          for (const tid of taskIds) {
+            const st = statusMap[tid];
+            if (!st) continue;
+
+            const row = document.getElementById(`row-${tid}`);
+            const titleElem = document.getElementById(`title-${tid}`);
+            const subElem = document.getElementById(`sub-${tid}`);
+            const rightElem = document.getElementById(`right-${tid}`);
+            if (!row || !rightElem) continue;
+
+            if (st.status === 'queued') {
+              subElem.textContent = 'In Queue...';
+            } else if (st.status === 'starting' || st.status === 'downloading') {
+              anyActive = true;
+              if (st.filename && titleElem) titleElem.textContent = st.filename;
+              subElem.textContent = `${st.progress || 0}% · ${st.speed || 'Downloading'} · ⏱ ${st.elapsed_str || ''}`;
+              rightElem.innerHTML = `<span class="batch-item-status-badge badge-downloading">${st.progress || 0}%</span>`;
+            } else if (st.status === 'processing') {
+              anyActive = true;
+              subElem.textContent = 'Merging & finalizing media...';
+              rightElem.innerHTML = `<span class="batch-item-status-badge badge-processing">Processing</span>`;
+            } else if (st.status === 'done') {
+              completedCount++;
+              if (st.filename && titleElem) titleElem.textContent = st.filename;
+              subElem.textContent = `${st.size_str || 'Ready'} · ⏱ ${st.elapsed_str || ''}`;
+              const safeName = (st.filename || 'media.mp4').replace(/"/g, '&quot;');
+              const escName = (st.filename || '').replace(/'/g, "\\'");
+              rightElem.innerHTML = `
+                <span class="batch-item-status-badge badge-done">Done</span>
+                <a class="btn-item-sm btn-item-save" href="/file/${tid}" download="${safeName}" title="Save to Device">Save</a>
+                <button class="btn-item-sm local-only" onclick="openFileById('${tid}', '${escName}')" title="Open File">Open</button>
+                <button class="btn-item-sm local-only" onclick="openFolderById('${tid}', '${escName}')" title="Show in Folder">Folder</button>
+              `;
+            } else if (st.status === 'error' || st.status === 'cancelled') {
+              completedCount++;
+              subElem.textContent = st.error ? st.error.slice(0, 45) : 'Failed';
+              rightElem.innerHTML = `<span class="batch-item-status-badge badge-error">Failed</span>`;
+            }
+          }
+
+          // Update overall batch progress
+          const total = taskIds.length;
+          const pct = Math.round((completedCount / total) * 100);
+          batchOverallFill.style.width = `${pct}%`;
+          batchCountPill.textContent = `${completedCount} / ${total} Done`;
+
+          // If all tasks are completed
+          if (completedCount === total) {
+            clearInterval(batchPollInterval);
+            batchPollInterval = null;
+            stopBatchStopwatch();
+            document.getElementById('batch-indicator').style.animation = 'none';
+            document.getElementById('batch-indicator').style.background = '#10b981';
+            batchCardFooter.style.display = 'flex';
+            resetButton();
+          }
+        } catch (_) {}
+      }, 350);
+    }
+
+    function updateProgress(pct, speed, eta) {
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-pct').textContent = pct + '%';
+      document.getElementById('progress-speed').textContent = speed;
+      document.getElementById('progress-eta').textContent = eta;
+    }
+
+    function resetButton() {
+      startBtn.disabled = false;
+      updateButtonLabel();
+    }
+
+    function resetForNewDownload() {
+      stopLiveStopwatch();
+      stopBatchStopwatch();
+      if (pollInterval) clearInterval(pollInterval);
+      if (batchPollInterval) clearInterval(batchPollInterval);
+      doneCard.classList.remove('show');
+      batchCard.classList.remove('show');
+      progressBox.classList.remove('show');
+      urlInput.value = '';
+      batchUrlInput.value = '';
+      if (isBatchMode) {
+        handleBatchChange();
+        batchUrlInput.focus();
+      } else {
+        handleUrlChange();
+        urlInput.focus();
+      }
+    }
+
+    async function openFinishedFile() {
+      if (!lastFinishedTaskId && !lastFinishedFilename) return;
+      openFileById(lastFinishedTaskId, lastFinishedFilename);
+    }
+
+    async function openFinishedFolder() {
+      openFolderById(lastFinishedTaskId, lastFinishedFilename);
+    }
+
+    async function openFileById(taskId, filename) {
+      try {
+        const res = await fetch('/open-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: taskId, filename: filename })
+        });
+        const d = await res.json();
+        if (d && d.is_remote && d.download_url) {
+          window.location.href = d.download_url;
+        }
+      } catch (_) {
+        if (taskId) window.location.href = `/file/${taskId}`;
+      }
+    }
+
+    async function openFolderById(taskId, filename) {
+      try {
+        const res = await fetch('/open-folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ task_id: taskId, filename: filename })
+        });
+        const d = await res.json();
+        if (d && d.is_remote && taskId) {
+          window.location.href = `/file/${taskId}`;
+        }
+      } catch (_) {}
+    }
+
+    async function openFolder() {
+      try {
+        await fetch('/open-folder');
+      } catch (_) {}
+    }
+
+    // Detect client environment (hide local explorer buttons for remote mobile/browser visitors)
+    fetch('/system-info')
+      .then(r => r.json())
+      .then(info => {
+        if (info && !info.is_localhost) {
+          document.body.classList.add('is-remote-client');
+        }
+      })
+      .catch(() => {});
+
+    // Initialize in clean standby mode
+    handleUrlChange();
+  </script>
+</body>
+</html>

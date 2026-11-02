@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  downloadivo:
+    build: .
+    container_name: downloadivo
+    restart: always
+    ports:
+      - "8899:8899"
+    environment:
+      - PORT=8899
+    volumes:
+      - ./downloads:/app/downloads
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

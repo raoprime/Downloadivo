@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.vscode/
+downloads/*
+!downloads/.gitkeep
+*.part
+*.ytdl
+node_modules/
