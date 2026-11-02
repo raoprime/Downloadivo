@@ -3,8 +3,8 @@ title: Downloadivo
 emoji: ⚡
 colorFrom: blue
 colorTo: indigo
-sdk: docker
-app_port: 7860
+sdk: gradio
+app_file: app.py
 pinned: false
 ---
 
@@ -21,7 +21,7 @@ Downloadivo is a production-grade, high-performance media downloader supporting 
 - **100% Free & Open-Source**.
 
 ## 🛠️ Tech Stack
-- **FastAPI** + **Uvicorn**
+- **FastAPI** + **Uvicorn** + **Gradio**
 - **yt-dlp** + **Instaloader**
 - **FFmpeg** + **Node.js**
 - **Pure Native Modern Dark UI**
