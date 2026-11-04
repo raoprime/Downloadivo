@@ -1,5 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": null,
+  "outputDirectory": ".",
   "cleanUrls": true,
   "rewrites": [
     {
@@ -29,6 +32,14 @@
     {
       "source": "/download-file/:path*",
       "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/download-file/:path*"
+    },
+    {
+      "source": "/open-file",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/open-file"
+    },
+    {
+      "source": "/open-folder",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/open-folder"
     },
     {
       "source": "/stream",

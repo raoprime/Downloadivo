@@ -1,5 +1,19 @@
-/*
-!index.html
-!assets
-!assets/**
-!vercel.json
+# Python files & serverless triggers
+requirements.txt
+main.py
+*.py
+*.pyc
+__pycache__/
+.venv/
+venv/
+
+# Build & Container configs
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Runtime data & logs
+*.log
+tunnel_url.txt
+downloads/
+temp/
