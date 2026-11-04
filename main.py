@@ -27,7 +27,7 @@ from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 import uvicorn
 import yt_dlp
 import instaloader
@@ -50,25 +50,20 @@ FILE_RETENTION_SECONDS = int(os.environ.get("FILE_RETENTION_SECONDS", 1800))
 
 _cached_tunnel_url = ""
 _tunnel_lock = threading.Lock()
+_last_cf_check = 0.0
 
 def _get_public_tunnel_url() -> str:
-    global _cached_tunnel_url
+    global _cached_tunnel_url, _last_cf_check
+    now = time.time()
     with _tunnel_lock:
-        if _cached_tunnel_url:
+        if _cached_tunnel_url and (now - _last_cf_check < 15):
             return _cached_tunnel_url
+        _last_cf_check = now
 
     url_file = Path(__file__).parent / "tunnel_url.txt"
-    if url_file.exists():
-        try:
-            txt = url_file.read_text("utf-8").strip()
-            if txt.startswith("http"):
-                with _tunnel_lock:
-                    _cached_tunnel_url = txt
-                return txt
-        except Exception:
-            pass
-
     cf_log = Path(__file__).parent / "cloudflared.log"
+
+    # Prefer the active live URL from cloudflared.log
     if cf_log.exists():
         try:
             content = cf_log.read_text("utf-8", errors="ignore")
@@ -82,6 +77,16 @@ def _get_public_tunnel_url() -> str:
                 except Exception:
                     pass
                 return url
+        except Exception:
+            pass
+
+    if url_file.exists():
+        try:
+            txt = url_file.read_text("utf-8").strip()
+            if txt.startswith("http"):
+                with _tunnel_lock:
+                    _cached_tunnel_url = txt
+                return txt
         except Exception:
             pass
     return ""
@@ -116,7 +121,7 @@ def _cleanup_old_files_daemon():
 _cleaner_thread = threading.Thread(target=_cleanup_old_files_daemon, daemon=True, name="storage_cleaner")
 _cleaner_thread.start()
 
-app = FastAPI(title="Downloadivo Multi-Engine", version="5.0.0")
+app = FastAPI(title="Downloadivo Multi-Engine", version="5.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -126,6 +131,27 @@ app.add_middleware(
 )
 
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"ok": False, "detail": exc.detail, "error": exc.detail, "status_code": exc.status_code},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    err_msg = str(exc)
+    for prefix in ["ERROR: ", "[youtube] ", "[generic] ", "[Instagram] "]:
+        err_msg = err_msg.replace(prefix, "")
+    if "; please report this issue" in err_msg:
+        err_msg = err_msg.split("; please report this issue")[0].strip()
+    return JSONResponse(
+        status_code=500,
+        content={"ok": False, "detail": err_msg[:250], "error": "Internal processing error", "status_code": 500},
+    )
 
 # Active task state: {task_id: {status, progress, filename, speed, eta, error, ...}}
 downloads: Dict[str, dict] = {}
@@ -140,17 +166,38 @@ _executor = concurrent.futures.ThreadPoolExecutor(max_workers=3, thread_name_pre
 # Pydantic Schemas
 # ──────────────────────────────────────────────────────────────
 class DownloadRequest(BaseModel):
-    url: str
-    format: str = "best"  # "best" | "1080p" | "720p" | "480p" | "mp3" | "thumbnail"
+    url: str = Field(..., max_length=2048)
+    format: str = Field(default="best", max_length=64)  # "best" | "1080p" | "720p" | "480p" | "mp3" | "thumbnail"
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("URL cannot be empty")
+        return v
+
+    @field_validator("format")
+    @classmethod
+    def validate_format(cls, v: str) -> str:
+        return v.strip().lower() or "best"
 
 
 class InfoRequest(BaseModel):
-    url: str
+    url: str = Field(..., max_length=2048)
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("URL cannot be empty")
+        return v
 
 
 class FileActionRequest(BaseModel):
-    filename: Optional[str] = None
-    task_id: Optional[str] = None
+    filename: Optional[str] = Field(default=None, max_length=255)
+    task_id: Optional[str] = Field(default=None, max_length=128)
 
 
 # ──────────────────────────────────────────────────────────────
@@ -1019,8 +1066,8 @@ def _info_ydl_opts() -> dict:
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
         },
-        "socket_timeout": 15,
-        "retries": 5,
+        "socket_timeout": 8,
+        "retries": 2,
     }
 
 
@@ -1256,15 +1303,25 @@ def master_download_worker(task_id: str, url: str, fmt: str):
 # ──────────────────────────────────────────────────────────────
 # REST Endpoints
 # ──────────────────────────────────────────────────────────────
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "service": "Downloadivo",
+        "version": "5.1.0",
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
-async def index():
+def index():
     html_file = Path(__file__).parent / "index.html"
     with open(html_file, encoding="utf-8") as f:
         return f.read()
 
 
 @app.get("/system-info")
-async def system_info(request: Request):
+def system_info(request: Request):
     is_remote = _is_remote_request(request)
     is_localhost = not is_remote
     client_ip = (
@@ -1295,7 +1352,7 @@ async def system_info(request: Request):
 
 
 @app.post("/info")
-async def get_info(req: InfoRequest):
+def get_info(req: InfoRequest):
     url = req.url
     url_lower = url.lower()
 
@@ -1535,7 +1592,7 @@ async def cancel_task(task_id: str):
 
 
 @app.get("/downloads")
-async def list_downloads():
+def list_downloads():
     files_data = []
     try:
         for f in sorted(DOWNLOAD_DIR.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
@@ -1561,7 +1618,7 @@ async def list_downloads():
 
 @app.api_route("/file/{task_id}", methods=["GET", "HEAD"])
 @app.api_route("/download-file/{task_id}", methods=["GET", "HEAD"])
-async def download_file_by_id(task_id: str, request: Request):
+def download_file_by_id(task_id: str, request: Request):
     """Direct streaming FileResponse for mobile and remote browsers worldwide."""
     target_path: Optional[Path] = None
     filename: Optional[str] = None
@@ -1621,7 +1678,7 @@ async def download_file_by_id(task_id: str, request: Request):
 
 
 @app.post("/open-file")
-async def open_file(req: FileActionRequest, request: Request):
+def open_file(req: FileActionRequest, request: Request):
     if _is_remote_request(request) or not hasattr(os, "startfile"):
         return {"ok": True, "is_remote": True, "download_url": f"/file/{req.task_id}" if req.task_id else None}
 
@@ -1658,7 +1715,7 @@ async def open_file(req: FileActionRequest, request: Request):
 
 
 @app.api_route("/open-folder", methods=["GET", "POST"])
-async def open_folder(request: Request, req: Optional[FileActionRequest] = None):
+def open_folder(request: Request, req: Optional[FileActionRequest] = None):
     if _is_remote_request(request) or not hasattr(os, "startfile"):
         return {"ok": True, "is_remote": True}
 
