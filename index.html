@@ -1454,12 +1454,15 @@
       }
     }
 
+    let errorTimeout = null;
     function showError(msg) {
+      if (errorTimeout) clearTimeout(errorTimeout);
       progressBox.classList.remove('show');
-      detectedStatus.innerHTML = `<span style="color: var(--red);">⚠️ ${msg}</span>`;
-      setTimeout(() => {
+      const cleanMsg = (msg || 'Download error occurred. Please check the link.').replace(/^⚠️\s*/, '');
+      detectedStatus.innerHTML = `<span style="color: var(--red); font-weight: 500;">⚠️ ${cleanMsg}</span>`;
+      errorTimeout = setTimeout(() => {
         detectedStatus.textContent = 'Ready to download';
-      }, 5000);
+      }, 10000);
     }
 
     async function triggerDownload() {
@@ -1540,6 +1543,16 @@
               saveBtn.setAttribute('download', data.filename || 'media.mp4');
             }
             doneCard.classList.add('show');
+
+            // Auto-trigger direct download to user's device/phone
+            try {
+              const dlAnchor = document.createElement('a');
+              dlAnchor.href = `/file/${taskId}`;
+              dlAnchor.download = data.filename || 'media.mp4';
+              document.body.appendChild(dlAnchor);
+              dlAnchor.click();
+              document.body.removeChild(dlAnchor);
+            } catch (_) {}
 
             resetButton();
           } else if (data.status === 'error') {
