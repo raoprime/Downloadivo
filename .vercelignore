@@ -1,12 +1,5 @@
-main.py
-app.py
-requirements.txt
-Dockerfile
-docker-compose.yml
-.dockerignore
-__pycache__
-downloads/
-*.bat
-*.vbs
-tunnel_url.txt
-cloudflared.log
+/*
+!index.html
+!assets
+!assets/**
+!vercel.json
