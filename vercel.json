@@ -1,14 +1,38 @@
 {
-  "version": 2,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
-  "routes": [
+  "rewrites": [
     {
-      "src": "/assets/(.*)",
-      "dest": "/assets/$1"
+      "source": "/health",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/health"
     },
     {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/system-info",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/system-info"
+    },
+    {
+      "source": "/info",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/info"
+    },
+    {
+      "source": "/download",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/download"
+    },
+    {
+      "source": "/status/:path*",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/status/:path*"
+    },
+    {
+      "source": "/file/:path*",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/file/:path*"
+    },
+    {
+      "source": "/download-file/:path*",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/download-file/:path*"
+    },
+    {
+      "source": "/stream",
+      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/stream"
     }
   ]
 }
