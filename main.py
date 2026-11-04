@@ -105,10 +105,7 @@ def _cleanup_old_files_daemon():
                         # 1. Prune orphaned partial temp files older than 30 mins
                         if (f.name.endswith(".part") or f.name.endswith(".ytdl")) and age > 1800:
                             f.unlink(missing_ok=True)
-                        # 2. Prune temporary batch zip archives older than 1 hour
-                        elif f.name.startswith("Downloadivo_Batch_") and age > 3600:
-                            f.unlink(missing_ok=True)
-                        # 3. Only prune finished media files in cloud / ephemeral deployments
+                        # 2. Only prune finished media files in cloud / ephemeral deployments
                         elif IS_EPHEMERAL and age > FILE_RETENTION_SECONDS:
                             f.unlink(missing_ok=True)
                     except Exception:
@@ -145,15 +142,6 @@ _executor = concurrent.futures.ThreadPoolExecutor(max_workers=3, thread_name_pre
 class DownloadRequest(BaseModel):
     url: str
     format: str = "best"  # "best" | "1080p" | "720p" | "480p" | "mp3" | "thumbnail"
-
-
-class BatchDownloadRequest(BaseModel):
-    urls: List[str]
-    format: str = "best"
-
-
-class BatchStatusRequest(BaseModel):
-    task_ids: List[str]
 
 
 class InfoRequest(BaseModel):
@@ -1514,63 +1502,12 @@ async def get_info(req: InfoRequest):
 @app.post("/download")
 async def start_download(req: DownloadRequest):
     extracted = _extract_urls(req.url)
-    # If user provided multiple URLs in a single string, auto-route to batch queue
-    if len(extracted) > 1:
-        batch_tasks = []
-        for u in extracted:
-            t_id = _create_task(u, req.format)
-            _executor.submit(_run_task_worker, t_id, u, req.format)
-            batch_tasks.append({"task_id": t_id, "url": u, "status": "queued"})
-        return {
-            "task_id": batch_tasks[0]["task_id"],
-            "is_batch": True,
-            "tasks": batch_tasks,
-            "count": len(batch_tasks),
-        }
-
     target_url = extracted[0] if extracted else req.url.strip()
+    if not target_url:
+        raise HTTPException(status_code=400, detail="Please provide a valid media URL")
     task_id = _create_task(target_url, req.format)
     _executor.submit(_run_task_worker, task_id, target_url, req.format)
-    return {"task_id": task_id, "is_batch": False}
-
-
-@app.post("/download-batch")
-async def start_batch_download(req: BatchDownloadRequest):
-    valid_urls = []
-    for raw in req.urls:
-        extracted = _extract_urls(raw)
-        if extracted:
-            valid_urls.extend(extracted)
-        elif raw.strip().startswith("http"):
-            valid_urls.append(raw.strip())
-
-    # Preserve order & deduplicate
-    seen = set()
-    final_urls = []
-    for u in valid_urls:
-        if u not in seen:
-            seen.add(u)
-            final_urls.append(u)
-
-    if not final_urls:
-        raise HTTPException(status_code=400, detail="No valid URLs provided for batch download")
-
-    batch_tasks = []
-    for url in final_urls:
-        task_id = _create_task(url, req.format)
-        _executor.submit(_run_task_worker, task_id, url, req.format)
-        batch_tasks.append({
-            "task_id": task_id,
-            "url": url,
-            "format": req.format,
-            "status": "queued",
-        })
-
-    return {
-        "batch_id": str(uuid.uuid4()),
-        "tasks": batch_tasks,
-        "count": len(batch_tasks),
-    }
+    return {"task_id": task_id}
 
 
 @app.get("/status/{task_id}")
@@ -1584,24 +1521,6 @@ async def get_status(task_id: str):
         data["elapsed_sec"] = round(elapsed, 1)
         data["elapsed_str"] = _format_duration(elapsed)
     return data
-
-
-@app.post("/batch-status")
-async def get_batch_status(req: BatchStatusRequest):
-    results = {}
-    now = time.time()
-    with _lock:
-        for t_id in req.task_ids:
-            if t_id in downloads:
-                data = dict(downloads[t_id])
-                if data.get("status") not in ["done", "error", "cancelled"]:
-                    elapsed = max(0.1, now - data.get("start_ts", now))
-                    data["elapsed_sec"] = round(elapsed, 1)
-                    data["elapsed_str"] = _format_duration(elapsed)
-                results[t_id] = data
-            else:
-                results[t_id] = {"status": "not_found", "task_id": t_id}
-    return results
 
 
 @app.post("/cancel/{task_id}")
@@ -1696,43 +1615,6 @@ async def download_file_by_id(task_id: str, request: Request):
         method=request.method,
         headers={
             "Cache-Control": "public, max-age=3600",
-            "Accept-Ranges": "bytes",
-        }
-    )
-
-
-@app.api_route("/batch-zip", methods=["GET", "POST", "HEAD"])
-async def download_batch_zip(request: Request, tasks: str = ""):
-    """Download all completed media files from a batch as a single ZIP archive."""
-    task_ids = [t.strip() for t in tasks.split(",") if t.strip()]
-    if not task_ids:
-        raise HTTPException(status_code=400, detail="No task IDs provided")
-
-    valid_files = []
-    with _lock:
-        for tid in task_ids:
-            if tid in downloads:
-                fp = downloads[tid].get("file_path")
-                if fp and Path(fp).exists():
-                    valid_files.append(Path(fp))
-
-    if not valid_files:
-        raise HTTPException(status_code=404, detail="No completed files found for this batch")
-
-    zip_filename = f"Downloadivo_Batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-    zip_path = DOWNLOAD_DIR / zip_filename
-
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in valid_files:
-            zf.write(f, arcname=f.name)
-
-    return FileResponse(
-        path=str(zip_path.resolve()),
-        filename=zip_filename,
-        media_type="application/zip",
-        method=request.method,
-        headers={
-            "Cache-Control": "no-cache",
             "Accept-Ranges": "bytes",
         }
     )

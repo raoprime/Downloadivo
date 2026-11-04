@@ -7,13 +7,12 @@ Downloadivo is a production-grade, high-performance media downloader supporting 
 ## 🚀 Features
 
 - **8K / 4K / 60FPS / HDR** support with multi-stream FFmpeg merging.
-- **Batch Download Queue** with real-time ETA and live speed meters.
+- **Fast 1-Click Downloads** with real-time ETA and live speed meters.
 - **Instagram Specialist Engine** (Reels, Stories, Carousels, Profile DP).
-- **YouTube Specialist Engine** (Videos, Shorts, Playlists, Community Posts, Channel Banner & Avatar).
+- **YouTube Specialist Engine** (Videos, Shorts, Community Posts, Channel Banner & Avatar).
 - **Spotify Cloud Engine** (320kbps MP3 extraction with embedded cover art).
 - **Twitter / X, TikTok, Reddit, Pinterest** high-resolution media extraction.
 - **Universal Mobile & Remote Browser Streaming** (`/file/{task_id}`).
-- **Batch ZIP Packaging** (`/batch-zip`) — 1-click download of all batch items.
 - **Zero Downtime Architecture** via Cloudflare Tunnel (Enterprise DDoS protected, HTTPS).
 - **100% Free & Forever Zero Cost**.
 

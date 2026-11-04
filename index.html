@@ -776,345 +776,6 @@
       color: var(--text);
     }
 
-    /* ════════════════════════════════════════════════════════════
-       BATCH MODE & QUEUE STYLES
-    ════════════════════════════════════════════════════════════ */
-    .batch-pill-btn {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: var(--text-subtle);
-      font-size: 11px;
-      font-weight: 500;
-      padding: 5px 9px;
-      border-radius: 7px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      white-space: nowrap;
-      user-select: none;
-      font-family: inherit;
-    }
-
-    .batch-pill-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    .batch-pill-btn.active {
-      background: rgba(59, 130, 246, 0.18);
-      border-color: rgba(59, 130, 246, 0.4);
-      color: #60a5fa;
-    }
-
-    .batch-input-row {
-      display: none;
-      flex-direction: column;
-      gap: 8px;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid var(--input-border);
-      border-radius: 12px;
-      padding: 12px 14px;
-      transition: border-color 0.2s ease;
-    }
-
-    .batch-input-row.show {
-      display: flex;
-    }
-
-    .batch-input-row:focus-within {
-      border-color: rgba(255, 255, 255, 0.22);
-    }
-
-    .batch-textarea-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 11.5px;
-      color: var(--text-muted);
-    }
-
-    .batch-header-title {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: var(--text-subtle);
-      font-weight: 500;
-    }
-
-    .batch-close-btn {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      font-size: 11px;
-      cursor: pointer;
-      padding: 2px 6px;
-      border-radius: 4px;
-      transition: color 0.15s ease;
-      font-family: inherit;
-    }
-
-    .batch-close-btn:hover {
-      color: #fff;
-    }
-
-    .batch-textarea {
-      width: 100%;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: #fff;
-      font-family: inherit;
-      font-size: 13px;
-      line-height: 1.5;
-      resize: vertical;
-      min-height: 76px;
-      max-height: 220px;
-    }
-
-    .batch-textarea::placeholder {
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-
-    .batch-textarea-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 6px;
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
-    .batch-counter {
-      font-size: 11.5px;
-      color: var(--text-muted);
-      font-variant-numeric: tabular-nums;
-    }
-
-    /* Batch Card Queue Container */
-    .batch-card {
-      display: none;
-      flex-direction: column;
-      gap: 12px;
-      background: rgba(16, 185, 129, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 14px;
-      padding: 16px;
-      animation: fadeIn 0.25s ease-out;
-    }
-
-    .batch-card.show {
-      display: flex;
-    }
-
-    .batch-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .batch-card-title-group {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .batch-live-indicator {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #10b981;
-      box-shadow: 0 0 10px #10b981;
-      animation: pulseIndicator 1.8s infinite;
-    }
-
-    @keyframes pulseIndicator {
-      0% { opacity: 0.5; transform: scale(0.9); }
-      50% { opacity: 1; transform: scale(1.1); }
-      100% { opacity: 0.5; transform: scale(0.9); }
-    }
-
-    .batch-main-title {
-      font-size: 13.5px;
-      font-weight: 600;
-      color: #fff;
-    }
-
-    .batch-count-pill {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--text-subtle);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .batch-overall-progress-bar {
-      width: 100%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 99px;
-      overflow: hidden;
-    }
-
-    .batch-overall-progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #10b981, #34d399);
-      border-radius: 99px;
-      transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .batch-items-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 280px;
-      overflow-y: auto;
-      padding-right: 2px;
-    }
-
-    .batch-items-list::-webkit-scrollbar {
-      width: 4px;
-    }
-
-    .batch-items-list::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-    }
-
-    .batch-item-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 10px;
-      padding: 10px 12px;
-      transition: background 0.15s ease;
-    }
-
-    .batch-item-row:hover {
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .batch-item-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 0;
-      flex: 1;
-    }
-
-    .batch-item-icon {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-subtle);
-      flex-shrink: 0;
-    }
-
-    .batch-item-info {
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-    }
-
-    .batch-item-title {
-      font-size: 12px;
-      font-weight: 500;
-      color: #fff;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 240px;
-    }
-
-    .batch-item-sub {
-      font-size: 10.5px;
-      color: var(--text-muted);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .batch-item-right {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      flex-shrink: 0;
-    }
-
-    .batch-item-status-badge {
-      font-size: 10.5px;
-      font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 6px;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .badge-queued {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--text-muted);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .badge-downloading {
-      background: rgba(59, 130, 246, 0.12);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.25);
-    }
-
-    .badge-processing {
-      background: rgba(168, 85, 247, 0.12);
-      color: #c084fc;
-      border: 1px solid rgba(168, 85, 247, 0.25);
-    }
-
-    .badge-done {
-      background: rgba(16, 185, 129, 0.12);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.25);
-    }
-
-    .badge-error {
-      background: rgba(239, 68, 68, 0.12);
-      color: #f87171;
-      border: 1px solid rgba(239, 68, 68, 0.25);
-    }
-
-    .btn-item-sm {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: #fff;
-      border-radius: 6px;
-      padding: 3px 8px;
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      transition: all 0.15s ease;
-      font-family: inherit;
-    }
-
-    .btn-item-sm:hover {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    .batch-card-footer {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
-    }
-
     @keyframes fadeIn {
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
@@ -1189,29 +850,7 @@
               <line x1="6" y1="6" x2="18" y2="18"></line>
             </svg>
           </button>
-          <button class="batch-pill-btn" id="batch-toggle-btn" onclick="toggleBatchMode()" title="Switch to Multi-Link Batch Mode">+ Batch</button>
           <button class="paste-badge-btn" onclick="pasteLink()">Paste</button>
-        </div>
-
-        <!-- Multi-Link Batch Textarea Input -->
-        <div class="batch-input-row" id="batch-input-row">
-          <div class="batch-textarea-header">
-            <div class="batch-header-title">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-              <span>Batch Mode · Download Multiple Videos</span>
-            </div>
-            <button class="batch-close-btn" onclick="toggleBatchMode(false)" title="Return to Single Mode">✕ Single Link</button>
-          </div>
-          <textarea
-            id="batch-url-input"
-            class="batch-textarea"
-            rows="3"
-            placeholder="Paste multiple video/audio links (one per line) — YouTube, Instagram, Spotify, TikTok, Twitter/X..."
-          ></textarea>
-          <div class="batch-textarea-footer">
-            <span class="batch-counter" id="batch-counter">0 links detected</span>
-            <button class="paste-badge-btn" onclick="pasteBatchLinks()">Paste Links</button>
-          </div>
         </div>
       </div>
 
@@ -1325,66 +964,18 @@
         </div>
         <button class="btn-reset" onclick="resetForNewDownload()">Download another file</button>
       </div>
-
-      <!-- Multi-Item Batch Queue Hub -->
-      <div class="batch-card" id="batch-card">
-        <div class="batch-card-header">
-          <div class="batch-card-title-group">
-            <div class="batch-live-indicator" id="batch-indicator"></div>
-            <span class="batch-main-title" id="batch-main-title">Batch Queue</span>
-            <span class="batch-count-pill" id="batch-count-pill">0 / 0</span>
-          </div>
-          <div class="batch-header-right">
-            <span class="live-timer-pill" id="batch-timer-pill">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              <span id="batch-timer">0.0s</span>
-            </span>
-          </div>
-        </div>
-
-        <div class="batch-overall-progress-bar">
-          <div class="batch-overall-progress-fill" id="batch-overall-fill" style="width: 0%;"></div>
-        </div>
-
-        <!-- Scrollable queue item rows -->
-        <div class="batch-items-list" id="batch-items-list"></div>
-
-        <!-- Batch Action Footer -->
-        <div class="batch-card-footer" id="batch-card-footer" style="display: none;">
-          <div class="done-actions-row">
-            <a class="btn-action-primary" id="btn-batch-download-zip" href="#" download style="display: none;">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              <span>Download All (ZIP)</span>
-            </a>
-            <button class="btn-action-secondary local-only" onclick="openFolder()">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-              <span>Open Downloads Folder</span>
-            </button>
-          </div>
-          <button class="btn-reset" onclick="resetForNewDownload()">Start another batch</button>
-        </div>
-      </div>
     </div>
   </main>
 
   <script>
     let selectedFormat = 'best';
     let currentDetectedType = 'generic';
-    let isBatchMode = false;
     let pollInterval = null;
-    let batchPollInterval = null;
     let lastFinishedFilename = '';
     let lastFinishedTaskId = '';
     let previewDebounce = null;
     let downloadStartTs = 0;
-    let batchStartTs = 0;
     let timerTickInterval = null;
-    let batchTimerTickInterval = null;
-    let activeBatchTasks = [];
 
     function startLiveStopwatch() {
       downloadStartTs = performance.now();
@@ -1406,42 +997,13 @@
       }
     }
 
-    function startBatchStopwatch() {
-      batchStartTs = performance.now();
-      if (batchTimerTickInterval) clearInterval(batchTimerTickInterval);
-      const timerElem = document.getElementById('batch-timer');
-      if (timerElem) timerElem.textContent = '0.0s';
-      batchTimerTickInterval = setInterval(() => {
-        const elapsed = (performance.now() - batchStartTs) / 1000;
-        if (timerElem) {
-          timerElem.textContent = elapsed < 60 ? `${elapsed.toFixed(1)}s` : `${Math.floor(elapsed / 60)}m ${Math.floor(elapsed % 60)}s`;
-        }
-      }, 100);
-    }
-
-    function stopBatchStopwatch() {
-      if (batchTimerTickInterval) {
-        clearInterval(batchTimerTickInterval);
-        batchTimerTickInterval = null;
-      }
-    }
-
     const urlInput = document.getElementById('url-input');
-    const batchUrlInput = document.getElementById('batch-url-input');
     const singleInputRow = document.getElementById('single-input-row');
-    const batchInputRow = document.getElementById('batch-input-row');
-    const batchToggleBtn = document.getElementById('batch-toggle-btn');
-    const batchCounter = document.getElementById('batch-counter');
     const clearBtn = document.getElementById('clear-btn');
     const startBtn = document.getElementById('start-btn');
     const btnText = document.getElementById('btn-text');
     const progressBox = document.getElementById('progress-box');
     const doneCard = document.getElementById('done-card');
-    const batchCard = document.getElementById('batch-card');
-    const batchItemsList = document.getElementById('batch-items-list');
-    const batchCardFooter = document.getElementById('batch-card-footer');
-    const batchCountPill = document.getElementById('batch-count-pill');
-    const batchOverallFill = document.getElementById('batch-overall-fill');
     const optionsSection = document.getElementById('options-section');
     const chipsGrid = document.getElementById('chips-grid');
     const badgeText = document.getElementById('badge-text');
@@ -1478,7 +1040,7 @@
         openFolder();
       }
       if (e.key === 'Escape') {
-        if (doneCard.classList.contains('show') || batchCard.classList.contains('show')) {
+        if (doneCard.classList.contains('show')) {
           resetForNewDownload();
         }
       }
@@ -1490,67 +1052,6 @@
       if (e.key === 'Enter') triggerDownload();
     });
 
-    batchUrlInput.addEventListener('input', () => handleBatchChange());
-    batchUrlInput.addEventListener('paste', () => setTimeout(handleBatchChange, 10));
-
-    function toggleBatchMode(forceState) {
-      isBatchMode = (forceState !== undefined) ? forceState : !isBatchMode;
-      if (isBatchMode) {
-        singleInputRow.style.display = 'none';
-        batchInputRow.classList.add('show');
-        batchToggleBtn.classList.add('active');
-        const curSingle = urlInput.value.trim();
-        if (curSingle && !batchUrlInput.value.includes(curSingle)) {
-          batchUrlInput.value = curSingle + (batchUrlInput.value ? '\n' + batchUrlInput.value : '');
-        }
-        batchUrlInput.focus();
-        handleBatchChange();
-      } else {
-        batchInputRow.classList.remove('show');
-        singleInputRow.style.display = 'flex';
-        batchToggleBtn.classList.remove('active');
-        const urls = extractUrls(batchUrlInput.value);
-        if (urls.length === 1) {
-          urlInput.value = urls[0];
-        }
-        handleUrlChange();
-        urlInput.focus();
-      }
-    }
-
-    function handleBatchChange() {
-      const urls = extractUrls(batchUrlInput.value);
-      const count = urls.length;
-      batchCounter.textContent = `${count} valid link${count === 1 ? '' : 's'} detected`;
-
-      if (count === 0) {
-        optionsSection.classList.remove('show');
-        previewStrip.classList.remove('show');
-        startBtn.disabled = true;
-        btnText.textContent = 'Download Batch';
-        detectedStatus.textContent = 'Paste multiple media links above';
-        return;
-      }
-
-      startBtn.disabled = false;
-      btnText.textContent = `Download All (${count} Items)`;
-      badgeText.textContent = `Batch (${count})`;
-      badgeIconSvg.innerHTML = SVG_ICONS.globe;
-      detectedStatus.innerHTML = `<span style="color: #60a5fa; font-weight: 500;">✦ Batch Mode: ${count} media link${count === 1 ? '' : 's'} queued</span>`;
-
-      // Render universal quality choices for the batch
-      optionsSection.classList.add('show');
-      const chips = [
-        { fmt: 'best', label: 'Best Quality (Auto / Max 8K)', active: true },
-        { fmt: '1080p', label: '1080p Full HD' },
-        { fmt: '720p', label: '720p HD' },
-        { fmt: 'mp3', label: 'MP3 Audio (320k)' },
-      ];
-      chipsGrid.innerHTML = chips.map(c => `
-        <button class="opt-chip ${c.fmt === selectedFormat ? 'active' : ''}" onclick="selectFormatChip(this, '${c.fmt}')">${c.label}</button>
-      `).join('');
-    }
-
     function handleUrlChange() {
       const text = urlInput.value.trim();
       clearTimeout(previewDebounce);
@@ -1559,15 +1060,6 @@
         clearBtn.classList.add('show');
       } else {
         clearBtn.classList.remove('show');
-      }
-
-      // AUTO-DETECT BATCH: If multiple URLs were pasted into single input
-      const detectedUrls = extractUrls(text);
-      if (detectedUrls.length > 1) {
-        toggleBatchMode(true);
-        batchUrlInput.value = detectedUrls.join('\n');
-        handleBatchChange();
-        return;
       }
 
       // If no link entered: HIDE options & reset to standby
@@ -1598,14 +1090,8 @@
 
     function clearInput() {
       urlInput.value = '';
-      batchUrlInput.value = '';
-      if (isBatchMode) {
-        handleBatchChange();
-        batchUrlInput.focus();
-      } else {
-        handleUrlChange();
-        urlInput.focus();
-      }
+      handleUrlChange();
+      urlInput.focus();
     }
 
     function detectMediaType(url) {
@@ -1726,12 +1212,6 @@
     }
 
     function updateButtonLabel() {
-      if (isBatchMode) {
-        const count = extractUrls(batchUrlInput.value).length;
-        btnText.textContent = `Download All (${count} Items)`;
-        return;
-      }
-
       if (selectedFormat === 'avatar') {
         btnText.textContent = 'Download Channel Avatar (HD)';
       } else if (selectedFormat === 'banner') {
@@ -1817,18 +1297,6 @@
       }
     }
 
-    async function pasteBatchLinks() {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (text) {
-          batchUrlInput.value = (batchUrlInput.value ? batchUrlInput.value + '\n' : '') + text;
-          handleBatchChange();
-        }
-      } catch (_) {
-        batchUrlInput.focus();
-      }
-    }
-
     function showError(msg) {
       progressBox.classList.remove('show');
       detectedStatus.innerHTML = `<span style="color: var(--red);">⚠️ ${msg}</span>`;
@@ -1837,35 +1305,18 @@
       }, 5000);
     }
 
-    // Unified download trigger: Single or Batch
     async function triggerDownload() {
-      if (isBatchMode) {
-        const urls = extractUrls(batchUrlInput.value);
-        if (urls.length === 0) {
-          batchUrlInput.focus();
-          return;
-        }
-        startBatchDownload(urls);
-        return;
-      }
-
-      // Single input check
       const text = urlInput.value.trim();
       const urls = extractUrls(text);
-      if (urls.length > 1) {
-        startBatchDownload(urls);
-        return;
-      }
-      if (!text || !text.startsWith('http')) {
+      const targetUrl = urls.length > 0 ? urls[0] : text;
+      if (!targetUrl || !targetUrl.startsWith('http')) {
         urlInput.focus();
         return;
       }
 
-      // Single item download
       startBtn.disabled = true;
       btnText.textContent = 'Starting...';
       doneCard.classList.remove('show');
-      batchCard.classList.remove('show');
       progressBox.classList.add('show');
       startLiveStopwatch();
       updateProgress(0, 'Connecting to source...', '');
@@ -1874,15 +1325,13 @@
         const res = await fetch('/download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: text, format: selectedFormat })
+          body: JSON.stringify({ url: targetUrl, format: selectedFormat })
         });
         const data = await res.json();
-        if (data.is_batch && data.tasks) {
-          progressBox.classList.remove('show');
-          stopLiveStopwatch();
-          renderAndPollBatch(data.tasks);
-        } else {
+        if (data.task_id) {
           pollTask(data.task_id);
+        } else {
+          throw new Error(data.detail || 'Download failed to start');
         }
       } catch (err) {
         stopLiveStopwatch();
@@ -1939,150 +1388,6 @@
       }, 350);
     }
 
-    // ══════════════════════════════════════════════════════════════
-    // BATCH QUEUE LOGIC
-    // ══════════════════════════════════════════════════════════════
-    async function startBatchDownload(urls) {
-      startBtn.disabled = true;
-      btnText.textContent = `Downloading Batch (${urls.length})...`;
-      progressBox.classList.remove('show');
-      doneCard.classList.remove('show');
-      batchCard.classList.add('show');
-      batchCardFooter.style.display = 'none';
-
-      startBatchStopwatch();
-
-      try {
-        const res = await fetch('/download-batch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ urls: urls, format: selectedFormat })
-        });
-        const data = await res.json();
-        renderAndPollBatch(data.tasks);
-      } catch (err) {
-        stopBatchStopwatch();
-        showError(err.message);
-        resetButton();
-      }
-    }
-
-    function renderAndPollBatch(tasks) {
-      activeBatchTasks = tasks;
-      batchCountPill.textContent = `0 / ${tasks.length} Done`;
-      batchOverallFill.style.width = '0%';
-      const zipBtn = document.getElementById('btn-batch-download-zip');
-      if (zipBtn) zipBtn.style.display = 'none';
-
-      // Render initial queue rows
-      batchItemsList.innerHTML = tasks.map((t, idx) => {
-        const media = detectMediaType(t.url);
-        const iconSvg = SVG_ICONS[media.iconKey] || SVG_ICONS.globe;
-        return `
-          <div class="batch-item-row" id="row-${t.task_id}">
-            <div class="batch-item-left">
-              <div class="batch-item-icon">${iconSvg}</div>
-              <div class="batch-item-info">
-                <span class="batch-item-title" id="title-${t.task_id}" title="${t.url}">${media.label} #${idx + 1}</span>
-                <span class="batch-item-sub" id="sub-${t.task_id}">In Queue · Ready</span>
-              </div>
-            </div>
-            <div class="batch-item-right" id="right-${t.task_id}">
-              <span class="batch-item-status-badge badge-queued" id="badge-${t.task_id}">Queued</span>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      // Start batch polling loop
-      if (batchPollInterval) clearInterval(batchPollInterval);
-      const taskIds = tasks.map(t => t.task_id);
-
-      batchPollInterval = setInterval(async () => {
-        try {
-          const res = await fetch('/batch-status', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ task_ids: taskIds })
-          });
-          if (!res.ok) return;
-          const statusMap = await res.json();
-
-          let completedCount = 0;
-          let anyActive = false;
-
-          for (const tid of taskIds) {
-            const st = statusMap[tid];
-            if (!st) continue;
-
-            const row = document.getElementById(`row-${tid}`);
-            const titleElem = document.getElementById(`title-${tid}`);
-            const subElem = document.getElementById(`sub-${tid}`);
-            const rightElem = document.getElementById(`right-${tid}`);
-            if (!row || !rightElem) continue;
-
-            if (st.status === 'queued') {
-              subElem.textContent = 'In Queue...';
-            } else if (st.status === 'starting' || st.status === 'downloading') {
-              anyActive = true;
-              if (st.filename && titleElem) titleElem.textContent = st.filename;
-              subElem.textContent = `${st.progress || 0}% · ${st.speed || 'Downloading'} · ⏱ ${st.elapsed_str || ''}`;
-              rightElem.innerHTML = `<span class="batch-item-status-badge badge-downloading">${st.progress || 0}%</span>`;
-            } else if (st.status === 'processing') {
-              anyActive = true;
-              subElem.textContent = 'Merging & finalizing media...';
-              rightElem.innerHTML = `<span class="batch-item-status-badge badge-processing">Processing</span>`;
-            } else if (st.status === 'done') {
-              completedCount++;
-              if (st.filename && titleElem) titleElem.textContent = st.filename;
-              subElem.textContent = `${st.size_str || 'Ready'} · ⏱ ${st.elapsed_str || ''}`;
-              const safeName = (st.filename || 'media.mp4').replace(/"/g, '&quot;');
-              const escName = (st.filename || '').replace(/'/g, "\\'");
-              rightElem.innerHTML = `
-                <span class="batch-item-status-badge badge-done">Done</span>
-                <a class="btn-item-sm btn-item-save" href="/file/${tid}" download="${safeName}" title="Save to Device">Save</a>
-                <button class="btn-item-sm local-only" onclick="openFileById('${tid}', '${escName}')" title="Open File">Open</button>
-                <button class="btn-item-sm local-only" onclick="openFolderById('${tid}', '${escName}')" title="Show in Folder">Folder</button>
-              `;
-            } else if (st.status === 'error' || st.status === 'cancelled') {
-              completedCount++;
-              subElem.textContent = st.error ? st.error.slice(0, 45) : 'Failed';
-              rightElem.innerHTML = `<span class="batch-item-status-badge badge-error">Failed</span>`;
-            }
-          }
-
-          // Update overall batch progress
-          const total = taskIds.length;
-          const pct = Math.round((completedCount / total) * 100);
-          batchOverallFill.style.width = `${pct}%`;
-          batchCountPill.textContent = `${completedCount} / ${total} Done`;
-
-          // If all tasks are completed
-          if (completedCount === total) {
-            clearInterval(batchPollInterval);
-            batchPollInterval = null;
-            stopBatchStopwatch();
-            document.getElementById('batch-indicator').style.animation = 'none';
-            document.getElementById('batch-indicator').style.background = '#10b981';
-
-            const doneTaskIds = taskIds.filter(tid => statusMap[tid] && statusMap[tid].status === 'done');
-            const zipBtn = document.getElementById('btn-batch-download-zip');
-            if (zipBtn) {
-              if (doneTaskIds.length > 0) {
-                zipBtn.href = `/batch-zip?tasks=${doneTaskIds.join(',')}`;
-                zipBtn.style.display = 'inline-flex';
-              } else {
-                zipBtn.style.display = 'none';
-              }
-            }
-
-            batchCardFooter.style.display = 'flex';
-            resetButton();
-          }
-        } catch (_) {}
-      }, 350);
-    }
-
     function updateProgress(pct, speed, eta) {
       document.getElementById('progress-fill').style.width = pct + '%';
       document.getElementById('progress-pct').textContent = pct + '%';
@@ -2097,23 +1402,12 @@
 
     function resetForNewDownload() {
       stopLiveStopwatch();
-      stopBatchStopwatch();
       if (pollInterval) clearInterval(pollInterval);
-      if (batchPollInterval) clearInterval(batchPollInterval);
       doneCard.classList.remove('show');
-      batchCard.classList.remove('show');
       progressBox.classList.remove('show');
-      const zipBtn = document.getElementById('btn-batch-download-zip');
-      if (zipBtn) zipBtn.style.display = 'none';
       urlInput.value = '';
-      batchUrlInput.value = '';
-      if (isBatchMode) {
-        handleBatchChange();
-        batchUrlInput.focus();
-      } else {
-        handleUrlChange();
-        urlInput.focus();
-      }
+      handleUrlChange();
+      urlInput.focus();
     }
 
     async function openFinishedFile() {
