@@ -48,6 +48,48 @@ _FFMPEG_PATH = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe") or ""
 IS_EPHEMERAL = os.environ.get("EPHEMERAL_STORAGE", "0") == "1" or not hasattr(os, "startfile")
 FILE_RETENTION_SECONDS = int(os.environ.get("FILE_RETENTION_SECONDS", 1800))
 
+# ──────────────────────────────────────────────────────────────
+# Windows System Wake-Lock & Power Guard (24/7 Resilience)
+# ──────────────────────────────────────────────────────────────
+def _enable_system_wakelock():
+    """Prevents Windows from suspending CPU/network while service is active."""
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            # ES_CONTINUOUS (0x80000000) | ES_SYSTEM_REQUIRED (0x00000001)
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000001)
+            print("[INFO] Windows system wake-lock active (24/7 background mode)")
+    except Exception as e:
+        print(f"[WARN] Wake-lock could not be set: {e}")
+
+_enable_system_wakelock()
+
+# ──────────────────────────────────────────────────────────────
+# In-Memory Rate Limiter (Token Bucket / Anti-Abuse)
+# ──────────────────────────────────────────────────────────────
+_request_counts: Dict[str, List[float]] = {}
+_rate_limit_lock = threading.Lock()
+
+def _check_rate_limit(client_ip: str, max_requests: int = 50, window_seconds: int = 60) -> bool:
+    """Sliding-window rate limiter per client IP address."""
+    if client_ip in ["127.0.0.1", "localhost", "::1"]:
+        return True
+    now = time.time()
+    with _rate_limit_lock:
+        timestamps = _request_counts.get(client_ip, [])
+        valid_ts = [t for t in timestamps if now - t < window_seconds]
+        if len(valid_ts) >= max_requests:
+            _request_counts[client_ip] = valid_ts
+            return False
+        valid_ts.append(now)
+        _request_counts[client_ip] = valid_ts
+        if len(_request_counts) > 1000:
+            for ip in list(_request_counts.keys()):
+                _request_counts[ip] = [t for t in _request_counts[ip] if now - t < window_seconds]
+                if not _request_counts[ip]:
+                    del _request_counts[ip]
+        return True
+
 _cached_tunnel_url = ""
 _tunnel_lock = threading.Lock()
 _last_cf_check = 0.0
@@ -168,6 +210,8 @@ _executor = concurrent.futures.ThreadPoolExecutor(max_workers=3, thread_name_pre
 class DownloadRequest(BaseModel):
     url: str = Field(..., max_length=2048)
     format: str = Field(default="best", max_length=64)  # "best" | "1080p" | "720p" | "480p" | "mp3" | "thumbnail"
+    start_time: Optional[str] = Field(default=None, max_length=32)
+    end_time: Optional[str] = Field(default=None, max_length=32)
 
     @field_validator("url")
     @classmethod
@@ -181,6 +225,16 @@ class DownloadRequest(BaseModel):
     @classmethod
     def validate_format(cls, v: str) -> str:
         return v.strip().lower() or "best"
+
+    @field_validator("start_time", "end_time")
+    @classmethod
+    def validate_timestamps(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        v = v.strip()
+        if re.match(r"^(?:\d{1,2}:)?\d{1,2}:\d{2}$|^\d+(?:\.\d+)?$", v):
+            return v
+        return None
 
 
 class InfoRequest(BaseModel):
@@ -305,14 +359,17 @@ def _create_task(url: str, fmt: str) -> str:
     return task_id
 
 
-def _run_task_worker(task_id: str, url: str, fmt: str):
+def _run_task_worker(task_id: str, url: str, fmt: str, start_time: Optional[str] = None, end_time: Optional[str] = None):
     """Worker launcher executed inside thread pool."""
     with _lock:
         if task_id in downloads:
             downloads[task_id]["status"] = "starting"
             downloads[task_id]["speed"] = "Connecting..."
             downloads[task_id]["start_ts"] = time.time()
-    master_download_worker(task_id, url, fmt)
+            if start_time and end_time:
+                downloads[task_id]["is_trimmed"] = True
+                downloads[task_id]["trim_range"] = f"{start_time} - {end_time}"
+    master_download_worker(task_id, url, fmt, start_time, end_time)
 
 
 def _finish_task(task_id: str, updates: dict):
@@ -1036,6 +1093,11 @@ def _base_ydl_opts(outtmpl: str, hooks: list) -> dict:
         "merge_output_format": "mp4",
         "js_runtimes": js_runtimes,
         "remote_components": {"ejs:github"},
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "android", "mweb", "web"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
             "Accept": "*/*",
@@ -1061,6 +1123,11 @@ def _info_ydl_opts() -> dict:
         "noplaylist": True,
         "js_runtimes": js_runtimes,
         "remote_components": {"ejs:github"},
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "android", "mweb", "web"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
             "Accept": "*/*",
@@ -1240,14 +1307,89 @@ def _download_ytdlp(task_id: str, url: str, fmt: str):
         raise e
 
 
+def _download_trimmed_media(task_id: str, url: str, fmt: str, start_time: str, end_time: str):
+    """Zero-full-download precision trimmer using FFmpeg input seeking."""
+    with _lock:
+        if task_id in downloads:
+            downloads[task_id].update({
+                "status": "downloading",
+                "progress": 20,
+                "speed": "Virtual Byte-Range Seek",
+                "eta": f"Clipping {start_time} - {end_time}",
+            })
+
+    with yt_dlp.YoutubeDL(_info_ydl_opts()) as ydl:
+        info = ydl.extract_info(url, download=False)
+        if "entries" in info:
+            info = info["entries"][0]
+        title = info.get("title") or "clip"
+        formats = info.get("formats") or []
+
+        direct_url = None
+        if fmt == "mp3":
+            audio_formats = [f for f in formats if f.get("vcodec") == "none" and f.get("url")]
+            if audio_formats:
+                audio_formats.sort(key=lambda x: x.get("abr") or 0, reverse=True)
+                direct_url = audio_formats[0]["url"]
+        else:
+            prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
+            if prog:
+                prog.sort(key=lambda x: x.get("height") or 0, reverse=True)
+                direct_url = prog[0]["url"]
+            elif formats:
+                direct_url = formats[-1]["url"]
+
+    if not direct_url:
+        _download_ytdlp(task_id, url, fmt)
+        return
+
+    safe_title = _clean_filename(title)
+    s_clean = start_time.replace(":", ".")
+    e_clean = end_time.replace(":", ".")
+    ext = "mp3" if fmt == "mp3" else "mp4"
+    out_file = DOWNLOAD_DIR / f"{safe_title}_Clip_{s_clean}_to_{e_clean}.{ext}"
+
+    with _lock:
+        if task_id in downloads:
+            downloads[task_id].update({"status": "processing", "progress": 60, "speed": "FFmpeg Range Cut", "eta": "Finalizing"})
+
+    cmd = [_FFMPEG_PATH, "-y", "-ss", start_time, "-to", end_time, "-i", direct_url]
+    if fmt == "mp3":
+        cmd += ["-vn", "-c:a", "libmp3lame", "-b:a", "320k", str(out_file.resolve())]
+    else:
+        cmd += ["-c", "copy", "-movflags", "+faststart", str(out_file.resolve())]
+
+    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if not out_file.exists() or out_file.stat().st_size == 0:
+        # Keyframe boundary fallback
+        cmd_reencode = [_FFMPEG_PATH, "-y", "-ss", start_time, "-to", end_time, "-i", direct_url, "-c:v", "libx264", "-c:a", "aac", str(out_file.resolve())]
+        subprocess.run(cmd_reencode, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    if not out_file.exists():
+        raise Exception("FFmpeg trimmer was unable to render the selected clip range")
+
+    _finish_task(task_id, {
+        "filename": out_file.name,
+        "file_path": str(out_file.resolve()),
+        "size_str": _format_size(out_file.stat().st_size),
+        "is_audio": fmt == "mp3",
+        "title": f"{title} (Clip {start_time}-{end_time})",
+        "thumbnail": info.get("thumbnail") or "",
+    })
+
+
 # ──────────────────────────────────────────────────────────────
 # MASTER ROUTER DISPATCHER
 # ──────────────────────────────────────────────────────────────
-def master_download_worker(task_id: str, url: str, fmt: str):
+def master_download_worker(task_id: str, url: str, fmt: str, start_time: Optional[str] = None, end_time: Optional[str] = None):
     with _lock:
         if task_id in downloads and downloads[task_id].get("status") == "cancelled":
             return
     try:
+        if start_time and end_time:
+            _download_trimmed_media(task_id, url, fmt, start_time, end_time)
+            return
+
         url_lower = url.lower()
 
         # 1. YouTube Community Post
@@ -1352,7 +1494,15 @@ def system_info(request: Request):
 
 
 @app.post("/info")
-def get_info(req: InfoRequest):
+def get_info(req: InfoRequest, request: Request):
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "127.0.0.1")
+    )
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many preview requests. Please wait a moment.")
+
     url = req.url
     url_lower = url.lower()
 
@@ -1557,14 +1707,64 @@ def get_info(req: InfoRequest):
 
 
 @app.post("/download")
-async def start_download(req: DownloadRequest):
+async def start_download(req: DownloadRequest, request: Request):
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "127.0.0.1")
+    )
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many download requests. Please wait a moment.")
+
     extracted = _extract_urls(req.url)
     target_url = extracted[0] if extracted else req.url.strip()
     if not target_url:
         raise HTTPException(status_code=400, detail="Please provide a valid media URL")
     task_id = _create_task(target_url, req.format)
-    _executor.submit(_run_task_worker, task_id, target_url, req.format)
+    _executor.submit(_run_task_worker, task_id, target_url, req.format, req.start_time, req.end_time)
     return {"task_id": task_id}
+
+
+@app.get("/stream")
+def stream_media(url: str, request: Request):
+    """Zero-disk chunked stream proxy directly from upstream CDN to client browser."""
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "127.0.0.1")
+    )
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded.")
+
+    with yt_dlp.YoutubeDL(_info_ydl_opts()) as ydl:
+        info = ydl.extract_info(url, download=False)
+        if "entries" in info:
+            info = info["entries"][0]
+        title = info.get("title") or "media"
+        formats = info.get("formats") or []
+        prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
+        direct_url = prog[-1]["url"] if prog else (formats[-1]["url"] if formats else None)
+
+    if not direct_url:
+        raise HTTPException(status_code=400, detail="Could not resolve direct media stream")
+
+    safe_name = _clean_filename(title)
+
+    def iter_stream():
+        import requests
+        with requests.get(direct_url, stream=True, timeout=25, headers={"User-Agent": "Mozilla/5.0"}) as r:
+            for chunk in r.iter_content(chunk_size=1024 * 512):
+                if chunk:
+                    yield chunk
+
+    return StreamingResponse(
+        iter_stream(),
+        media_type="video/mp4",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
+            "Accept-Ranges": "bytes",
+        }
+    )
 
 
 @app.get("/status/{task_id}")

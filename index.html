@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#09090b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Downloadivo — Universal Media Studio</title>
+  <link rel="manifest" href="/assets/manifest.json" />
   <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
   <link rel="icon" type="image/png" href="/assets/icon_white.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -403,6 +407,106 @@
       display: flex;
       align-items: center;
       gap: 6px;
+    }
+
+    /* Precision Trimmer Controls */
+    .trimmer-section {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 10px 14px;
+      transition: all 0.2s ease;
+    }
+
+    .trimmer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .trimmer-title {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-subtle);
+    }
+
+    .trimmer-toggle-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      padding: 3px 8px;
+      background: rgba(59, 130, 246, 0.1);
+      border-radius: 6px;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .trimmer-body {
+      padding-top: 10px;
+      margin-top: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .trimmer-inputs {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .trimmer-field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 5px 10px;
+    }
+
+    .trimmer-field label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .trimmer-field input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #fff;
+      font-size: 12.5px;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .trimmer-sep {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .trimmer-clear-btn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .trimmer-clear-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.06);
     }
 
     .download-action-btn {
@@ -853,6 +957,37 @@
         <div class="chips-grid" id="chips-grid"></div>
       </div>
 
+      <!-- Precision Trimmer (Optional Range Cut) -->
+      <div class="trimmer-section" id="trimmer-section" style="display: none;">
+        <div class="trimmer-header" onclick="toggleTrimmer()">
+          <div class="trimmer-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="6" cy="6" r="3"></circle>
+              <circle cx="6" cy="18" r="3"></circle>
+              <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+              <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+              <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+            </svg>
+            <span>Precision Trimmer</span>
+          </div>
+          <span class="trimmer-toggle-label" id="trimmer-toggle-label">+ Trim Range</span>
+        </div>
+        <div class="trimmer-body" id="trimmer-body" style="display: none;">
+          <div class="trimmer-inputs">
+            <div class="trimmer-field">
+              <label>Start</label>
+              <input type="text" id="trim-start" placeholder="00:00" maxlength="8" />
+            </div>
+            <span class="trimmer-sep">➔</span>
+            <div class="trimmer-field">
+              <label>End</label>
+              <input type="text" id="trim-end" placeholder="00:30" maxlength="8" />
+            </div>
+            <button type="button" class="trimmer-clear-btn" onclick="clearTrimmer()">Clear</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Footer Action Bar -->
       <div class="card-footer">
         <div class="detected-status" id="detected-status">
@@ -1048,6 +1183,9 @@
 
       // If no link entered: HIDE options & reset to standby
       if (!text) {
+        const trimmerSection = document.getElementById('trimmer-section');
+        if (trimmerSection) trimmerSection.style.display = 'none';
+        clearTrimmer();
         optionsSection.classList.remove('show');
         previewStrip.classList.remove('show');
         badgeIconSvg.innerHTML = SVG_ICONS.globe;
@@ -1185,7 +1323,31 @@
         <button class="opt-chip ${c.is8k ? 'chip-8k' : ''} ${c.fmt === selectedFormat ? 'active' : ''}" onclick="selectFormatChip(this, '${c.fmt}')">${c.label}</button>
       `).join('');
 
+      const trimmerSection = document.getElementById('trimmer-section');
+      if (trimmerSection) {
+        const canTrim = ['yt_video', 'yt_shorts', 'ig_reel', 'twitter', 'tiktok', 'direct_video', 'generic'].includes(type);
+        trimmerSection.style.display = canTrim ? 'block' : 'none';
+      }
+
       updateButtonLabel();
+    }
+
+    let trimmerOpen = false;
+    function toggleTrimmer() {
+      trimmerOpen = !trimmerOpen;
+      const body = document.getElementById('trimmer-body');
+      const label = document.getElementById('trimmer-toggle-label');
+      if (body && label) {
+        body.style.display = trimmerOpen ? 'block' : 'none';
+        label.textContent = trimmerOpen ? '− Close' : '+ Trim Range';
+      }
+    }
+
+    function clearTrimmer() {
+      const s = document.getElementById('trim-start');
+      const e = document.getElementById('trim-end');
+      if (s) s.value = '';
+      if (e) e.value = '';
     }
 
     function selectFormatChip(btn, fmt) {
@@ -1317,10 +1479,18 @@
       updateProgress(0, 'Connecting to source...', '');
 
       try {
+        const trimStart = (document.getElementById('trim-start') ? document.getElementById('trim-start').value : '').trim();
+        const trimEnd = (document.getElementById('trim-end') ? document.getElementById('trim-end').value : '').trim();
+        const payload = { url: targetUrl, format: selectedFormat };
+        if (trimStart && trimEnd) {
+          payload.start_time = trimStart;
+          payload.end_time = trimEnd;
+        }
+
         const res = await fetch('/download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: targetUrl, format: selectedFormat })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.task_id) {
