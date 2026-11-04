@@ -1725,7 +1725,7 @@ async def start_download(req: DownloadRequest, request: Request):
     return {"task_id": task_id}
 
 
-@app.get("/stream")
+@app.api_route("/stream", methods=["GET", "HEAD"])
 def stream_media(url: str, format: str = "best", request: Request = None):
     """Zero-disk high-speed chunked stream proxy directly into client Chrome browser."""
     if request:
