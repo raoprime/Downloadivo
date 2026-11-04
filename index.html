@@ -1479,28 +1479,52 @@
       doneCard.classList.remove('show');
       progressBox.classList.add('show');
       startLiveStopwatch();
-      updateProgress(0, 'Connecting to source...', '');
+      updateProgress(10, 'Connecting to stream...', '');
 
       try {
         const trimStart = (document.getElementById('trim-start') ? document.getElementById('trim-start').value : '').trim();
         const trimEnd = (document.getElementById('trim-end') ? document.getElementById('trim-end').value : '').trim();
-        const payload = { url: targetUrl, format: selectedFormat };
-        if (trimStart && trimEnd) {
-          payload.start_time = trimStart;
-          payload.end_time = trimEnd;
+        const isTrimmed = Boolean(trimStart && trimEnd);
+
+        // If trimming is specified, use virtual byte-range trimmer worker
+        if (isTrimmed) {
+          const payload = { url: targetUrl, format: selectedFormat, start_time: trimStart, end_time: trimEnd };
+          const res = await fetch('/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (data.task_id) {
+            pollTask(data.task_id);
+          } else {
+            throw new Error(data.detail || 'Download failed to start');
+          }
+          return;
         }
 
-        const res = await fetch('/download', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (data.task_id) {
-          pollTask(data.task_id);
-        } else {
-          throw new Error(data.detail || 'Download failed to start');
-        }
+        // ⚡ INSTANT CHROME DIRECT DOWNLOAD (Native browser line-rate speed)
+        // Chrome catches this immediately and shows the download bar in the browser!
+        btnText.textContent = 'Downloading in Chrome...';
+        updateProgress(60, 'Streaming directly into Chrome...', 'Fast Download');
+
+        const streamUrl = `/stream?url=${encodeURIComponent(targetUrl)}&format=${encodeURIComponent(selectedFormat)}`;
+        
+        // Trigger Chrome browser native download instantly
+        const dlAnchor = document.createElement('a');
+        dlAnchor.href = streamUrl;
+        dlAnchor.setAttribute('download', '');
+        document.body.appendChild(dlAnchor);
+        dlAnchor.click();
+        document.body.removeChild(dlAnchor);
+
+        setTimeout(() => {
+          stopLiveStopwatch();
+          progressBox.classList.remove('show');
+          detectedStatus.innerHTML = '<span style="color: var(--green); font-weight: 500;">⚡ Download active in Chrome! Check your browser downloads bar.</span>';
+          resetButton();
+        }, 1500);
+
       } catch (err) {
         stopLiveStopwatch();
         showError(err.message);

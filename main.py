@@ -1726,39 +1726,158 @@ async def start_download(req: DownloadRequest, request: Request):
 
 
 @app.get("/stream")
-def stream_media(url: str, request: Request):
-    """Zero-disk chunked stream proxy directly from upstream CDN to client browser."""
-    client_ip = (
-        request.headers.get("cf-connecting-ip")
-        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
-        or (request.client.host if request.client else "127.0.0.1")
-    )
-    if not _check_rate_limit(client_ip):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded.")
+def stream_media(url: str, format: str = "best", request: Request = None):
+    """Zero-disk high-speed chunked stream proxy directly into client Chrome browser."""
+    if request:
+        client_ip = (
+            request.headers.get("cf-connecting-ip")
+            or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+            or (request.client.host if request.client else "127.0.0.1")
+        )
+        if not _check_rate_limit(client_ip):
+            raise HTTPException(status_code=429, detail="Rate limit exceeded.")
 
-    with yt_dlp.YoutubeDL(_info_ydl_opts()) as ydl:
-        info = ydl.extract_info(url, download=False)
-        if "entries" in info:
-            info = info["entries"][0]
-        title = info.get("title") or "media"
-        formats = info.get("formats") or []
-        prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
-        direct_url = prog[-1]["url"] if prog else (formats[-1]["url"] if formats else None)
+    extracted = _extract_urls(url)
+    target_url = extracted[0] if extracted else url.strip()
 
-    if not direct_url:
-        raise HTTPException(status_code=400, detail="Could not resolve direct media stream")
+    try:
+        with yt_dlp.YoutubeDL(_info_ydl_opts()) as ydl:
+            info = ydl.extract_info(target_url, download=False)
+            if "entries" in info:
+                info = info["entries"][0]
+            title = info.get("title") or "download"
+            formats = info.get("formats") or []
+    except Exception as e:
+        err = str(e).replace("ERROR: ", "").replace("[youtube] ", "")
+        raise HTTPException(status_code=400, detail=f"Cannot resolve media stream: {err[:200]}")
 
     safe_name = _clean_filename(title)
+    fmt_lower = (format or "best").lower()
 
-    def iter_stream():
+    # 1. Audio stream requested (MP3 / Audio)
+    if fmt_lower in ["mp3", "audio"]:
+        audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
+        audio_fmts.sort(key=lambda x: x.get("abr") or 0, reverse=True)
+        if not audio_fmts:
+            raise HTTPException(status_code=400, detail="No audio stream available")
+        direct_url = audio_fmts[0]["url"]
+
+        def iter_audio():
+            import requests
+            with requests.get(direct_url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as r:
+                for chunk in r.iter_content(chunk_size=1024 * 512):
+                    if chunk:
+                        yield chunk
+
+        return StreamingResponse(
+            iter_audio(),
+            media_type="audio/mpeg",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_name}.mp3"',
+                "Accept-Ranges": "bytes",
+            }
+        )
+
+    # 2. Video stream requested
+    # Fast path: Progressive format (video + audio pre-combined) -> zero server CPU, instant start
+    prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
+    chosen_url = None
+
+    if prog:
+        if fmt_lower == "720p":
+            matches = [f for f in prog if (f.get("height") or 0) <= 720]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower == "480p":
+            matches = [f for f in prog if (f.get("height") or 0) <= 480]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower == "360p":
+            matches = [f for f in prog if (f.get("height") or 0) <= 360]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower in ["best", "original"]:
+            chosen_url = prog[-1]["url"]
+
+    if chosen_url:
+        def iter_stream():
+            import requests
+            with requests.get(chosen_url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as r:
+                for chunk in r.iter_content(chunk_size=1024 * 512):
+                    if chunk:
+                        yield chunk
+
+        return StreamingResponse(
+            iter_stream(),
+            media_type="video/mp4",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
+                "Accept-Ranges": "bytes",
+            }
+        )
+
+    # 3. Separate video + audio streams available -> Pipe mux via FFmpeg in real time
+    video_fmts = [f for f in formats if f.get("vcodec") != "none" and f.get("url")]
+    audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
+
+    if video_fmts and audio_fmts and _FFMPEG_PATH:
+        if fmt_lower == "1080p":
+            matches = [f for f in video_fmts if (f.get("height") or 0) <= 1080]
+            chosen_v = matches[-1]["url"] if matches else video_fmts[-1]["url"]
+        elif fmt_lower == "4k":
+            matches = [f for f in video_fmts if (f.get("height") or 0) <= 2160]
+            chosen_v = matches[-1]["url"] if matches else video_fmts[-1]["url"]
+        elif fmt_lower == "8k":
+            chosen_v = video_fmts[-1]["url"]
+        else:
+            chosen_v = video_fmts[-1]["url"]
+
+        chosen_a = audio_fmts[-1]["url"]
+
+        def iter_ffmpeg_pipe():
+            cmd = [
+                _FFMPEG_PATH,
+                "-y",
+                "-loglevel", "error",
+                "-i", chosen_v,
+                "-i", chosen_a,
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+                "-f", "mp4",
+                "pipe:1"
+            ]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                while True:
+                    data = proc.stdout.read(64 * 1024)
+                    if not data:
+                        break
+                    yield data
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+
+        return StreamingResponse(
+            iter_ffmpeg_pipe(),
+            media_type="video/mp4",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
+                "Accept-Ranges": "bytes",
+            }
+        )
+
+    # 4. Fallback direct stream
+    fallback_url = formats[-1]["url"] if formats else None
+    if not fallback_url:
+        raise HTTPException(status_code=400, detail="Could not resolve media stream URL")
+
+    def iter_fallback():
         import requests
-        with requests.get(direct_url, stream=True, timeout=25, headers={"User-Agent": "Mozilla/5.0"}) as r:
+        with requests.get(fallback_url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as r:
             for chunk in r.iter_content(chunk_size=1024 * 512):
                 if chunk:
                     yield chunk
 
     return StreamingResponse(
-        iter_stream(),
+        iter_fallback(),
         media_type="video/mp4",
         headers={
             "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
