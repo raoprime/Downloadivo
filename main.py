@@ -43,25 +43,76 @@ ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 _NODE_PATH = shutil.which("node") or shutil.which("node.exe") or ""
 _FFMPEG_PATH = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe") or ""
 
-# Ephemeral File Storage Retention (30 minutes TTL for zero-cost cloud disk hygiene)
+# Storage Configuration
+# Ephemeral pruning enabled on cloud/headless or if explicitly set via EPHEMERAL_STORAGE=1
+IS_EPHEMERAL = os.environ.get("EPHEMERAL_STORAGE", "0") == "1" or not hasattr(os, "startfile")
 FILE_RETENTION_SECONDS = int(os.environ.get("FILE_RETENTION_SECONDS", 1800))
 
+_cached_tunnel_url = ""
+_tunnel_lock = threading.Lock()
+
+def _get_public_tunnel_url() -> str:
+    global _cached_tunnel_url
+    with _tunnel_lock:
+        if _cached_tunnel_url:
+            return _cached_tunnel_url
+
+    url_file = Path(__file__).parent / "tunnel_url.txt"
+    if url_file.exists():
+        try:
+            txt = url_file.read_text("utf-8").strip()
+            if txt.startswith("http"):
+                with _tunnel_lock:
+                    _cached_tunnel_url = txt
+                return txt
+        except Exception:
+            pass
+
+    cf_log = Path(__file__).parent / "cloudflared.log"
+    if cf_log.exists():
+        try:
+            content = cf_log.read_text("utf-8", errors="ignore")
+            matches = re.findall(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", content)
+            if matches:
+                url = matches[-1]
+                with _tunnel_lock:
+                    _cached_tunnel_url = url
+                try:
+                    url_file.write_text(url + "\n", encoding="utf-8")
+                except Exception:
+                    pass
+                return url
+        except Exception:
+            pass
+    return ""
+
 def _cleanup_old_files_daemon():
-    """Background storage pruner that runs continuously to clean files older than TTL."""
+    """Background storage pruner and tunnel sync daemon."""
     while True:
         try:
-            time.sleep(300)  # Sweep every 5 minutes
+            time.sleep(15)  # Quick check every 15 seconds
             now = time.time()
+            
+            # Sync tunnel URL if needed
+            _get_public_tunnel_url()
+
             if DOWNLOAD_DIR.exists():
                 for f in DOWNLOAD_DIR.glob("*"):
-                    if f.is_file() and not f.name.endswith(".gitkeep"):
-                        try:
-                            # Prune files older than retention TTL or orphaned .part files older than 15 mins
-                            age = now - f.stat().st_mtime
-                            if age > FILE_RETENTION_SECONDS or (f.name.endswith(".part") and age > 900):
-                                f.unlink(missing_ok=True)
-                        except Exception:
-                            pass
+                    if not f.is_file() or f.name.endswith(".gitkeep"):
+                        continue
+                    try:
+                        age = now - f.stat().st_mtime
+                        # 1. Prune orphaned partial temp files older than 30 mins
+                        if (f.name.endswith(".part") or f.name.endswith(".ytdl")) and age > 1800:
+                            f.unlink(missing_ok=True)
+                        # 2. Prune temporary batch zip archives older than 1 hour
+                        elif f.name.startswith("Downloadivo_Batch_") and age > 3600:
+                            f.unlink(missing_ok=True)
+                        # 3. Only prune finished media files in cloud / ephemeral deployments
+                        elif IS_EPHEMERAL and age > FILE_RETENTION_SECONDS:
+                            f.unlink(missing_ok=True)
+                    except Exception:
+                        pass
         except Exception:
             pass
 
@@ -171,6 +222,23 @@ def _extract_urls(text: str) -> List[str]:
         if u and u not in cleaned:
             cleaned.append(u)
     return cleaned
+
+
+def _is_remote_request(request: Request) -> bool:
+    """Accurately identify if the request originates from a remote/public client."""
+    if not request:
+        return False
+    cf_ip = request.headers.get("cf-connecting-ip")
+    host_hdr = request.headers.get("host", "").lower()
+    if cf_ip or "trycloudflare.com" in host_hdr:
+        return True
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        first_ip = xff.split(",")[0].strip()
+        if first_ip not in ["127.0.0.1", "::1", "localhost"] and not first_ip.startswith("192.168.") and not first_ip.startswith("10."):
+            return True
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    return client_ip not in ["127.0.0.1", "::1", "localhost"] and not client_ip.startswith("192.168.") and not client_ip.startswith("10.")
 
 
 def _create_task(url: str, fmt: str) -> str:
@@ -1107,9 +1175,17 @@ def _download_ytdlp(task_id: str, url: str, fmt: str):
 
             file_path = Path(filename)
             if not file_path.exists():
-                potential = [f for f in DOWNLOAD_DIR.glob(f"*{file_path.stem[:30]}*") if not f.name.endswith(".part")]
-                if potential:
-                    file_path = potential[0]
+                stem_sub = re.sub(r"[^\w\s-]", "", file_path.stem[:25]).strip().lower()
+                candidates = []
+                for item in DOWNLOAD_DIR.iterdir():
+                    if item.is_file() and not item.name.endswith(".part") and not item.name.endswith(".ytdl"):
+                        if stem_sub and stem_sub in item.name.lower():
+                            candidates.append(item)
+                        elif item.stat().st_mtime >= (time.time() - 300):
+                            candidates.append(item)
+                if candidates:
+                    candidates.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+                    file_path = candidates[0]
 
             actual_size = file_path.stat().st_size if file_path.exists() else 0
 
@@ -1201,11 +1277,17 @@ async def index():
 
 @app.get("/system-info")
 async def system_info(request: Request):
-    client_ip = request.client.host if request.client else "127.0.0.1"
-    is_localhost = client_ip in ["127.0.0.1", "::1", "localhost"] or client_ip.startswith("192.168.") or client_ip.startswith("10.")
+    is_remote = _is_remote_request(request)
+    is_localhost = not is_remote
+    client_ip = (
+        request.headers.get("cf-connecting-ip")
+        or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
+        or (request.client.host if request.client else "127.0.0.1")
+    )
     total, used, free = shutil.disk_usage(DOWNLOAD_DIR)
-    files = [f for f in DOWNLOAD_DIR.glob("*") if f.is_file()]
+    files = [f for f in DOWNLOAD_DIR.glob("*") if f.is_file() and not f.name.endswith(".gitkeep")]
     consumed = sum(f.stat().st_size for f in files)
+    public_url = _get_public_tunnel_url()
 
     return {
         "download_dir": str(DOWNLOAD_DIR),
@@ -1217,8 +1299,10 @@ async def system_info(request: Request):
         "ffmpeg_available": bool(_FFMPEG_PATH),
         "ytdlp_version": yt_dlp.version.__version__,
         "is_localhost": is_localhost,
+        "is_remote": is_remote,
         "is_cloud": not hasattr(os, "startfile"),
         "client_ip": client_ip,
+        "public_url": public_url,
     }
 
 
@@ -1558,7 +1642,7 @@ async def list_downloads():
 
 @app.api_route("/file/{task_id}", methods=["GET", "HEAD"])
 @app.api_route("/download-file/{task_id}", methods=["GET", "HEAD"])
-async def download_file_by_id(task_id: str):
+async def download_file_by_id(task_id: str, request: Request):
     """Direct streaming FileResponse for mobile and remote browsers worldwide."""
     target_path: Optional[Path] = None
     filename: Optional[str] = None
@@ -1577,10 +1661,12 @@ async def download_file_by_id(task_id: str):
             if cand.exists():
                 target_path = cand
             else:
-                stem = Path(filename).stem[:30]
-                matches = [f for f in DOWNLOAD_DIR.glob(f"*{stem}*") if not f.name.endswith(".part")]
-                if matches:
-                    target_path = matches[0]
+                stem_sub = re.sub(r"[^\w\s-]", "", Path(filename).stem[:25]).strip().lower()
+                for item in DOWNLOAD_DIR.iterdir():
+                    if item.is_file() and not item.name.endswith(".part") and not item.name.endswith(".ytdl"):
+                        if stem_sub and stem_sub in item.name.lower():
+                            target_path = item
+                            break
 
     if not target_path or not target_path.exists():
         raise HTTPException(status_code=404, detail="File not found or has expired from server disk")
@@ -1607,15 +1693,56 @@ async def download_file_by_id(task_id: str):
         path=str(target_path.resolve()),
         filename=dl_name,
         media_type=media_type,
+        method=request.method,
         headers={
-            "Content-Disposition": f'attachment; filename="{dl_name}"',
             "Cache-Control": "public, max-age=3600",
+            "Accept-Ranges": "bytes",
+        }
+    )
+
+
+@app.api_route("/batch-zip", methods=["GET", "POST", "HEAD"])
+async def download_batch_zip(request: Request, tasks: str = ""):
+    """Download all completed media files from a batch as a single ZIP archive."""
+    task_ids = [t.strip() for t in tasks.split(",") if t.strip()]
+    if not task_ids:
+        raise HTTPException(status_code=400, detail="No task IDs provided")
+
+    valid_files = []
+    with _lock:
+        for tid in task_ids:
+            if tid in downloads:
+                fp = downloads[tid].get("file_path")
+                if fp and Path(fp).exists():
+                    valid_files.append(Path(fp))
+
+    if not valid_files:
+        raise HTTPException(status_code=404, detail="No completed files found for this batch")
+
+    zip_filename = f"Downloadivo_Batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+    zip_path = DOWNLOAD_DIR / zip_filename
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in valid_files:
+            zf.write(f, arcname=f.name)
+
+    return FileResponse(
+        path=str(zip_path.resolve()),
+        filename=zip_filename,
+        media_type="application/zip",
+        method=request.method,
+        headers={
+            "Cache-Control": "no-cache",
+            "Accept-Ranges": "bytes",
         }
     )
 
 
 @app.post("/open-file")
-async def open_file(req: FileActionRequest):
+async def open_file(req: FileActionRequest, request: Request):
+    if _is_remote_request(request) or not hasattr(os, "startfile"):
+        return {"ok": True, "is_remote": True, "download_url": f"/file/{req.task_id}" if req.task_id else None}
+
     target_path: Optional[Path] = None
     
     # 1. Try task_id lookup
@@ -1631,17 +1758,15 @@ async def open_file(req: FileActionRequest):
             target_path = cand
         else:
             # 3. Fuzzy search by stem
-            stem = Path(req.filename).stem[:30]
-            matches = [f for f in DOWNLOAD_DIR.glob(f"*{stem}*") if not f.name.endswith(".part")]
-            if matches:
-                target_path = matches[0]
+            stem_sub = re.sub(r"[^\w\s-]", "", Path(req.filename).stem[:25]).strip().lower()
+            for item in DOWNLOAD_DIR.iterdir():
+                if item.is_file() and not item.name.endswith(".part") and not item.name.endswith(".ytdl"):
+                    if stem_sub and stem_sub in item.name.lower():
+                        target_path = item
+                        break
 
     if not target_path or not target_path.exists():
         raise HTTPException(status_code=404, detail="File could not be found on disk")
-
-    # If running on cloud/Linux (no local display), return download link
-    if not hasattr(os, "startfile") and not shutil.which("explorer"):
-        return {"ok": True, "is_remote": True, "download_url": f"/file/{req.task_id}"}
 
     try:
         os.startfile(str(target_path.resolve()))
@@ -1651,7 +1776,10 @@ async def open_file(req: FileActionRequest):
 
 
 @app.api_route("/open-folder", methods=["GET", "POST"])
-async def open_folder(req: Optional[FileActionRequest] = None):
+async def open_folder(request: Request, req: Optional[FileActionRequest] = None):
+    if _is_remote_request(request) or not hasattr(os, "startfile"):
+        return {"ok": True, "is_remote": True}
+
     target_path: Optional[Path] = None
     if req:
         if req.task_id and req.task_id in downloads:
@@ -1663,14 +1791,12 @@ async def open_folder(req: Optional[FileActionRequest] = None):
             if cand.exists():
                 target_path = cand
             else:
-                stem = Path(req.filename).stem[:30]
-                matches = [f for f in DOWNLOAD_DIR.glob(f"*{stem}*") if not f.name.endswith(".part")]
-                if matches:
-                    target_path = matches[0]
-
-    # If running on cloud/Linux (no local display), return download directory response
-    if not hasattr(os, "startfile") and not shutil.which("explorer"):
-        return {"ok": True, "is_remote": True}
+                stem_sub = re.sub(r"[^\w\s-]", "", Path(req.filename).stem[:25]).strip().lower()
+                for item in DOWNLOAD_DIR.iterdir():
+                    if item.is_file() and not item.name.endswith(".part") and not item.name.endswith(".ytdl"):
+                        if stem_sub and stem_sub in item.name.lower():
+                            target_path = item
+                            break
 
     if target_path and target_path.exists():
         # Open Windows Explorer and highlight the exact downloaded file!

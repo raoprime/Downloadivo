@@ -7,3 +7,5 @@ downloads/*
 !downloads/.gitkeep
 *.part
 *.ytdl
+cloudflared.log
+tunnel_url.txt

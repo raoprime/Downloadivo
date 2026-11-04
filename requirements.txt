@@ -6,4 +6,3 @@ instaloader>=4.14.0
 aiofiles>=23.2.0
 requests>=2.31.0
 curl_cffi>=0.6.0
-gradio>=5.0.0

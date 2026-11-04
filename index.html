@@ -697,6 +697,69 @@
       display: none !important;
     }
 
+    .tunnel-live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+      color: #34d399;
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+    }
+    .tunnel-live-pill:hover {
+      background: rgba(16, 185, 129, 0.18);
+      border-color: rgba(16, 185, 129, 0.45);
+      transform: translateY(-1px);
+    }
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.8);
+      animation: livePulse 2s infinite ease-in-out;
+    }
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .tunnel-label {
+      color: var(--text-subtle);
+    }
+    .tunnel-host {
+      font-weight: 600;
+      color: #fff;
+    }
+
+    #toast-msg {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(18, 18, 22, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      padding: 9px 18px;
+      border-radius: 9999px;
+      font-size: 12.5px;
+      font-weight: 500;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 9999;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    #toast-msg.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
     .btn-reset {
       background: transparent;
       border: none;
@@ -1066,7 +1129,18 @@
       <img src="/assets/logo_white.png" alt="Downloadivo" class="brand-logo-img" />
     </div>
 
-    <button class="header-btn" onclick="openFolder()" title="Open Downloads Directory">
+    <!-- Live Worldwide Cloudflare Tunnel Indicator -->
+    <div class="tunnel-live-pill" id="tunnel-live-pill" style="display: none;" onclick="copyTunnelUrl()" title="Click to copy live public link">
+      <span class="live-dot"></span>
+      <span class="tunnel-label">Live Worldwide:</span>
+      <span class="tunnel-host" id="tunnel-host-text">Connecting...</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+    </div>
+
+    <button class="header-btn local-only" onclick="openFolder()" title="Open Downloads Directory">
       <svg width="13.5" height="13.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
       </svg>
@@ -1229,6 +1303,13 @@
             </svg>
             <span>Save to Device</span>
           </a>
+          <button class="btn-action-secondary" id="btn-copy-link" onclick="copyFinishedLink()" title="Copy Direct Download Link">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span id="copy-link-text">Copy Link</span>
+          </button>
           <button class="btn-action-secondary local-only" onclick="openFinishedFile()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="5 3 19 12 5 21 5 3"/>
@@ -1270,8 +1351,16 @@
 
         <!-- Batch Action Footer -->
         <div class="batch-card-footer" id="batch-card-footer" style="display: none;">
-          <div class="done-actions-row local-only">
-            <button class="btn-action-primary" onclick="openFolder()">
+          <div class="done-actions-row">
+            <a class="btn-action-primary" id="btn-batch-download-zip" href="#" download style="display: none;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Download All (ZIP)</span>
+            </a>
+            <button class="btn-action-secondary local-only" onclick="openFolder()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               <span>Open Downloads Folder</span>
             </button>
@@ -1882,6 +1971,8 @@
       activeBatchTasks = tasks;
       batchCountPill.textContent = `0 / ${tasks.length} Done`;
       batchOverallFill.style.width = '0%';
+      const zipBtn = document.getElementById('btn-batch-download-zip');
+      if (zipBtn) zipBtn.style.display = 'none';
 
       // Render initial queue rows
       batchItemsList.innerHTML = tasks.map((t, idx) => {
@@ -1973,6 +2064,18 @@
             stopBatchStopwatch();
             document.getElementById('batch-indicator').style.animation = 'none';
             document.getElementById('batch-indicator').style.background = '#10b981';
+
+            const doneTaskIds = taskIds.filter(tid => statusMap[tid] && statusMap[tid].status === 'done');
+            const zipBtn = document.getElementById('btn-batch-download-zip');
+            if (zipBtn) {
+              if (doneTaskIds.length > 0) {
+                zipBtn.href = `/batch-zip?tasks=${doneTaskIds.join(',')}`;
+                zipBtn.style.display = 'inline-flex';
+              } else {
+                zipBtn.style.display = 'none';
+              }
+            }
+
             batchCardFooter.style.display = 'flex';
             resetButton();
           }
@@ -2000,6 +2103,8 @@
       doneCard.classList.remove('show');
       batchCard.classList.remove('show');
       progressBox.classList.remove('show');
+      const zipBtn = document.getElementById('btn-batch-download-zip');
+      if (zipBtn) zipBtn.style.display = 'none';
       urlInput.value = '';
       batchUrlInput.value = '';
       if (isBatchMode) {
@@ -2056,12 +2161,62 @@
       } catch (_) {}
     }
 
-    // Detect client environment (hide local explorer buttons for remote mobile/browser visitors)
+    let currentPublicUrl = '';
+
+    function copyTunnelUrl() {
+      if (!currentPublicUrl) return;
+      navigator.clipboard.writeText(currentPublicUrl).then(() => {
+        showToast('Live public link copied to clipboard!');
+      }).catch(() => {
+        prompt('Copy public link:', currentPublicUrl);
+      });
+    }
+
+    function copyFinishedLink() {
+      if (!lastFinishedTaskId) return;
+      const fullUrl = `${window.location.origin}/file/${lastFinishedTaskId}`;
+      navigator.clipboard.writeText(fullUrl).then(() => {
+        showToast('Direct download link copied to clipboard!');
+      }).catch(() => {
+        prompt('Copy download link:', fullUrl);
+      });
+    }
+
+    function showToast(msg) {
+      let toast = document.getElementById('toast-msg');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toast-msg';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => toast.classList.remove('show'), 2600);
+    }
+
+    // Detect client environment (hide local explorer buttons for remote mobile/browser visitors) & get live tunnel URL
     fetch('/system-info')
       .then(r => r.json())
       .then(info => {
-        if (info && !info.is_localhost) {
-          document.body.classList.add('is-remote-client');
+        if (info) {
+          if (!info.is_localhost) {
+            document.body.classList.add('is-remote-client');
+          }
+          if (info.public_url) {
+            currentPublicUrl = info.public_url;
+            const pill = document.getElementById('tunnel-live-pill');
+            const hostElem = document.getElementById('tunnel-host-text');
+            if (pill && hostElem) {
+              try {
+                const parsed = new URL(info.public_url);
+                hostElem.textContent = parsed.hostname;
+              } catch (_) {
+                hostElem.textContent = info.public_url;
+              }
+              pill.style.display = 'inline-flex';
+            }
+          }
         }
       })
       .catch(() => {});

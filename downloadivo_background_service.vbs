@@ -9,5 +9,5 @@ WshShell.Run "cmd /c cd /d C:\Users\DELL\.gemini\antigravity\scratch\FastDownloa
 ' 2. Wait 2 seconds for server to bind port 8899
 WScript.Sleep 2000
 
-' 3. Start Cloudflare Live Tunnel in Background (Hidden)
-WshShell.Run "cmd /c cloudflared tunnel --url http://localhost:8899", 0, False
+' 3. Start Cloudflare Live Tunnel in Background (Hidden) with persistent log file
+WshShell.Run "cmd /c cd /d C:\Users\DELL\.gemini\antigravity\scratch\FastDownloader && cloudflared tunnel --url http://localhost:8899 --logfile cloudflared.log", 0, False
