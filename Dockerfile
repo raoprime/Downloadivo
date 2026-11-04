@@ -30,6 +30,7 @@ RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Copy source code and UI assets
 COPY --chown=user main.py index.html /app/
+COPY --chown=user assets /app/assets
 
 # Create persistent download cache directory
 RUN mkdir -p /app/downloads /tmp/downloads
