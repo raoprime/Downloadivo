@@ -7,43 +7,51 @@
   "rewrites": [
     {
       "source": "/health",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/health"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/health"
     },
     {
       "source": "/system-info",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/system-info"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/system-info"
     },
     {
       "source": "/info",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/info"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/info"
     },
     {
       "source": "/download",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/download"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/download"
     },
     {
       "source": "/status/:path*",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/status/:path*"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/status/:path*"
     },
     {
       "source": "/file/:path*",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/file/:path*"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/file/:path*"
     },
     {
       "source": "/download-file/:path*",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/download-file/:path*"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/download-file/:path*"
     },
     {
       "source": "/open-file",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/open-file"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/open-file"
     },
     {
       "source": "/open-folder",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/open-folder"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/open-folder"
     },
     {
       "source": "/stream",
-      "destination": "https://satellite-every-exhibition-cart.trycloudflare.com/stream"
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/stream"
+    },
+    {
+      "source": "/downloads",
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/downloads"
+    },
+    {
+      "source": "/cancel/:path*",
+      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/cancel/:path*"
     }
   ]
 }
