@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: downloadivo
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DOWNLOAD_DIR
+        value: /tmp/downloads
+      - key: EPHEMERAL_STORAGE
+        value: "1"
+      - key: FILE_RETENTION_SECONDS
+        value: "1800"
+    healthCheckPath: /health
+    autoDeploy: true
