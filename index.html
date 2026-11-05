@@ -1504,16 +1504,35 @@
         }
 
         // ⚡ INSTANT CHROME DIRECT DOWNLOAD (Native browser line-rate speed)
-        // Chrome catches this immediately and shows the download bar in the browser!
+        btnText.textContent = 'Fetching info...';
+        updateProgress(20, 'Getting video info...', '');
+
+        // Step 1: Get video title for proper filename
+        let dlFilename = 'media';
+        try {
+          const infoRes = await fetch(`/info?url=${encodeURIComponent(targetUrl)}`);
+          if (infoRes.ok) {
+            const infoData = await infoRes.json();
+            const rawTitle = infoData.title || infoData.filename || 'media';
+            // Sanitize: keep alphanum, spaces, hyphens
+            dlFilename = rawTitle.replace(/[^\w\s\-().]/g, '').trim().slice(0, 80) || 'media';
+          }
+        } catch (_) {}
+
+        // Step 2: Determine extension from format
+        const extMap = { mp3: 'mp3', '1080p': 'mp4', '720p': 'mp4', '480p': 'mp4', '4k': 'mp4', '8k': 'mp4', best: 'mp4' };
+        const ext = extMap[selectedFormat] || 'mp4';
+        const fullFilename = `${dlFilename}.${ext}`;
+
         btnText.textContent = 'Downloading in Chrome...';
-        updateProgress(60, 'Streaming directly into Chrome...', 'Fast Download');
+        updateProgress(60, `Downloading: ${fullFilename}`, 'Fast Download');
 
         const streamUrl = `/stream?url=${encodeURIComponent(targetUrl)}&format=${encodeURIComponent(selectedFormat)}`;
         
-        // Trigger Chrome browser native download instantly
+        // Step 3: Trigger Chrome native download with proper filename
         const dlAnchor = document.createElement('a');
         dlAnchor.href = streamUrl;
-        dlAnchor.setAttribute('download', '');
+        dlAnchor.download = fullFilename;   // ← proper filename, no more stream.json!
         document.body.appendChild(dlAnchor);
         dlAnchor.click();
         document.body.removeChild(dlAnchor);
@@ -1521,7 +1540,7 @@
         setTimeout(() => {
           stopLiveStopwatch();
           progressBox.classList.remove('show');
-          detectedStatus.innerHTML = '<span style="color: var(--green); font-weight: 500;">⚡ Download active in Chrome! Check your browser downloads bar.</span>';
+          detectedStatus.innerHTML = `<span style="color: var(--green); font-weight: 500;">⚡ "${fullFilename}" downloading in Chrome!</span>`;
           resetButton();
         }, 1500);
 
