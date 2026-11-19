@@ -172,7 +172,7 @@ class DownloadService : Service() {
                         status = DownloadStatus.SUCCESS,
                         filePath = mediaUri.toString()
                     )
-                    showCompletionNotification(cleanTitle, true)
+                    showCompletionNotification(cleanTitle, true, mediaUri, isAudio)
                 } else {
                     throw result.exceptionOrNull() ?: Exception("Download aborted")
                 }
@@ -187,7 +187,7 @@ class DownloadService : Service() {
                     status = DownloadStatus.ERROR,
                     error = e.localizedMessage ?: "Download failed"
                 )
-                showCompletionNotification(cleanTitle, false)
+                showCompletionNotification(cleanTitle, false, null, isAudio)
             } finally {
                 try { outStream?.close() } catch (_: Exception) {}
                 if (wakeLock?.isHeld == true) wakeLock?.release()
@@ -234,6 +234,16 @@ class DownloadService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val cancelIntent = Intent(this, DownloadService::class.java).apply {
+            action = ACTION_CANCEL_DOWNLOAD
+        }
+        val cancelPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         return NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(if (progress >= 0) "$progress% • $speed" else "Streaming • $speed")
@@ -241,22 +251,37 @@ class DownloadService : Service() {
             .setProgress(100, if (progress >= 0) progress else 0, progress < 0)
             .setOngoing(true)
             .setContentIntent(contentIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
-    private fun showCompletionNotification(title: String, isSuccess: Boolean) {
+    private fun showCompletionNotification(title: String, isSuccess: Boolean, mediaUri: Uri?, isAudio: Boolean) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-        val contentIntent = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+
+        val contentIntent = if (isSuccess && mediaUri != null) {
+            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(mediaUri, if (isAudio) "audio/*" else "video/*")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            PendingIntent.getActivity(
+                this,
+                0,
+                viewIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        } else {
+            PendingIntent.getActivity(
+                this,
+                0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        }
 
         val notification = NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_ID)
             .setContentTitle(title)
-            .setContentText(if (isSuccess) "⚡ Download completed successfully!" else "Download failed")
+            .setContentText(if (isSuccess) "⚡ Download complete! Tap to play." else "Download failed")
             .setSmallIcon(if (isSuccess) android.R.drawable.stat_sys_download_done else android.R.drawable.stat_notify_error)
             .setAutoCancel(true)
             .setContentIntent(contentIntent)

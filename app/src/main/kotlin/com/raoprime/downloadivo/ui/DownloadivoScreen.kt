@@ -471,6 +471,22 @@ fun DownloadivoScreen(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            IconButton(
+                                onClick = {
+                                    val cancelIntent = android.content.Intent(context, DownloadService::class.java).apply {
+                                        action = DownloadService.ACTION_CANCEL_DOWNLOAD
+                                    }
+                                    context.startService(cancelIntent)
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Clear,
+                                    contentDescription = "Cancel Download",
+                                    tint = ErrorRed
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -538,6 +554,40 @@ fun DownloadivoScreen(
                             fontSize = 13.sp,
                             color = TextMuted
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    downloadTask.filePath?.let { uriStr ->
+                                        try {
+                                            val playIntent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                                setDataAndType(
+                                                    android.net.Uri.parse(uriStr),
+                                                    if (downloadTask.format == "mp3") "audio/*" else "video/*"
+                                                )
+                                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                            context.startActivity(playIntent)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "No media player found", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = PrimaryEmerald,
+                                    contentColor = Color.Black
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.SmartDisplay, contentDescription = null, tint = Color.Black)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Play Media", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }

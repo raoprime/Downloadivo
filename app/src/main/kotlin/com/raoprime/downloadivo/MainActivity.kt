@@ -1,6 +1,9 @@
 package com.raoprime.downloadivo
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,6 +26,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Android 13+ Notification Permission Check
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+
         handleShareIntent(intent)
 
         setContent {
@@ -44,11 +54,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleShareIntent(intent: Intent?) {
-        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
-            val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: ""
-            val extracted = extractUrl(text)
-            if (extracted.isNotBlank()) {
-                sharedUrl = extracted
+        if (intent == null) return
+
+        when (intent.action) {
+            Intent.ACTION_SEND -> {
+                if (intent.type == "text/plain") {
+                    val text = intent.getStringExtra(Intent.EXTRA_TEXT) ?: ""
+                    val extracted = extractUrl(text)
+                    if (extracted.isNotBlank()) {
+                        sharedUrl = extracted
+                    }
+                }
+            }
+            Intent.ACTION_VIEW -> {
+                val data = intent.dataString ?: ""
+                val extracted = extractUrl(data)
+                if (extracted.isNotBlank()) {
+                    sharedUrl = extracted
+                }
             }
         }
     }
