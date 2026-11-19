@@ -3,8 +3,10 @@ package com.raoprime.downloadivo.network
 import com.raoprime.downloadivo.model.MediaInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.InputStream
 import java.io.OutputStream
@@ -24,23 +26,50 @@ object DownloadEngine {
 
     suspend fun fetchMediaInfo(targetUrl: String): Result<MediaInfo> = withContext(Dispatchers.IO) {
         try {
-            val encoded = URLEncoder.encode(targetUrl, "UTF-8")
+            val jsonBody = JSONObject().put("url", targetUrl).toString()
+            val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+            val requestBody = jsonBody.toRequestBody(mediaType)
+
+            // Try POST first, fallback to GET if needed
             val request = Request.Builder()
-                .url("$BASE_URL/info?url=$encoded")
+                .url("$BASE_URL/info")
                 .header("User-Agent", "Downloadivo-Android/1.0")
-                .get()
+                .header("Content-Type", "application/json")
+                .post(requestBody)
                 .build()
 
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP ${response.code}: Failed to resolve media info"))
+                    // Fallback to GET
+                    val encoded = URLEncoder.encode(targetUrl, "UTF-8")
+                    val getReq = Request.Builder()
+                        .url("$BASE_URL/info?url=$encoded")
+                        .header("User-Agent", "Downloadivo-Android/1.0")
+                        .get()
+                        .build()
+                    val getResp = client.newCall(getReq).execute()
+                    if (!getResp.isSuccessful) {
+                        return@withContext Result.failure(Exception("HTTP ${getResp.code}: Failed to resolve media info"))
+                    }
+                    val body = getResp.body?.string() ?: throw Exception("Empty server response")
+                    val json = JSONObject(body)
+                    return@withContext Result.success(
+                        MediaInfo(
+                            title = json.optString("title", "Media Download"),
+                            author = json.optString("uploader", json.optString("author", "Web Stream")),
+                            duration = json.optString("duration", ""),
+                            thumbnail = json.optString("thumbnail", ""),
+                            url = targetUrl
+                        )
+                    )
                 }
+
                 val body = response.body?.string() ?: throw Exception("Empty server response")
                 val json = JSONObject(body)
 
                 val info = MediaInfo(
                     title = json.optString("title", "Media Download"),
-                    author = json.optString("author", "Web Stream"),
+                    author = json.optString("uploader", json.optString("author", "Web Stream")),
                     duration = json.optString("duration", ""),
                     thumbnail = json.optString("thumbnail", ""),
                     url = targetUrl

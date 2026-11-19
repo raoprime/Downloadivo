@@ -6,8 +6,10 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -15,6 +17,8 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.SmartDisplay
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +37,7 @@ import com.raoprime.downloadivo.model.DownloadStatus
 import com.raoprime.downloadivo.model.MediaInfo
 import com.raoprime.downloadivo.network.DownloadEngine
 import com.raoprime.downloadivo.service.DownloadService
+import com.raoprime.downloadivo.ui.theme.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,13 +56,13 @@ fun DownloadivoScreen(
     var isResolving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Seal-style Quick Share Bottom Sheet
+    // Seal-style Quick Share BottomSheet State
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val downloadTask by DownloadService.currentTask.collectAsState()
 
-    // Trigger Seal-style quick bottom sheet when a URL is shared from YouTube/Insta/Browser
+    // Auto-trigger Seal-style Quick BottomSheet when URL is shared via Android Intent
     LaunchedEffect(sharedUrl) {
         if (!sharedUrl.isNullOrBlank()) {
             inputUrl = sharedUrl
@@ -66,40 +72,49 @@ fun DownloadivoScreen(
             coroutineScope.launch {
                 val res = DownloadEngine.fetchMediaInfo(sharedUrl)
                 isResolving = false
-                res.onSuccess { resolvedInfo = it }
-                    .onFailure { errorMessage = it.message ?: "Failed to resolve link" }
+                res.onSuccess {
+                    resolvedInfo = it
+                }.onFailure {
+                    errorMessage = it.message ?: "Failed to resolve media info"
+                }
             }
         }
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        containerColor = BackgroundDark,
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
                         Text(
                             text = "Downloadivo",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                            fontSize = 20.sp,
+                            color = TextPrimary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer
+                            shape = RoundedCornerShape(8.dp),
+                            color = PrimaryEmerald.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
                         ) {
                             Text(
                                 text = "PRO",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PrimaryEmerald
                             )
                         }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = BackgroundDark
                 )
             )
         }
@@ -109,17 +124,67 @@ fun DownloadivoScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
                 .animateContentSize(),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            // ── URL INPUT CARD (Synchronized with Web UI) ──────────────────────
+            // ── HERO LOGO & TITLE (Website Matched) ──────────────────────────
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(vertical = 12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(68.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(SurfaceCardDark)
+                        .border(1.dp, CardBorderDark, RoundedCornerShape(20.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Logo",
+                        tint = PrimaryEmerald,
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Universal Downloader",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "High-speed line-rate media extractor",
+                    fontSize = 13.sp,
+                    color = TextMuted,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Platform tags matching website
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PlatformPill("YouTube")
+                    PlatformPill("Instagram")
+                    PlatformPill("X / Twitter")
+                    PlatformPill("TikTok")
+                    PlatformPill("Spotify")
+                }
+            }
+
+            // ── CENTRAL INPUT CARD (Exact Website & Seal Parity) ────────────
             Card(
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                ),
+                colors = CardDefaults.cardColors(containerColor = SurfaceCardDark),
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -129,10 +194,19 @@ fun DownloadivoScreen(
                             inputUrl = it
                             errorMessage = null
                         },
-                        placeholder = { Text("Paste video, reel, or audio link...") },
+                        placeholder = {
+                            Text("Paste video, reel, or audio link...", color = TextSubtle, fontSize = 14.sp)
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PrimaryEmerald,
+                            unfocusedBorderColor = CardBorderDark,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            cursorColor = PrimaryEmerald
+                        ),
                         trailingIcon = {
                             if (inputUrl.isNotBlank()) {
                                 IconButton(onClick = {
@@ -140,7 +214,7 @@ fun DownloadivoScreen(
                                     resolvedInfo = null
                                     errorMessage = null
                                 }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextMuted)
                                 }
                             } else {
                                 IconButton(onClick = {
@@ -155,25 +229,27 @@ fun DownloadivoScreen(
                                             res.onSuccess {
                                                 resolvedInfo = it
                                                 showBottomSheet = true
-                                            }.onFailure { errorMessage = it.message }
+                                            }.onFailure {
+                                                errorMessage = it.message
+                                            }
                                         }
                                     } else {
                                         Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
                                     }
                                 }) {
-                                    Icon(Icons.Default.ContentPaste, contentDescription = "Paste")
+                                    Icon(Icons.Default.ContentPaste, contentDescription = "Paste", tint = PrimaryEmerald)
                                 }
                             }
                         }
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        FilledTonalButton(
+                        Button(
                             onClick = {
                                 if (inputUrl.isNotBlank()) {
                                     isResolving = true
@@ -184,22 +260,31 @@ fun DownloadivoScreen(
                                         res.onSuccess {
                                             resolvedInfo = it
                                             showBottomSheet = true
-                                        }.onFailure { errorMessage = it.message }
+                                        }.onFailure {
+                                            errorMessage = it.message
+                                        }
                                     }
                                 }
                             },
                             enabled = inputUrl.isNotBlank() && !isResolving,
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PrimaryEmerald,
+                                contentColor = Color.Black,
+                                disabledContainerColor = CardBorderDark,
+                                disabledContentColor = TextSubtle
+                            )
                         ) {
                             if (isResolving) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
+                                    strokeWidth = 2.dp,
+                                    color = Color.Black
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Analyzing...")
+                                Text("Inspecting...", fontWeight = FontWeight.Bold)
                             } else {
-                                Text("Inspect Link")
+                                Text("Inspect Link", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -210,7 +295,8 @@ fun DownloadivoScreen(
             AnimatedVisibility(visible = errorMessage != null) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
+                    color = ErrorContainer,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -220,14 +306,130 @@ fun DownloadivoScreen(
                         Icon(
                             Icons.Default.ErrorOutline,
                             contentDescription = "Error",
-                            tint = MaterialTheme.colorScheme.error
+                            tint = ErrorRed
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             text = errorMessage ?: "",
-                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            color = TextPrimary,
                             fontSize = 13.sp
                         )
+                    }
+                }
+            }
+
+            // ── RESOLVED MEDIA CARD (Synchronized Preview) ───────────────────
+            resolvedInfo?.let { info ->
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCardDark),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        if (info.thumbnail.isNotBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(190.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(BackgroundDark)
+                            ) {
+                                AsyncImage(
+                                    model = info.thumbnail,
+                                    contentDescription = "Thumbnail",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                                if (info.duration.isNotBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color.Black.copy(alpha = 0.85f),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(8.dp)
+                                    ) {
+                                        Text(
+                                            text = info.duration,
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                        }
+
+                        Text(
+                            text = info.title.ifBlank { "Media Stream" },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = TextPrimary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (info.author.isNotBlank()) {
+                            Text(
+                                text = info.author,
+                                fontSize = 12.sp,
+                                color = TextMuted
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Format Selector Pills
+                        Text(
+                            text = "SELECT QUALITY",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextSubtle,
+                            letterSpacing = 0.5.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            SyncedFormatChip("best", "Best Video", selectedFormat) { selectedFormat = it }
+                            SyncedFormatChip("1080p", "1080p HD", selectedFormat) { selectedFormat = it }
+                            SyncedFormatChip("720p", "720p", selectedFormat) { selectedFormat = it }
+                            SyncedFormatChip("mp3", "320k MP3", selectedFormat) { selectedFormat = it }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Big Download Action Button
+                        Button(
+                            onClick = {
+                                DownloadService.startDownload(
+                                    context = context,
+                                    url = info.url,
+                                    title = info.title,
+                                    format = selectedFormat
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PrimaryEmerald,
+                                contentColor = Color.Black
+                            )
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Start Download Stream",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Color.Black
+                            )
+                        }
                     }
                 }
             }
@@ -236,9 +438,8 @@ fun DownloadivoScreen(
             if (downloadTask.status == DownloadStatus.DOWNLOADING) {
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                    ),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCardDark),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.5f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
@@ -248,9 +449,10 @@ fun DownloadivoScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = downloadTask.title.ifBlank { "Downloading media..." },
+                                text = downloadTask.title.ifBlank { "Downloading stream..." },
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 14.sp,
+                                color = TextPrimary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
@@ -258,11 +460,12 @@ fun DownloadivoScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primary
+                                color = PrimaryEmerald.copy(alpha = 0.15f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.4f))
                             ) {
                                 Text(
                                     text = downloadTask.speed.ifBlank { "Line-Rate" },
-                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    color = PrimaryEmerald,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
@@ -278,14 +481,18 @@ fun DownloadivoScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = PrimaryEmerald,
+                                trackColor = CardBorderDark
                             )
                         } else {
                             LinearProgressIndicator(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp))
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = PrimaryEmerald,
+                                trackColor = CardBorderDark
                             )
                         }
 
@@ -298,25 +505,24 @@ fun DownloadivoScreen(
                             Text(
                                 text = if (downloadTask.progress >= 0) "${downloadTask.progress}%" else "Streaming chunk...",
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = TextMuted
                             )
                             Text(
                                 text = formatByteSize(downloadTask.bytesDownloaded),
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = TextMuted
                             )
                         }
                     }
                 }
             }
 
-            // ── COMPLETED SUCCESS CARD (Direct Gallery Sync Notification) ──────
+            // ── COMPLETED SUCCESS CARD ───────────────────────────────────────
             if (downloadTask.status == DownloadStatus.SUCCESS) {
                 Card(
                     shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
-                    ),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCardDark),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryEmerald),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
@@ -324,32 +530,42 @@ fun DownloadivoScreen(
                             text = "⚡ Download Complete!",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                            color = PrimaryEmerald
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${downloadTask.title} is saved in your device Movies & Music folder.",
+                            text = "${downloadTask.title} is saved directly to your Movies & Music folder.",
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                            color = TextMuted
                         )
                     }
                 }
             }
         }
 
-        // ── SEAL-STYLE QUICK SHARE BOTTOM SHEET ──────────────────────────────
+        // ── SEAL-STYLE MODAL BOTTOM SHEET (When Shared via Android Intent) ──
         if (showBottomSheet && (resolvedInfo != null || isResolving)) {
             ModalBottomSheet(
                 onDismissRequest = { showBottomSheet = false },
                 sheetState = sheetState,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                containerColor = MaterialTheme.colorScheme.surface
+                containerColor = SurfaceCardDark,
+                dragHandle = {
+                    Box(
+                        modifier = Modifier
+                            .padding(vertical = 10.dp)
+                            .width(40.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(TextSubtle)
+                    )
+                }
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp, vertical = 8.dp)
-                        .padding(bottom = 32.dp),
+                        .padding(bottom = 36.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     if (isResolving) {
@@ -360,9 +576,9 @@ fun DownloadivoScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator()
+                                CircularProgressIndicator(color = PrimaryEmerald)
                                 Spacer(modifier = Modifier.height(12.dp))
-                                Text("Analyzing media stream...", fontSize = 14.sp)
+                                Text("Analyzing media stream...", fontSize = 14.sp, color = TextPrimary)
                             }
                         }
                     } else {
@@ -374,6 +590,7 @@ fun DownloadivoScreen(
                                         .fillMaxWidth()
                                         .height(180.dp)
                                         .clip(RoundedCornerShape(16.dp))
+                                        .background(BackgroundDark)
                                 ) {
                                     AsyncImage(
                                         model = info.thumbnail,
@@ -383,8 +600,8 @@ fun DownloadivoScreen(
                                     )
                                     if (info.duration.isNotBlank()) {
                                         Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = Color.Black.copy(alpha = 0.75f),
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = Color.Black.copy(alpha = 0.85f),
                                             modifier = Modifier
                                                 .align(Alignment.BottomEnd)
                                                 .padding(8.dp)
@@ -405,6 +622,7 @@ fun DownloadivoScreen(
                                 text = info.title.ifBlank { "Media Stream" },
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
+                                color = TextPrimary,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -412,26 +630,27 @@ fun DownloadivoScreen(
                                 Text(
                                     text = info.author,
                                     fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = TextMuted
                                 )
                             }
 
                             // Format Selector Chips
                             Text(
-                                text = "Select Quality",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "SELECT QUALITY",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextSubtle,
+                                letterSpacing = 0.5.sp
                             )
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                FormatChip("best", "Best Video", selectedFormat) { selectedFormat = it }
-                                FormatChip("1080p", "1080p", selectedFormat) { selectedFormat = it }
-                                FormatChip("720p", "720p", selectedFormat) { selectedFormat = it }
-                                FormatChip("mp3", "320k MP3", selectedFormat) { selectedFormat = it }
+                                SyncedFormatChip("best", "Best Video", selectedFormat) { selectedFormat = it }
+                                SyncedFormatChip("1080p", "1080p HD", selectedFormat) { selectedFormat = it }
+                                SyncedFormatChip("720p", "720p", selectedFormat) { selectedFormat = it }
+                                SyncedFormatChip("mp3", "320k MP3", selectedFormat) { selectedFormat = it }
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -452,15 +671,17 @@ fun DownloadivoScreen(
                                     .height(52.dp),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
+                                    containerColor = PrimaryEmerald,
+                                    contentColor = Color.Black
                                 )
                             ) {
-                                Icon(Icons.Default.Download, contentDescription = null)
+                                Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black)
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = "Start Download",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
+                                    fontSize = 15.sp,
+                                    color = Color.Black
                                 )
                             }
                         }
@@ -472,19 +693,47 @@ fun DownloadivoScreen(
 }
 
 @Composable
-private fun FormatChip(
+private fun PlatformPill(name: String) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = SurfaceCardDark,
+        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark)
+    ) {
+        Text(
+            text = name,
+            fontSize = 11.sp,
+            color = TextSubtle,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
+    }
+}
+
+@Composable
+private fun SyncedFormatChip(
     key: String,
     label: String,
     currentSelected: String,
     onSelect: (String) -> Unit
 ) {
     val isSelected = currentSelected == key
-    FilterChip(
-        selected = isSelected,
+    Surface(
         onClick = { onSelect(key) },
-        label = { Text(label, fontSize = 12.sp) },
-        shape = RoundedCornerShape(10.dp)
-    )
+        shape = RoundedCornerShape(10.dp),
+        color = if (isSelected) PrimaryEmerald.copy(alpha = 0.15f) else SurfaceCardDark,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isSelected) PrimaryEmerald else CardBorderDark
+        )
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) PrimaryEmerald else TextMuted,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+        )
+    }
 }
 
 private fun formatByteSize(bytes: Long): String {
