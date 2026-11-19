@@ -463,13 +463,15 @@ fun QuickShareOverlay(
                                         if (isSelected) PrimaryEmerald else CardBorderDark
                                     )
                                 ) {
+                                    val chipTitle = "${fmt.label.replace(" Video", "").replace(" Quality", "")}${if (fmt.sizeStr.isNotBlank()) "\n" + fmt.sizeStr else ""}"
                                     Text(
-                                        text = fmt.label.replace(" Video", "").replace(" Quality", ""),
-                                        fontSize = 11.5.sp,
+                                        text = chipTitle,
+                                        fontSize = 10.5.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                         color = if (isSelected) PrimaryEmerald else TextMuted,
                                         textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(vertical = 8.dp)
+                                        maxLines = 2,
+                                        modifier = Modifier.padding(vertical = 6.dp)
                                     )
                                 }
                             }

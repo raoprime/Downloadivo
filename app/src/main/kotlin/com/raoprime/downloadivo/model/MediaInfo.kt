@@ -9,7 +9,8 @@ data class FormatOption(
     val ext: String = "mp4",
     val isAudio: Boolean = false,
     val note: String = "",
-    val resolution: Int = 0
+    val resolution: Int = 0,
+    val sizeStr: String = ""
 )
 
 @Serializable

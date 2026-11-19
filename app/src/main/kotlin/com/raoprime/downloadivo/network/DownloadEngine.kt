@@ -123,32 +123,52 @@ object DownloadEngine {
                 }
             }
 
-            // Build dynamic Seal-grade format matrix
+            // Parse format sizes if returned by backend
+            val formatSizesJson = json.optJSONObject("format_sizes")
+            val sizeMap = mutableMapOf<String, String>()
+            if (formatSizesJson != null) {
+                val keys = formatSizesJson.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    sizeMap[k] = formatSizesJson.optString(k, "")
+                }
+            }
+
+            // Build dynamic Seal-grade format matrix with file sizes
             val formats = mutableListOf<FormatOption>()
-            formats.add(FormatOption("best", "Best Video (Max Quality)", "mp4", false, "Original Quality"))
+            val bestSize = sizeMap["best"] ?: sizeMap["2160"] ?: sizeMap["1080"] ?: ""
+            formats.add(FormatOption("best", "Best Video (Max Quality)", "mp4", false, "Original Quality", 0, bestSize))
 
             if (is4k || resolutions.contains(2160) || is8k) {
-                formats.add(FormatOption("4k", "4K UHD (2160p)", "mp4", false, "Ultra HD", 2160))
+                val sz = sizeMap["2160"] ?: sizeMap["4k"] ?: ""
+                formats.add(FormatOption("4k", "4K UHD (2160p)", "mp4", false, "Ultra HD", 2160, sz))
             }
             if (resolutions.contains(1440)) {
-                formats.add(FormatOption("1440p", "2K QHD (1440p)", "mp4", false, "Quad HD", 1440))
+                val sz = sizeMap["1440"] ?: ""
+                formats.add(FormatOption("1440p", "2K QHD (1440p)", "mp4", false, "Quad HD", 1440, sz))
             }
             if (resolutions.contains(1080) || (!resolutions.isEmpty() && resolutions.maxOrNull() ?: 0 >= 1080)) {
-                formats.add(FormatOption("1080p", "1080p Full HD", "mp4", false, "1920x1080", 1080))
+                val sz = sizeMap["1080"] ?: ""
+                formats.add(FormatOption("1080p", "1080p Full HD", "mp4", false, "1920x1080", 1080, sz))
             }
             if (resolutions.contains(720) || resolutions.isEmpty()) {
-                formats.add(FormatOption("720p", "720p HD", "mp4", false, "1280x720", 720))
+                val sz = sizeMap["720"] ?: ""
+                formats.add(FormatOption("720p", "720p HD", "mp4", false, "1280x720", 720, sz))
             }
             if (resolutions.contains(480) || resolutions.isEmpty()) {
-                formats.add(FormatOption("480p", "480p Standard", "mp4", false, "854x480", 480))
+                val sz = sizeMap["480"] ?: ""
+                formats.add(FormatOption("480p", "480p Standard", "mp4", false, "854x480", 480, sz))
             }
             if (resolutions.contains(360) || resolutions.isEmpty()) {
-                formats.add(FormatOption("360p", "360p Data Saver", "mp4", false, "640x360", 360))
+                val sz = sizeMap["360"] ?: ""
+                formats.add(FormatOption("360p", "360p Data Saver", "mp4", false, "640x360", 360, sz))
             }
 
-            // High Fidelity Audio Options
-            formats.add(FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, "Studio Fidelity"))
-            formats.add(FormatOption("m4a", "Lossless AAC Stream", "m4a", true, "Original Sound"))
+            // High Fidelity Audio Options with file sizes
+            val mp3Size = sizeMap["mp3"] ?: ""
+            val m4aSize = sizeMap["m4a"] ?: ""
+            formats.add(FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, "Studio Fidelity", 0, mp3Size))
+            formats.add(FormatOption("m4a", "Lossless AAC Stream", "m4a", true, "Original Sound", 0, m4aSize))
 
             val info = MediaInfo(
                 title = title,

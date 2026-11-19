@@ -1249,9 +1249,16 @@ private fun HomeDownloaderTab(
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     rowList.forEach { fmt ->
+                                        val chipText = buildString {
+                                            append(fmt.label.replace(" Video", "").replace(" Quality", ""))
+                                            if (fmt.sizeStr.isNotBlank()) {
+                                                append("\n")
+                                                append(fmt.sizeStr)
+                                            }
+                                        }
                                         SyncedChip(
                                             key = fmt.id,
-                                            label = fmt.label.replace(" Video", "").replace(" Quality", ""),
+                                            label = chipText,
                                             currentSelected = selectedFormat,
                                             modifier = Modifier.weight(1f)
                                         ) {
@@ -1271,9 +1278,16 @@ private fun HomeDownloaderTab(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             audioFormats.forEach { fmt ->
+                                val chipText = buildString {
+                                    append(fmt.label)
+                                    if (fmt.sizeStr.isNotBlank()) {
+                                        append("\n")
+                                        append(fmt.sizeStr)
+                                    }
+                                }
                                 SyncedChip(
                                     key = fmt.id,
-                                    label = fmt.label,
+                                    label = chipText,
                                     currentSelected = selectedFormat,
                                     modifier = Modifier.weight(1f)
                                 ) {
@@ -1382,9 +1396,11 @@ private fun HomeDownloaderTab(
                     ) {
                         Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black, modifier = Modifier.size(19.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        val selectedLabel = info.availableFormats.find { it.id == selectedFormat }?.label ?: selectedFormat.uppercase()
+                        val selectedFmt = info.availableFormats.find { it.id == selectedFormat }
+                        val selectedLabel = selectedFmt?.label ?: selectedFormat.uppercase()
+                        val sizePart = if (!selectedFmt?.sizeStr.isNullOrBlank()) " • ${selectedFmt!!.sizeStr}" else ""
                         Text(
-                            text = if (isTrimming) "Download Trimmed Clip" else "Download $selectedLabel",
+                            text = if (isTrimming) "Download Trimmed Clip" else "Download $selectedLabel$sizePart",
                             style = Typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             color = Color.Black
@@ -2013,7 +2029,7 @@ private fun SettingsTab() {
                 ) {
                     Column {
                         Text("Downloadivo Mobile", style = Typography.titleSmall, color = TextCrisp)
-                        Text("v3.5.0 Monochrome Edition", style = Typography.bodySmall, color = TextCrisp)
+                        Text("v3.6.0 Studio Edition (4K & Pre-Size)", style = Typography.bodySmall, color = TextCrisp)
                     }
                     Image(
                         painter = painterResource(id = R.drawable.app_icon),
@@ -2050,13 +2066,14 @@ private fun SyncedChip(
     ) {
         Text(
             text = label,
-            style = Typography.labelMedium,
+            style = Typography.labelSmall,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
             color = if (isSelected) AccentEmerald else TextSecondary,
             textAlign = TextAlign.Center,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 9.dp)
+            lineHeight = 14.sp,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 7.dp)
         )
     }
 }
