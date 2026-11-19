@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.provider.MediaStore
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.raoprime.downloadivo.DownloadivoApp
@@ -26,12 +27,24 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.OutputStream
 
+data class QueuedDownload(
+    val id: String,
+    val url: String,
+    val title: String,
+    val format: String,
+    val thumbnail: String = "",
+    val startTime: String? = null,
+    val endTime: String? = null
+)
+
 class DownloadService : Service() {
 
     companion object {
         const val ACTION_START_DOWNLOAD = "com.raoprime.downloadivo.START_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.raoprime.downloadivo.CANCEL_DOWNLOAD"
+        const val ACTION_REMOVE_QUEUED = "com.raoprime.downloadivo.REMOVE_QUEUED"
 
+        const val EXTRA_TASK_ID = "extra_task_id"
         const val EXTRA_URL = "extra_url"
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_FORMAT = "extra_format"
@@ -41,6 +54,9 @@ class DownloadService : Service() {
 
         private val _currentTask = MutableStateFlow(DownloadTask())
         val currentTask = _currentTask.asStateFlow()
+
+        private val _queuedTasks = MutableStateFlow<List<DownloadTask>>(emptyList())
+        val queuedTasks = _queuedTasks.asStateFlow()
 
         fun startDownload(
             context: Context,
@@ -66,12 +82,23 @@ class DownloadService : Service() {
                 context.startService(intent)
             }
         }
+
+        fun removeQueuedTask(context: Context, taskId: String) {
+            val intent = Intent(context, DownloadService::class.java).apply {
+                action = ACTION_REMOVE_QUEUED
+                putExtra(EXTRA_TASK_ID, taskId)
+            }
+            context.startService(intent)
+        }
     }
 
     private val serviceJob = Job()
     private val scope = CoroutineScope(Dispatchers.Main + serviceJob)
     private var downloadJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+
+    private val pendingQueue = ArrayDeque<QueuedDownload>()
+    private var isDownloading = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -91,17 +118,23 @@ class DownloadService : Service() {
                 val startTime = intent.getStringExtra(EXTRA_START_TIME)
                 val endTime = intent.getStringExtra(EXTRA_END_TIME)
                 if (url.isNotBlank()) {
-                    beginDownload(url, title, format, thumbnail, startTime, endTime)
+                    enqueueDownload(url, title, format, thumbnail, startTime, endTime)
                 }
             }
             ACTION_CANCEL_DOWNLOAD -> {
-                cancelDownload()
+                cancelCurrentDownload()
+            }
+            ACTION_REMOVE_QUEUED -> {
+                val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: ""
+                if (taskId.isNotBlank()) {
+                    removeQueued(taskId)
+                }
             }
         }
         return START_NOT_STICKY
     }
 
-    private fun beginDownload(
+    private fun enqueueDownload(
         url: String,
         title: String,
         format: String,
@@ -109,30 +142,83 @@ class DownloadService : Service() {
         startTime: String? = null,
         endTime: String? = null
     ) {
-        downloadJob?.cancel()
-
-        wakeLock?.acquire(10 * 60 * 1000L /* 10 minutes */)
-
+        val taskId = System.currentTimeMillis().toString()
         val cleanTitle = title.replace(Regex("[^a-zA-Z0-9._ -]"), "").take(80).ifBlank { "download" }
         val isAudio = format.lowercase() == "mp3" || format.lowercase() == "m4a"
-        val extension = if (isAudio) (if (format.lowercase() == "m4a") "m4a" else "mp3") else "mp4"
-        val clipSuffix = if (!startTime.isNullOrBlank() && !endTime.isNullOrBlank()) {
-            "_Clip_${startTime.replace(':', '.')}_to_${endTime.replace(':', '.')}"
+
+        val item = QueuedDownload(
+            id = taskId,
+            url = url,
+            title = cleanTitle,
+            format = format,
+            thumbnail = thumbnail,
+            startTime = startTime,
+            endTime = endTime
+        )
+
+        if (isDownloading) {
+            pendingQueue.addLast(item)
+            updateQueuedState()
+            val queuedTask = DownloadTask(
+                id = taskId,
+                title = cleanTitle,
+                url = url,
+                format = format,
+                thumbnail = thumbnail,
+                status = DownloadStatus.QUEUED,
+                isAudio = isAudio,
+                startTime = startTime,
+                endTime = endTime
+            )
+            com.raoprime.downloadivo.data.DownloadRepository.addTask(queuedTask)
+            Toast.makeText(applicationContext, "Added to download queue (#${pendingQueue.size})", Toast.LENGTH_SHORT).show()
+        } else {
+            beginDownload(item)
+        }
+    }
+
+    private fun updateQueuedState() {
+        _queuedTasks.value = pendingQueue.map { q ->
+            DownloadTask(
+                id = q.id,
+                title = q.title,
+                url = q.url,
+                format = q.format,
+                thumbnail = q.thumbnail,
+                status = DownloadStatus.QUEUED,
+                isAudio = q.format.lowercase() == "mp3" || q.format.lowercase() == "m4a",
+                startTime = q.startTime,
+                endTime = q.endTime
+            )
+        }
+    }
+
+    private fun beginDownload(item: QueuedDownload) {
+        isDownloading = true
+        downloadJob?.cancel()
+
+        wakeLock?.acquire(15 * 60 * 1000L /* 15 minutes */)
+
+        val cleanTitle = item.title
+        val isAudio = item.format.lowercase() == "mp3" || item.format.lowercase() == "m4a"
+        val extension = if (isAudio) (if (item.format.lowercase() == "m4a") "m4a" else "mp3") else "mp4"
+        val clipSuffix = if (!item.startTime.isNullOrBlank() && !item.endTime.isNullOrBlank()) {
+            "_Clip_${item.startTime.replace(':', '.')}_to_${item.endTime.replace(':', '.')}"
         } else {
             ""
         }
         val fileName = "$cleanTitle$clipSuffix.$extension"
 
         val initialTask = DownloadTask(
-            id = System.currentTimeMillis().toString(),
+            id = item.id,
             title = "$cleanTitle$clipSuffix",
-            url = url,
-            format = format,
-            thumbnail = thumbnail,
+            url = item.url,
+            format = item.format,
+            thumbnail = item.thumbnail,
             status = DownloadStatus.DOWNLOADING,
             isAudio = isAudio,
-            startTime = startTime,
-            endTime = endTime
+            startTime = item.startTime,
+            endTime = item.endTime
         )
         _currentTask.value = initialTask
         com.raoprime.downloadivo.data.DownloadRepository.addTask(initialTask)
@@ -144,7 +230,6 @@ class DownloadService : Service() {
             var outStream: OutputStream? = null
 
             try {
-                // MediaStore Target Setup (Scoped Storage)
                 val resolver = applicationContext.contentResolver
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
@@ -179,10 +264,10 @@ class DownloadService : Service() {
                     ?: throw Exception("Could not open destination stream")
 
                 val result = DownloadEngine.downloadStream(
-                    targetUrl = url,
-                    format = format,
-                    startTime = startTime,
-                    endTime = endTime,
+                    targetUrl = item.url,
+                    format = item.format,
+                    startTime = item.startTime,
+                    endTime = item.endTime,
                     outputStream = outStream,
                     onProgress = { percent, speed, eta, current, total ->
                         val updated = _currentTask.value.copy(
@@ -200,7 +285,6 @@ class DownloadService : Service() {
                 )
 
                 if (result.isSuccess) {
-                    // Mark file complete in MediaStore (instant visibility in Gallery/Photos)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         contentValues.clear()
                         contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
@@ -220,7 +304,6 @@ class DownloadService : Service() {
                 }
 
             } catch (e: Exception) {
-                // Delete partial file on error
                 mediaUri?.let { uri ->
                     try { applicationContext.contentResolver.delete(uri, null, null) } catch (_: Exception) {}
                 }
@@ -234,13 +317,25 @@ class DownloadService : Service() {
                 showCompletionNotification(cleanTitle, false, null, isAudio)
             } finally {
                 try { outStream?.close() } catch (_: Exception) {}
-                if (wakeLock?.isHeld == true) wakeLock?.release()
-                stopForeground(STOP_FOREGROUND_DETACH)
+                isDownloading = false
+                processNextInQueue()
             }
         }
     }
 
-    private fun cancelDownload() {
+    private fun processNextInQueue() {
+        if (pendingQueue.isNotEmpty()) {
+            val next = pendingQueue.removeFirst()
+            updateQueuedState()
+            beginDownload(next)
+        } else {
+            _queuedTasks.value = emptyList()
+            if (wakeLock?.isHeld == true) wakeLock?.release()
+            stopForeground(STOP_FOREGROUND_DETACH)
+        }
+    }
+
+    private fun cancelCurrentDownload() {
         downloadJob?.cancel()
         val cancelled = _currentTask.value.copy(
             status = DownloadStatus.CANCELLED,
@@ -248,9 +343,14 @@ class DownloadService : Service() {
         )
         _currentTask.value = cancelled
         com.raoprime.downloadivo.data.DownloadRepository.updateTask(cancelled)
-        if (wakeLock?.isHeld == true) wakeLock?.release()
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        isDownloading = false
+        processNextInQueue()
+    }
+
+    private fun removeQueued(taskId: String) {
+        pendingQueue.removeAll { it.id == taskId }
+        updateQueuedState()
+        com.raoprime.downloadivo.data.DownloadRepository.removeTask(taskId)
     }
 
     private fun startForegroundNotification(title: String, progress: Int, speed: String, eta: String = "") {
@@ -290,10 +390,14 @@ class DownloadService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val queueCount = pendingQueue.size
+        val queueSubtext = if (queueCount > 0) " +$queueCount in queue" else ""
+
         val statusText = buildString {
             if (progress >= 0) append("$progress%") else append("Streaming")
             if (speed.isNotBlank()) append(" • $speed")
             if (eta.isNotBlank()) append(" • $eta")
+            append(queueSubtext)
         }
 
         return NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_ID)
@@ -329,7 +433,6 @@ class DownloadService : Service() {
             return
         }
 
-        // Tap action: Open built-in media viewer
         val playIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(mediaUri, if (isAudio) "audio/*" else "video/*")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -341,7 +444,6 @@ class DownloadService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 1-Tap Share from notification shade
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = if (isAudio) "audio/*" else "video/*"
             putExtra(Intent.EXTRA_STREAM, mediaUri)

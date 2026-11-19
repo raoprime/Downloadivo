@@ -109,7 +109,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun extractUrl(text: String): String {
-        val regex = Regex("""https?://[^\s]+""")
-        return regex.find(text)?.value ?: text.trim()
+        return com.raoprime.downloadivo.network.DownloadEngine.sanitizeUrl(text)
     }
 }

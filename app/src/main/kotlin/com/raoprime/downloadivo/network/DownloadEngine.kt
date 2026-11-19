@@ -26,8 +26,15 @@ object DownloadEngine {
         .retryOnConnectionFailure(true)
         .build()
 
+    fun sanitizeUrl(rawUrl: String): String {
+        val trimmed = rawUrl.trim()
+        val regex = Regex("""https?://[^\s<>"'{}|\\^`]+""")
+        val match = regex.find(trimmed)?.value ?: trimmed
+        return match.trimEnd('.', ',', '!', '?', ')', ']', '}', '>', ';', '"', '\'')
+    }
+
     suspend fun fetchMediaInfo(targetUrl: String): Result<MediaInfo> = withContext(Dispatchers.IO) {
-        val cleanUrl = targetUrl.trim()
+        val cleanUrl = sanitizeUrl(targetUrl)
         if (cleanUrl.isBlank()) {
             return@withContext Result.failure(Exception("Please provide a valid URL"))
         }
@@ -165,7 +172,8 @@ object DownloadEngine {
         onProgress: (percent: Int, speedStr: String, etaStr: String, currentBytes: Long, totalBytes: Long) -> Unit
     ): Result<Long> = withContext(Dispatchers.IO) {
         try {
-            val encodedUrl = URLEncoder.encode(targetUrl.trim(), "UTF-8")
+            val cleanUrl = sanitizeUrl(targetUrl)
+            val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
             val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
             var streamUrl = "$activeBaseUrl/stream?url=$encodedUrl&format=$encodedFmt"
 

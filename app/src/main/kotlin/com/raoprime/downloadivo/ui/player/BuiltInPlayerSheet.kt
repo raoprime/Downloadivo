@@ -75,7 +75,8 @@ fun BuiltInPlayerSheet(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .wrapContentHeight(),
+            .wrapContentHeight()
+            .navigationBarsPadding(),
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         color = SurfaceCardDark,
         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark)

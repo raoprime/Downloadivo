@@ -103,8 +103,7 @@ class QuickShareActivity : ComponentActivity() {
     }
 
     private fun extractUrl(text: String): String {
-        val regex = Regex("""https?://[^\s]+""")
-        return regex.find(text)?.value ?: text.trim()
+        return DownloadEngine.sanitizeUrl(text)
     }
 }
 
@@ -161,7 +160,8 @@ fun QuickShareOverlay(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 22.dp, vertical = 6.dp)
-                .padding(bottom = 36.dp),
+                .navigationBarsPadding()
+                .padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Header Bar: App Logo + Title + Close Button

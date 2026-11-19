@@ -14,9 +14,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -28,8 +31,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -80,6 +86,7 @@ fun DownloadivoScreen(
     var activePlaybackIsAudio by remember { mutableStateOf(false) }
 
     val currentTask by DownloadService.currentTask.collectAsState()
+    val queuedTasks by DownloadService.queuedTasks.collectAsState()
     val historyList by DownloadRepository.history.collectAsState()
 
     // Trigger auto-fill when sharedUrl is passed
@@ -269,6 +276,14 @@ fun DownloadivoScreen(
                                             color = TextSubtle
                                         )
                                     }
+                                    if (queuedTasks.isNotEmpty()) {
+                                        Text(
+                                            text = " (+${queuedTasks.size} queued)",
+                                            fontSize = 11.sp,
+                                            color = PrimaryEmerald,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
                                 }
                             }
                             Spacer(modifier = Modifier.width(8.dp))
@@ -373,10 +388,11 @@ fun DownloadivoScreen(
                         selected = currentTab == AppTab.QUEUE,
                         onClick = { currentTab = AppTab.QUEUE },
                         icon = {
+                            val activeBadgeCount = (if (currentTask.status == DownloadStatus.DOWNLOADING) 1 else 0) + queuedTasks.size
                             BadgedBox(badge = {
-                                if (currentTask.status == DownloadStatus.DOWNLOADING) {
+                                if (activeBadgeCount > 0) {
                                     Badge(containerColor = PrimaryEmerald) {
-                                        Text("1", color = Color.Black, fontWeight = FontWeight.Bold)
+                                        Text("$activeBadgeCount", color = Color.Black, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }) {
@@ -503,11 +519,15 @@ fun DownloadivoScreen(
 
                 AppTab.QUEUE -> QueueTab(
                     currentTask = currentTask,
-                    onCancel = {
+                    queuedTasks = queuedTasks,
+                    onCancelCurrent = {
                         val cancelIntent = Intent(context, DownloadService::class.java).apply {
                             action = DownloadService.ACTION_CANCEL_DOWNLOAD
                         }
                         context.startService(cancelIntent)
+                    },
+                    onRemoveQueued = { taskId ->
+                        DownloadService.removeQueuedTask(context, taskId)
                     },
                     onNavigateHome = { currentTab = AppTab.HOME }
                 )
@@ -591,6 +611,8 @@ private fun HomeDownloaderTab(
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     var activePlatformFilter by remember { mutableStateOf("All") }
     var mediaMode by remember { mutableStateOf("video") }
@@ -616,6 +638,7 @@ private fun HomeDownloaderTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
+            .imePadding()
             .padding(horizontal = 18.dp, vertical = 6.dp)
             .animateContentSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -772,6 +795,8 @@ private fun HomeDownloaderTab(
                     Spacer(modifier = Modifier.width(6.dp))
                     Button(
                         onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
                             onUrlChange(clipboardUrl)
                             onClearClipboard()
                             onInstantDownload(clipboardUrl, "best")
@@ -815,6 +840,13 @@ private fun HomeDownloaderTab(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                        }
+                    ),
                     leadingIcon = {
                         if (detectedPlatform != null) {
                             Surface(
@@ -837,15 +869,20 @@ private fun HomeDownloaderTab(
                     },
                     trailingIcon = {
                         if (inputUrl.isNotBlank()) {
-                            IconButton(onClick = onClear) {
+                            IconButton(onClick = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                onClear()
+                            }) {
                                 Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextMuted)
                             }
                         } else {
                             IconButton(onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                if (clip.startsWith("http")) {
-                                    onUrlChange(clip)
+                                val clean = DownloadEngine.sanitizeUrl(clip)
+                                if (clean.startsWith("http")) {
+                                    onUrlChange(clean)
                                 } else {
                                     Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
                                 }
@@ -871,6 +908,8 @@ private fun HomeDownloaderTab(
                     // Instant Video Button
                     Button(
                         onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
                             if (inputUrl.isNotBlank()) {
                                 onInstantDownload(inputUrl, "best")
                             } else {
@@ -895,6 +934,8 @@ private fun HomeDownloaderTab(
                     // Instant Audio Button
                     Button(
                         onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
                             if (inputUrl.isNotBlank()) {
                                 onInstantDownload(inputUrl, "mp3")
                             } else {
@@ -919,7 +960,11 @@ private fun HomeDownloaderTab(
 
                 // ⚙️ Customization Toggle
                 Surface(
-                    onClick = onToggleCustomize,
+                    onClick = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
+                        onToggleCustomize()
+                    },
                     shape = RoundedCornerShape(10.dp),
                     color = BackgroundDark,
                     border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
@@ -1295,6 +1340,8 @@ private fun HomeDownloaderTab(
                             // Download with Custom Settings Button
                             Button(
                                 onClick = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
                                     val start = if (isTrimming) trimStart.ifBlank { null } else null
                                     val end = if (isTrimming) trimEnd.ifBlank { null } else null
                                     onDownloadCustom(info, selectedFormat, start, end)
@@ -1325,19 +1372,25 @@ private fun HomeDownloaderTab(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 2: ACTIVE QUEUE (WITH LIVE SPEEDOMETER & REAL-TIME ETA)
+// TAB 2: ACTIVE QUEUE (WITH LIVE SPEEDOMETER & MULTI-ITEM FIFO QUEUE)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun QueueTab(
     currentTask: DownloadTask,
-    onCancel: () -> Unit,
+    queuedTasks: List<DownloadTask>,
+    onCancelCurrent: () -> Unit,
+    onRemoveQueued: (String) -> Unit,
     onNavigateHome: () -> Unit
 ) {
+    val scrollState = rememberScrollState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(scrollState)
             .padding(18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1367,8 +1420,7 @@ private fun QueueTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
-
+        // Active Downloading Task Card
         if (currentTask.status == DownloadStatus.DOWNLOADING) {
             Card(
                 shape = RoundedCornerShape(18.dp),
@@ -1382,16 +1434,30 @@ private fun QueueTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = currentTask.title.ifBlank { "Downloading stream..." },
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
-                            color = TextPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = onCancel, modifier = Modifier.size(30.dp)) {
+                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = PrimaryEmerald.copy(alpha = 0.15f),
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(
+                                    text = if (currentTask.isAudio) "MP3" else "MP4",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryEmerald,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                )
+                            }
+                            Text(
+                                text = currentTask.title.ifBlank { "Downloading stream..." },
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp,
+                                color = TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        IconButton(onClick = onCancelCurrent, modifier = Modifier.size(30.dp)) {
                             Icon(Icons.Default.Clear, contentDescription = "Cancel", tint = ErrorRed)
                         }
                     }
@@ -1446,11 +1512,81 @@ private fun QueueTab(
                     }
                 }
             }
-        } else {
+        }
+
+        // Queued Tasks Section (Up Next in Queue)
+        if (queuedTasks.isNotEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "UP NEXT IN QUEUE (${queuedTasks.size})",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextSubtle,
+                    letterSpacing = 0.5.sp
+                )
+
+                queuedTasks.forEachIndexed { index, task ->
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = SurfaceCardDark,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = BackgroundDark,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "#${index + 1}",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PrimaryEmerald
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = task.title,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = if (task.isAudio) "Audio (MP3) • Waiting in queue" else "Video (Best) • Waiting in queue",
+                                    fontSize = 11.sp,
+                                    color = TextSubtle
+                                )
+                            }
+                            IconButton(
+                                onClick = { onRemoveQueued(task.id) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextSubtle)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Empty State (Neither active nor queued)
+        if (currentTask.status != DownloadStatus.DOWNLOADING && queuedTasks.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .height(280.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1860,7 +1996,7 @@ private fun SettingsTab() {
                 ) {
                     Column {
                         Text("Downloadivo Mobile Version", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
-                        Text("v3.1.0 (Seal 10X Frictionless)", fontSize = 12.sp, color = PrimaryEmerald)
+                        Text("v3.2.0 (FIFO Queue & Zero-Glitch)", fontSize = 12.sp, color = PrimaryEmerald)
                     }
                     Image(
                         painter = painterResource(id = R.drawable.app_icon),
