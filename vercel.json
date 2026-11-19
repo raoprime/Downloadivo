@@ -5,53 +5,17 @@
   "outputDirectory": ".",
   "cleanUrls": true,
   "rewrites": [
-    {
-      "source": "/health",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/health"
-    },
-    {
-      "source": "/system-info",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/system-info"
-    },
-    {
-      "source": "/info",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/info"
-    },
-    {
-      "source": "/download",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/download"
-    },
-    {
-      "source": "/status/:path*",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/status/:path*"
-    },
-    {
-      "source": "/file/:path*",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/file/:path*"
-    },
-    {
-      "source": "/download-file/:path*",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/download-file/:path*"
-    },
-    {
-      "source": "/open-file",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/open-file"
-    },
-    {
-      "source": "/open-folder",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/open-folder"
-    },
-    {
-      "source": "/stream",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/stream"
-    },
-    {
-      "source": "/downloads",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/downloads"
-    },
-    {
-      "source": "/cancel/:path*",
-      "destination": "https://iii-basketball-focus-titles.trycloudflare.com/cancel/:path*"
-    }
+    { "source": "/health", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/health" },
+    { "source": "/system-info", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/system-info" },
+    { "source": "/info", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/info" },
+    { "source": "/download", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/download" },
+    { "source": "/status/:path*", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/status/:path*" },
+    { "source": "/file/:path*", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/file/:path*" },
+    { "source": "/download-file/:path*", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/download-file/:path*" },
+    { "source": "/open-file", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/open-file" },
+    { "source": "/open-folder", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/open-folder" },
+    { "source": "/stream", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/stream" },
+    { "source": "/downloads", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/downloads" },
+    { "source": "/cancel/:path*", "destination": "https://purple-temperatures-grew-jun.trycloudflare.com/cancel/:path*" }
   ]
 }

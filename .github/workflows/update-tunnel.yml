@@ -1,0 +1,54 @@
+name: 🔄 Update Tunnel URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      tunnel_url:
+        description: 'New Cloudflare tunnel URL (without https://)'
+        required: true
+        type: string
+
+jobs:
+  update-tunnel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update vercel.json with new tunnel URL
+        run: |
+          TUNNEL="${{ github.event.inputs.tunnel_url }}"
+          echo "Updating tunnel to: $TUNNEL"
+          cat > vercel.json << EOF
+          {
+            "\$schema": "https://openapi.vercel.sh/vercel.json",
+            "framework": null,
+            "buildCommand": null,
+            "outputDirectory": ".",
+            "cleanUrls": true,
+            "rewrites": [
+              { "source": "/health",              "destination": "https://${TUNNEL}/health" },
+              { "source": "/system-info",         "destination": "https://${TUNNEL}/system-info" },
+              { "source": "/info",                "destination": "https://${TUNNEL}/info" },
+              { "source": "/download",            "destination": "https://${TUNNEL}/download" },
+              { "source": "/status/:path*",       "destination": "https://${TUNNEL}/status/:path*" },
+              { "source": "/file/:path*",         "destination": "https://${TUNNEL}/file/:path*" },
+              { "source": "/download-file/:path*","destination": "https://${TUNNEL}/download-file/:path*" },
+              { "source": "/open-file",           "destination": "https://${TUNNEL}/open-file" },
+              { "source": "/open-folder",         "destination": "https://${TUNNEL}/open-folder" },
+              { "source": "/stream",              "destination": "https://${TUNNEL}/stream" },
+              { "source": "/downloads",           "destination": "https://${TUNNEL}/downloads" },
+              { "source": "/cancel/:path*",       "destination": "https://${TUNNEL}/cancel/:path*" }
+            ]
+          }
+          EOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "Downloadivo Bot"
+          git config user.email "bot@downloadivo.app"
+          git add vercel.json
+          git commit -m "fix(tunnel): auto-update to ${{ github.event.inputs.tunnel_url }}"
+          git push
