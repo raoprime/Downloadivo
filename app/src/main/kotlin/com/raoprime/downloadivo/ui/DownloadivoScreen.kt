@@ -2,15 +2,10 @@ package com.raoprime.downloadivo.ui
 
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,8 +15,6 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,20 +44,25 @@ fun DownloadivoScreen(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
-    var inputUrl by remember { mutableStateOf(sharedUrl ?: "") }
+    var inputUrl by remember { mutableStateOf("") }
     var resolvedInfo by remember { mutableStateOf<MediaInfo?>(null) }
     var selectedFormat by remember { mutableStateOf("best") }
     var isResolving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Seal-style Quick Share Bottom Sheet
+    var showBottomSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     val downloadTask by DownloadService.currentTask.collectAsState()
 
-    // Auto-resolve when URL is shared via Intent or pasted
+    // Trigger Seal-style quick bottom sheet when a URL is shared from YouTube/Insta/Browser
     LaunchedEffect(sharedUrl) {
         if (!sharedUrl.isNullOrBlank()) {
             inputUrl = sharedUrl
             isResolving = true
             errorMessage = null
+            showBottomSheet = true
             coroutineScope.launch {
                 val res = DownloadEngine.fetchMediaInfo(sharedUrl)
                 isResolving = false
@@ -116,7 +114,7 @@ fun DownloadivoScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
 
-            // ── URL INPUT CARD ───────────────────────────────────────
+            // ── URL INPUT CARD (Synchronized with Web UI) ──────────────────────
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
@@ -131,7 +129,7 @@ fun DownloadivoScreen(
                             inputUrl = it
                             errorMessage = null
                         },
-                        placeholder = { Text("Paste video or audio link...") },
+                        placeholder = { Text("Paste video, reel, or audio link...") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         shape = RoundedCornerShape(14.dp),
@@ -154,11 +152,13 @@ fun DownloadivoScreen(
                                             isResolving = true
                                             val res = DownloadEngine.fetchMediaInfo(clip)
                                             isResolving = false
-                                            res.onSuccess { resolvedInfo = it }
-                                                .onFailure { errorMessage = it.message }
+                                            res.onSuccess {
+                                                resolvedInfo = it
+                                                showBottomSheet = true
+                                            }.onFailure { errorMessage = it.message }
                                         }
                                     } else {
-                                        Toast.makeText(context, "No URL in clipboard", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
                                     }
                                 }) {
                                     Icon(Icons.Default.ContentPaste, contentDescription = "Paste")
@@ -181,8 +181,10 @@ fun DownloadivoScreen(
                                     coroutineScope.launch {
                                         val res = DownloadEngine.fetchMediaInfo(inputUrl)
                                         isResolving = false
-                                        res.onSuccess { resolvedInfo = it }
-                                            .onFailure { errorMessage = it.message }
+                                        res.onSuccess {
+                                            resolvedInfo = it
+                                            showBottomSheet = true
+                                        }.onFailure { errorMessage = it.message }
                                     }
                                 }
                             },
@@ -195,7 +197,7 @@ fun DownloadivoScreen(
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Fetching...")
+                                Text("Analyzing...")
                             } else {
                                 Text("Inspect Link")
                             }
@@ -204,7 +206,7 @@ fun DownloadivoScreen(
                 }
             }
 
-            // ── ERROR BANNER ─────────────────────────────────────────
+            // ── ERROR BANNER ─────────────────────────────────────────────────
             AnimatedVisibility(visible = errorMessage != null) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
@@ -230,118 +232,7 @@ fun DownloadivoScreen(
                 }
             }
 
-            // ── RESOLVED MEDIA CARD ──────────────────────────────────
-            resolvedInfo?.let { info ->
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        if (info.thumbnail.isNotBlank()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(190.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                            ) {
-                                AsyncImage(
-                                    model = info.thumbnail,
-                                    contentDescription = "Thumbnail",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                                if (info.duration.isNotBlank()) {
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = Color.Black.copy(alpha = 0.75f),
-                                        modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(8.dp)
-                                    ) {
-                                        Text(
-                                            text = info.duration,
-                                            color = Color.White,
-                                            fontSize = 11.sp,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-
-                        Text(
-                            text = info.title.ifBlank { "Media File" },
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 15.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (info.author.isNotBlank()) {
-                            Text(
-                                text = info.author,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        // Format Chips
-                        Text(
-                            text = "Select Format",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            FormatChip("best", "Best Video", selectedFormat) { selectedFormat = it }
-                            FormatChip("1080p", "1080p", selectedFormat) { selectedFormat = it }
-                            FormatChip("720p", "720p", selectedFormat) { selectedFormat = it }
-                            FormatChip("mp3", "320k MP3", selectedFormat) { selectedFormat = it }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Download Action Button
-                        Button(
-                            onClick = {
-                                DownloadService.startDownload(
-                                    context = context,
-                                    url = info.url,
-                                    title = info.title,
-                                    format = selectedFormat
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Icon(Icons.Default.Download, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Start Download",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            // ── LIVE ACTIVE DOWNLOAD CARD ────────────────────────────
+            // ── LIVE ACTIVE DOWNLOAD CARD (Line-Rate Speed & Notification Sync) ──
             if (downloadTask.status == DownloadStatus.DOWNLOADING) {
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -419,7 +310,7 @@ fun DownloadivoScreen(
                 }
             }
 
-            // ── COMPLETED SUCCESS CARD ───────────────────────────────
+            // ── COMPLETED SUCCESS CARD (Direct Gallery Sync Notification) ──────
             if (downloadTask.status == DownloadStatus.SUCCESS) {
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -437,10 +328,142 @@ fun DownloadivoScreen(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "${downloadTask.title} is saved directly into your device Gallery & Movies folder.",
+                            text = "${downloadTask.title} is saved in your device Movies & Music folder.",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
+                    }
+                }
+            }
+        }
+
+        // ── SEAL-STYLE QUICK SHARE BOTTOM SHEET ──────────────────────────────
+        if (showBottomSheet && (resolvedInfo != null || isResolving)) {
+            ModalBottomSheet(
+                onDismissRequest = { showBottomSheet = false },
+                sheetState = sheetState,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
+                        .padding(bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (isResolving) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(160.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text("Analyzing media stream...", fontSize = 14.sp)
+                            }
+                        }
+                    } else {
+                        resolvedInfo?.let { info ->
+                            // Thumbnail Preview
+                            if (info.thumbnail.isNotBlank()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(180.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                ) {
+                                    AsyncImage(
+                                        model = info.thumbnail,
+                                        contentDescription = "Thumbnail",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    if (info.duration.isNotBlank()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = Color.Black.copy(alpha = 0.75f),
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .padding(8.dp)
+                                        ) {
+                                            Text(
+                                                text = info.duration,
+                                                color = Color.White,
+                                                fontSize = 11.sp,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Title & Author
+                            Text(
+                                text = info.title.ifBlank { "Media Stream" },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (info.author.isNotBlank()) {
+                                Text(
+                                    text = info.author,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            // Format Selector Chips
+                            Text(
+                                text = "Select Quality",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                FormatChip("best", "Best Video", selectedFormat) { selectedFormat = it }
+                                FormatChip("1080p", "1080p", selectedFormat) { selectedFormat = it }
+                                FormatChip("720p", "720p", selectedFormat) { selectedFormat = it }
+                                FormatChip("mp3", "320k MP3", selectedFormat) { selectedFormat = it }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // One-Tap Download Button
+                            Button(
+                                onClick = {
+                                    DownloadService.startDownload(
+                                        context = context,
+                                        url = info.url,
+                                        title = info.title,
+                                        format = selectedFormat
+                                    )
+                                    showBottomSheet = false
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Start Download",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                            }
+                        }
                     }
                 }
             }
