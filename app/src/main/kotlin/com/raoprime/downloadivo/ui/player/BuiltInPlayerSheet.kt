@@ -101,13 +101,13 @@ fun BuiltInPlayerSheet(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(PrimaryEmerald.copy(alpha = 0.15f)),
+                            .background(SurfaceHighlight),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (isAudio) Icons.Default.MusicNote else Icons.Default.SmartDisplay,
                             contentDescription = null,
-                            tint = PrimaryEmerald,
+                            tint = TextCrisp,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -156,13 +156,13 @@ fun BuiltInPlayerSheet(
                                 .rotate(rotation)
                                 .clip(CircleShape)
                                 .background(Color(0xFF18181B))
-                                .border(2.dp, PrimaryEmerald, CircleShape),
+                                .border(2.dp, TextCrisp, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.MusicNote,
                                 contentDescription = null,
-                                tint = PrimaryEmerald,
+                                tint = TextCrisp,
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -227,17 +227,17 @@ fun BuiltInPlayerSheet(
                                 exoPlayer.playbackParameters = PlaybackParameters(speed)
                             },
                             shape = RoundedCornerShape(6.dp),
-                            color = if (isSelected) PrimaryEmerald.copy(alpha = 0.2f) else SurfaceCardDark,
+                            color = if (isSelected) TextCrisp else SurfaceElevated,
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
-                                if (isSelected) PrimaryEmerald else CardBorderDark
+                                if (isSelected) TextCrisp else CardBorderDark
                             )
                         ) {
                             Text(
                                 text = "${speed}x",
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) PrimaryEmerald else TextMuted,
+                                color = if (isSelected) CanvasDark else TextMuted,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }

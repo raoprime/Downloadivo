@@ -186,14 +186,14 @@ fun QuickShareOverlay(
                     Spacer(modifier = Modifier.width(8.dp))
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = AccentEmeraldMuted,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.25f))
+                        color = SurfaceHighlight,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline)
                     ) {
                         Text(
                             text = "Quick Share",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = AccentEmerald,
+                            color = TextCrisp,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -224,7 +224,7 @@ fun QuickShareOverlay(
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(28.dp),
-                            color = PrimaryEmerald,
+                            color = TextCrisp,
                             strokeWidth = 2.5.dp
                         )
                         Spacer(modifier = Modifier.height(10.dp))
@@ -294,13 +294,13 @@ fun QuickShareOverlay(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = PrimaryEmerald.copy(alpha = 0.15f)
+                            color = SurfaceHighlight
                         ) {
                             Text(
                                 text = info.extractor.uppercase(),
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = PrimaryEmerald,
+                                color = TextCrisp,
                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                             )
                         }
@@ -338,7 +338,7 @@ fun QuickShareOverlay(
                         Icon(
                             Icons.Default.Link,
                             contentDescription = null,
-                            tint = PrimaryEmerald,
+                            tint = TextCrisp,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -374,14 +374,14 @@ fun QuickShareOverlay(
                         .height(50.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentEmerald,
-                        contentColor = Color.Black
+                        containerColor = TextCrisp,
+                        contentColor = CanvasDark
                     )
                 ) {
                     Icon(
                         Icons.Default.Download,
                         contentDescription = null,
-                        tint = Color.Black,
+                        tint = CanvasDark,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -389,7 +389,7 @@ fun QuickShareOverlay(
                         text = "Download Video",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.5.sp,
-                        color = Color.Black
+                        color = CanvasDark
                     )
                 }
 
@@ -409,7 +409,7 @@ fun QuickShareOverlay(
                     Icon(
                         Icons.Default.MusicNote,
                         contentDescription = null,
-                        tint = AccentEmerald,
+                        tint = TextCrisp,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -457,10 +457,10 @@ fun QuickShareOverlay(
                                     onClick = { selectedFormat = fmt.id },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(8.dp),
-                                    color = if (isSelected) PrimaryEmerald.copy(alpha = 0.2f) else BackgroundDark,
+                                    color = if (isSelected) TextCrisp else SurfaceElevated,
                                     border = androidx.compose.foundation.BorderStroke(
                                         1.dp,
-                                        if (isSelected) PrimaryEmerald else CardBorderDark
+                                        if (isSelected) TextCrisp else BorderHairline
                                     )
                                 ) {
                                     val chipTitle = "${fmt.label.replace(" Video", "").replace(" Quality", "")}${if (fmt.sizeStr.isNotBlank()) "\n" + fmt.sizeStr else ""}"
@@ -468,7 +468,7 @@ fun QuickShareOverlay(
                                         text = chipTitle,
                                         fontSize = 10.5.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) PrimaryEmerald else TextMuted,
+                                        color = if (isSelected) CanvasDark else TextSecondary,
                                         textAlign = TextAlign.Center,
                                         maxLines = 2,
                                         modifier = Modifier.padding(vertical = 6.dp)
@@ -501,12 +501,12 @@ fun QuickShareOverlay(
                     text = "Open Full App",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = PrimaryEmerald
+                    color = TextCrisp
                 )
                 Icon(
                     Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = PrimaryEmerald,
+                    tint = TextCrisp,
                     modifier = Modifier.size(16.dp)
                 )
             }

@@ -149,7 +149,7 @@ fun DownloadivoScreen(
                     snackbarData = data,
                     containerColor = SurfaceElevated,
                     contentColor = TextCrisp,
-                    actionColor = AccentEmerald,
+                    actionColor = TextCrisp,
                     shape = RoundedCornerShape(12.dp)
                 )
             }
@@ -408,28 +408,28 @@ fun DownloadivoScreen(
                                 modifier = Modifier
                                     .size(34.dp)
                                     .clip(CircleShape)
-                                    .background(AccentEmeraldMuted),
+                                    .background(SurfaceHighlight),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (currentTask.progress >= 0) {
                                     CircularProgressIndicator(
                                         progress = { currentTask.progress / 100f },
                                         modifier = Modifier.size(26.dp),
-                                        color = AccentEmerald,
+                                        color = TextCrisp,
                                         strokeWidth = 2.5.dp,
                                         trackColor = BorderHairline
                                     )
                                 } else {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(26.dp),
-                                        color = AccentEmerald,
+                                        color = TextCrisp,
                                         strokeWidth = 2.5.dp
                                     )
                                 }
                                 Icon(
                                     if (currentTask.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
                                     contentDescription = null,
-                                    tint = AccentEmerald,
+                                    tint = TextCrisp,
                                     modifier = Modifier.size(13.dp)
                                 )
                             }
@@ -446,7 +446,7 @@ fun DownloadivoScreen(
                                     Text(
                                         text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
                                         style = Typography.labelMedium,
-                                        color = AccentEmerald
+                                        color = TextCrisp
                                     )
                                     if (currentTask.speed.isNotBlank()) {
                                         Text(
@@ -473,7 +473,7 @@ fun DownloadivoScreen(
                                         Text(
                                             text = " (+${queuedTasks.size} queued)",
                                             style = Typography.labelSmall,
-                                            color = AccentEmerald
+                                            color = TextSecondary
                                         )
                                     }
                                 }
@@ -503,7 +503,7 @@ fun DownloadivoScreen(
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = SurfaceElevated,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.5f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
@@ -515,7 +515,7 @@ fun DownloadivoScreen(
                             Icon(
                                 Icons.Default.CheckCircle,
                                 contentDescription = null,
-                                tint = AccentEmerald,
+                                tint = TextCrisp,
                                 modifier = Modifier.size(20.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
@@ -542,12 +542,12 @@ fun DownloadivoScreen(
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = AccentEmerald,
-                                        contentColor = Color.Black
+                                        containerColor = TextCrisp,
+                                        contentColor = CanvasDark
                                     ),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                 ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black, modifier = Modifier.size(15.dp))
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(15.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Play", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
                                 }
@@ -633,7 +633,7 @@ private fun HomeDownloaderTab(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ═══════════════════════════════════════════════════════════════
-        // HERO BRANDING (MATCHES OFFICIAL WEBSITE DESIGN)
+        // STUDIO BRANDING SUBTITLE (SLEEK & REFINED)
         // ═══════════════════════════════════════════════════════════════
         AnimatedVisibility(
             visible = resolvedInfo == null && !isResolving,
@@ -643,34 +643,21 @@ private fun HomeDownloaderTab(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 10.dp, bottom = 2.dp),
+                    .padding(top = 8.dp, bottom = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(SurfaceDark)
-                        .border(1.dp, BorderHairline, RoundedCornerShape(18.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.app_icon_white),
-                        contentDescription = "Downloadivo",
-                        modifier = Modifier.size(42.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Downloadivo",
-                    style = Typography.displayLarge,
+                    text = "Studio Downloader",
+                    style = Typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
                     color = TextCrisp
                 )
-                Spacer(modifier = Modifier.height(2.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Universal Media Studio",
+                    text = "Extract 4K UHD, 1080p Full HD video or high-bitrate audio",
                     style = Typography.bodySmall,
-                    color = TextTertiary
+                    color = TextTertiary,
+                    textAlign = TextAlign.Center
                 )
             }
         }
@@ -692,7 +679,7 @@ private fun HomeDownloaderTab(
                     Icon(
                         Icons.Default.ContentPaste,
                         contentDescription = null,
-                        tint = AccentEmerald,
+                        tint = TextCrisp,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
@@ -719,10 +706,10 @@ private fun HomeDownloaderTab(
                             onClearClipboard()
                             onInspect()
                         },
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentEmerald,
-                            contentColor = Color.Black
+                            containerColor = TextCrisp,
+                            contentColor = CanvasDark
                         ),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
@@ -782,7 +769,7 @@ private fun HomeDownloaderTab(
                                 Text(
                                     text = detectedPlatform,
                                     style = Typography.labelSmall,
-                                    color = AccentEmerald,
+                                    color = TextCrisp,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
@@ -813,16 +800,16 @@ private fun HomeDownloaderTab(
                                     Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
                                 }
                             }) {
-                                Icon(Icons.Default.ContentPaste, contentDescription = "Paste", tint = AccentEmerald)
+                                Icon(Icons.Default.ContentPaste, contentDescription = "Paste", tint = TextCrisp)
                             }
                         }
                     },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentEmerald,
+                        focusedBorderColor = TextCrisp,
                         unfocusedBorderColor = BorderHairline,
                         focusedTextColor = TextCrisp,
                         unfocusedTextColor = TextCrisp,
-                        cursorColor = AccentEmerald
+                        cursorColor = TextCrisp
                     )
                 )
 
@@ -833,7 +820,7 @@ private fun HomeDownloaderTab(
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = SurfaceElevated,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.35f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
@@ -849,7 +836,7 @@ private fun HomeDownloaderTab(
                                         Icon(
                                             Icons.Default.Layers,
                                             contentDescription = null,
-                                            tint = AccentEmerald,
+                                            tint = TextCrisp,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
@@ -861,13 +848,13 @@ private fun HomeDownloaderTab(
                                     }
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
-                                        color = AccentEmeraldMuted
+                                        color = SurfaceHighlight
                                     ) {
                                         Text(
                                             text = "${detectedUrls.size} LINKS",
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
-                                            color = AccentEmerald,
+                                            color = TextCrisp,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
@@ -895,13 +882,13 @@ private fun HomeDownloaderTab(
                                         modifier = Modifier.weight(1f).height(46.dp),
                                         shape = RoundedCornerShape(10.dp),
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = AccentEmerald,
-                                            contentColor = Color.Black
+                                            containerColor = TextCrisp,
+                                            contentColor = CanvasDark
                                         )
                                     ) {
-                                        Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("All Videos (${detectedUrls.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                        Text("All Videos (${detectedUrls.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CanvasDark)
                                     }
 
                                     Button(
@@ -921,7 +908,7 @@ private fun HomeDownloaderTab(
                                         ),
                                         border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
                                     ) {
-                                        Icon(Icons.Default.MusicNote, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text("All MP3s (${detectedUrls.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextCrisp)
                                     }
@@ -929,62 +916,8 @@ private fun HomeDownloaderTab(
                             }
                         }
                     } else {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                    if (inputUrl.isNotBlank()) {
-                                        onInstantDownload(inputUrl, "best")
-                                    } else {
-                                        Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = AccentEmerald,
-                                    contentColor = Color.Black
-                                )
-                            ) {
-                                Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black, modifier = Modifier.size(17.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Download Video", style = Typography.labelLarge, color = Color.Black)
-                            }
-
-                            Button(
-                                onClick = {
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                    if (inputUrl.isNotBlank()) {
-                                        onInstantDownload(inputUrl, "mp3")
-                                    } else {
-                                        Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(48.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = SurfaceElevated,
-                                    contentColor = TextCrisp
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
-                            ) {
-                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(17.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Download Audio", style = Typography.labelLarge, color = TextCrisp)
-                            }
-                        }
-
-                        // Inspect Details Trigger
-                        TextButton(
+                        // High-Impact Primary Action: Inspect Formats & 4K Options
+                        Button(
                             onClick = {
                                 keyboardController?.hide()
                                 focusManager.clearFocus()
@@ -994,12 +927,67 @@ private fun HomeDownloaderTab(
                                     Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TextCrisp,
+                                contentColor = CanvasDark
+                            )
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Tune, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Search, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Inspect Formats & 4K Options", style = Typography.labelLarge, fontWeight = FontWeight.Bold, color = CanvasDark)
+                        }
+
+                        // Quick 1-Tap Action Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    if (inputUrl.isNotBlank()) {
+                                        onInstantDownload(inputUrl, "best")
+                                    } else {
+                                        Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(42.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = TextCrisp
+                                )
+                            ) {
+                                Icon(Icons.Default.FlashOn, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Inspect Available Resolutions & 4K Options", style = Typography.bodySmall, color = AccentEmerald)
+                                Text("Quick Video", style = Typography.labelMedium, color = TextCrisp)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    if (inputUrl.isNotBlank()) {
+                                        onInstantDownload(inputUrl, "mp3")
+                                    } else {
+                                        Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f).height(42.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = TextCrisp
+                                )
+                            ) {
+                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Quick MP3", style = Typography.labelMedium, color = TextCrisp)
                             }
                         }
                     }
@@ -1033,7 +1021,7 @@ private fun HomeDownloaderTab(
                         onClick = onInspect,
                         modifier = Modifier.size(28.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = AccentEmerald)
+                        Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = TextCrisp)
                     }
                 }
             }
@@ -1058,7 +1046,7 @@ private fun HomeDownloaderTab(
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(28.dp),
-                        color = AccentEmerald,
+                        color = TextCrisp,
                         strokeWidth = 2.5.dp
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -1128,14 +1116,14 @@ private fun HomeDownloaderTab(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = AccentEmeraldMuted,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.2f))
+                                color = SurfaceHighlight,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline)
                             ) {
                                 Text(
                                     text = info.extractor.uppercase(),
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = AccentEmerald,
+                                    color = TextCrisp,
                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                 )
                             }
@@ -1190,7 +1178,7 @@ private fun HomeDownloaderTab(
                                 Icon(
                                     Icons.Default.Videocam,
                                     contentDescription = null,
-                                    tint = if (mediaMode == "video") AccentEmerald else TextTertiary,
+                                    tint = if (mediaMode == "video") TextCrisp else TextTertiary,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -1216,7 +1204,7 @@ private fun HomeDownloaderTab(
                                 Icon(
                                     Icons.Default.MusicNote,
                                     contentDescription = null,
-                                    tint = if (mediaMode == "audio") AccentEmerald else TextTertiary,
+                                    tint = if (mediaMode == "audio") TextCrisp else TextTertiary,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -1316,7 +1304,7 @@ private fun HomeDownloaderTab(
                                     Icon(
                                         imageVector = Icons.Default.ContentCut,
                                         contentDescription = null,
-                                        tint = AccentEmerald,
+                                        tint = TextCrisp,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
@@ -1330,8 +1318,8 @@ private fun HomeDownloaderTab(
                                     checked = isTrimming,
                                     onCheckedChange = { isTrimming = it },
                                     colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.Black,
-                                        checkedTrackColor = AccentEmerald
+                                        checkedThumbColor = CanvasDark,
+                                        checkedTrackColor = TextCrisp
                                     )
                                 )
                             }
@@ -1349,7 +1337,7 @@ private fun HomeDownloaderTab(
                                         singleLine = true,
                                         shape = RoundedCornerShape(8.dp),
                                         colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = AccentEmerald,
+                                            focusedBorderColor = TextCrisp,
                                             unfocusedBorderColor = BorderHairline,
                                             focusedTextColor = TextCrisp,
                                             unfocusedTextColor = TextCrisp
@@ -1363,7 +1351,7 @@ private fun HomeDownloaderTab(
                                         singleLine = true,
                                         shape = RoundedCornerShape(8.dp),
                                         colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = AccentEmerald,
+                                            focusedBorderColor = TextCrisp,
                                             unfocusedBorderColor = BorderHairline,
                                             focusedTextColor = TextCrisp,
                                             unfocusedTextColor = TextCrisp
@@ -1390,11 +1378,11 @@ private fun HomeDownloaderTab(
                             .height(52.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentEmerald,
-                            contentColor = Color.Black
+                            containerColor = TextCrisp,
+                            contentColor = CanvasDark
                         )
                     ) {
-                        Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black, modifier = Modifier.size(19.dp))
+                        Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(19.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         val selectedFmt = info.availableFormats.find { it.id == selectedFormat }
                         val selectedLabel = selectedFmt?.label ?: selectedFormat.uppercase()
@@ -1403,7 +1391,7 @@ private fun HomeDownloaderTab(
                             text = if (isTrimming) "Download Trimmed Clip" else "Download $selectedLabel$sizePart",
                             style = Typography.labelLarge,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Black
+                            color = CanvasDark
                         )
                     }
                 }
@@ -1449,12 +1437,12 @@ private fun QueueTab(
             if (currentTask.status == DownloadStatus.DOWNLOADING) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
-                    color = AccentEmeraldMuted,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.3f))
+                    color = SurfaceHighlight,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline)
                 ) {
                     Text(
                         text = currentTask.speed.ifBlank { "Active" },
-                        color = AccentEmerald,
+                        color = TextCrisp,
                         style = Typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
@@ -1479,13 +1467,13 @@ private fun QueueTab(
                         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = AccentEmeraldMuted,
+                                color = SurfaceHighlight,
                                 modifier = Modifier.padding(end = 8.dp)
                             ) {
                                 Text(
                                     text = if (currentTask.isAudio) "MP3" else "MP4",
                                     style = Typography.labelSmall,
-                                    color = AccentEmerald,
+                                    color = TextCrisp,
                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                 )
                             }
@@ -1511,8 +1499,8 @@ private fun QueueTab(
                                 .fillMaxWidth()
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(3.dp)),
-                            color = AccentEmerald,
-                            trackColor = BorderHairline
+                            color = TextCrisp,
+                            trackColor = SurfaceHighlight
                         )
                     } else {
                         LinearProgressIndicator(
@@ -1520,8 +1508,8 @@ private fun QueueTab(
                                 .fillMaxWidth()
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(3.dp)),
-                            color = AccentEmerald,
-                            trackColor = BorderHairline
+                            color = TextCrisp,
+                            trackColor = SurfaceHighlight
                         )
                     }
 
@@ -1535,7 +1523,7 @@ private fun QueueTab(
                         Text(
                             text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
                             style = Typography.titleSmall,
-                            color = AccentEmerald
+                            color = TextCrisp
                         )
                         Text(
                             text = buildString {
@@ -1593,7 +1581,7 @@ private fun QueueTab(
                                     Text(
                                         text = "${index + 1}",
                                         style = Typography.labelSmall,
-                                        color = AccentEmerald
+                                        color = TextCrisp
                                     )
                                 }
                             }
@@ -1730,7 +1718,7 @@ private fun LibraryTab(
                     }
                 },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AccentEmerald,
+                    focusedBorderColor = TextCrisp,
                     unfocusedBorderColor = BorderHairline,
                     focusedTextColor = TextCrisp,
                     unfocusedTextColor = TextCrisp
@@ -1751,7 +1739,7 @@ private fun LibraryTab(
                         color = if (isSelected) SurfaceHighlight else SurfaceDark,
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (isSelected) AccentEmerald else BorderHairline
+                            if (isSelected) TextCrisp else BorderHairline
                         )
                     ) {
                         Text(
@@ -1839,7 +1827,7 @@ private fun LibraryTab(
                                     Icon(
                                         if (task.isAudio) Icons.Default.MusicNote else Icons.Default.SmartDisplay,
                                         contentDescription = null,
-                                        tint = AccentEmerald
+                                        tint = TextCrisp
                                     )
                                 }
                             }
@@ -1882,7 +1870,7 @@ private fun LibraryTab(
 
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                 IconButton(onClick = { onPlay(task) }, modifier = Modifier.size(34.dp)) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = AccentEmerald)
+                                    Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = TextCrisp)
                                 }
                                 IconButton(onClick = { onShare(task) }, modifier = Modifier.size(34.dp)) {
                                     Icon(Icons.Default.Share, contentDescription = "Share", tint = TextSecondary)
@@ -1947,8 +1935,8 @@ private fun SettingsTab() {
                         checked = true,
                         onCheckedChange = {},
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.Black,
-                            checkedTrackColor = AccentEmerald
+                            checkedThumbColor = CanvasDark,
+                            checkedTrackColor = TextCrisp
                         )
                     )
                 }
@@ -1968,7 +1956,7 @@ private fun SettingsTab() {
                         singleLine = true,
                         shape = RoundedCornerShape(10.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentEmerald,
+                            focusedBorderColor = TextCrisp,
                             unfocusedBorderColor = BorderHairline,
                             focusedTextColor = TextCrisp,
                             unfocusedTextColor = TextCrisp
@@ -1983,7 +1971,7 @@ private fun SettingsTab() {
                         Text(
                             text = testStatus ?: "Default: https://downloadivo.vercel.app",
                             style = Typography.bodySmall,
-                            color = if (testStatus?.startsWith("✓") == true) AccentEmerald else TextTertiary
+                            color = if (testStatus?.startsWith("✓") == true) TextCrisp else TextTertiary
                         )
                         FilledTonalButton(
                             onClick = {
