@@ -302,6 +302,51 @@ def _format_eta(seconds: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 
+def _format_video_duration(val) -> str:
+    """Format duration from int/float seconds, ISO 8601, or duration string to MM:SS or H:MM:SS."""
+    if not val:
+        return ""
+    if isinstance(val, (int, float)):
+        s = int(val)
+        if s <= 0:
+            return ""
+        h = s // 3600
+        m = (s % 3600) // 60
+        sec = s % 60
+        if h > 0:
+            return f"{h}:{m:02d}:{sec:02d}"
+        return f"{m:02d}:{sec:02d}"
+    if isinstance(val, str):
+        val = val.strip()
+        if not val:
+            return ""
+        if re.match(r"^\d+:\d{2}(:\d{2})?$", val):
+            return val
+        if val.replace(".", "", 1).isdigit():
+            try:
+                s = int(float(val))
+                if s <= 0:
+                    return ""
+                h = s // 3600
+                m = (s % 3600) // 60
+                sec = s % 60
+                if h > 0:
+                    return f"{h}:{m:02d}:{sec:02d}"
+                return f"{m:02d}:{sec:02d}"
+            except Exception:
+                pass
+        m_iso = re.match(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$", val, re.IGNORECASE)
+        if m_iso:
+            h = int(m_iso.group(1) or 0)
+            m = int(m_iso.group(2) or 0)
+            sec = int(m_iso.group(3) or 0)
+            if h > 0:
+                return f"{h}:{m:02d}:{sec:02d}"
+            return f"{m:02d}:{sec:02d}"
+        return val
+    return ""
+
+
 def _extract_urls(text: str) -> List[str]:
     """Extract and clean all valid http/https URLs from any text or block."""
     raw_urls = re.findall(r"https?://[^\s,;\"'<>]+", text)
@@ -1782,7 +1827,7 @@ async def get_info(request: Request, url: Optional[str] = None):
                                     "url": f"https://www.youtube.com/watch?v={re_id}",
                                     "thumbnail": thumb,
                                     "uploader": re_entry.get("uploader") or uploader_name or "Creator",
-                                    "duration": re_entry.get("duration_string") or "",
+                                    "duration": _format_video_duration(re_entry.get("duration")) or _format_video_duration(re_entry.get("duration_string")),
                                 })
                 except Exception:
                     pass
@@ -1790,7 +1835,7 @@ async def get_info(request: Request, url: Optional[str] = None):
             return {
                 "title": info.get("title", "Untitled Media"),
                 "thumbnail": info.get("thumbnail", ""),
-                "duration": info.get("duration_string") or str(info.get("duration") or ""),
+                "duration": _format_video_duration(info.get("duration")) or _format_video_duration(info.get("duration_string")),
                 "uploader": info.get("uploader") or info.get("channel") or "Unknown Author",
                 "extractor": extractor,
                 "is_youtube": is_youtube,
