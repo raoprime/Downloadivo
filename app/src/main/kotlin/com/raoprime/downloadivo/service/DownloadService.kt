@@ -35,16 +35,18 @@ class DownloadService : Service() {
         const val EXTRA_URL = "extra_url"
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_FORMAT = "extra_format"
+        const val EXTRA_THUMBNAIL = "extra_thumbnail"
 
         private val _currentTask = MutableStateFlow(DownloadTask())
         val currentTask = _currentTask.asStateFlow()
 
-        fun startDownload(context: Context, url: String, title: String, format: String) {
+        fun startDownload(context: Context, url: String, title: String, format: String, thumbnail: String = "") {
             val intent = Intent(context, DownloadService::class.java).apply {
                 action = ACTION_START_DOWNLOAD
                 putExtra(EXTRA_URL, url)
                 putExtra(EXTRA_TITLE, title)
                 putExtra(EXTRA_FORMAT, format)
+                putExtra(EXTRA_THUMBNAIL, thumbnail)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -73,8 +75,9 @@ class DownloadService : Service() {
                 val url = intent.getStringExtra(EXTRA_URL) ?: ""
                 val title = intent.getStringExtra(EXTRA_TITLE) ?: "Media"
                 val format = intent.getStringExtra(EXTRA_FORMAT) ?: "best"
+                val thumbnail = intent.getStringExtra(EXTRA_THUMBNAIL) ?: ""
                 if (url.isNotBlank()) {
-                    beginDownload(url, title, format)
+                    beginDownload(url, title, format, thumbnail)
                 }
             }
             ACTION_CANCEL_DOWNLOAD -> {
@@ -84,23 +87,27 @@ class DownloadService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun beginDownload(url: String, title: String, format: String) {
+    private fun beginDownload(url: String, title: String, format: String, thumbnail: String = "") {
         downloadJob?.cancel()
 
         wakeLock?.acquire(10 * 60 * 1000L /* 10 minutes */)
 
         val cleanTitle = title.replace(Regex("[^a-zA-Z0-9._ -]"), "").take(80).ifBlank { "download" }
-        val isAudio = format.lowercase() == "mp3"
-        val extension = if (isAudio) "mp3" else "mp4"
+        val isAudio = format.lowercase() == "mp3" || format.lowercase() == "m4a"
+        val extension = if (isAudio) (if (format.lowercase() == "m4a") "m4a" else "mp3") else "mp4"
         val fileName = "$cleanTitle.$extension"
 
-        _currentTask.value = DownloadTask(
+        val initialTask = DownloadTask(
             id = System.currentTimeMillis().toString(),
             title = cleanTitle,
             url = url,
             format = format,
-            status = DownloadStatus.DOWNLOADING
+            thumbnail = thumbnail,
+            status = DownloadStatus.DOWNLOADING,
+            isAudio = isAudio
         )
+        _currentTask.value = initialTask
+        com.raoprime.downloadivo.data.DownloadRepository.addTask(initialTask)
 
         startForegroundNotification(cleanTitle, 0, "Starting download...")
 
@@ -148,13 +155,15 @@ class DownloadService : Service() {
                     format = format,
                     outputStream = outStream,
                     onProgress = { percent, speed, current, total ->
-                        _currentTask.value = _currentTask.value.copy(
+                        val updated = _currentTask.value.copy(
                             progress = percent,
                             speed = speed,
                             bytesDownloaded = current,
                             totalBytes = total,
                             status = DownloadStatus.DOWNLOADING
                         )
+                        _currentTask.value = updated
+                        com.raoprime.downloadivo.data.DownloadRepository.updateTask(updated)
                         updateForegroundNotification(cleanTitle, percent, speed)
                     }
                 )
@@ -167,11 +176,13 @@ class DownloadService : Service() {
                         resolver.update(mediaUri, contentValues, null, null)
                     }
 
-                    _currentTask.value = _currentTask.value.copy(
+                    val completed = _currentTask.value.copy(
                         progress = 100,
                         status = DownloadStatus.SUCCESS,
                         filePath = mediaUri.toString()
                     )
+                    _currentTask.value = completed
+                    com.raoprime.downloadivo.data.DownloadRepository.updateTask(completed)
                     showCompletionNotification(cleanTitle, true, mediaUri, isAudio)
                 } else {
                     throw result.exceptionOrNull() ?: Exception("Download aborted")
@@ -183,10 +194,12 @@ class DownloadService : Service() {
                     try { applicationContext.contentResolver.delete(uri, null, null) } catch (_: Exception) {}
                 }
 
-                _currentTask.value = _currentTask.value.copy(
+                val failed = _currentTask.value.copy(
                     status = DownloadStatus.ERROR,
                     error = e.localizedMessage ?: "Download failed"
                 )
+                _currentTask.value = failed
+                com.raoprime.downloadivo.data.DownloadRepository.updateTask(failed)
                 showCompletionNotification(cleanTitle, false, null, isAudio)
             } finally {
                 try { outStream?.close() } catch (_: Exception) {}
@@ -198,10 +211,12 @@ class DownloadService : Service() {
 
     private fun cancelDownload() {
         downloadJob?.cancel()
-        _currentTask.value = _currentTask.value.copy(
-            status = DownloadStatus.IDLE,
+        val cancelled = _currentTask.value.copy(
+            status = DownloadStatus.CANCELLED,
             progress = 0
         )
+        _currentTask.value = cancelled
+        com.raoprime.downloadivo.data.DownloadRepository.updateTask(cancelled)
         if (wakeLock?.isHeld == true) wakeLock?.release()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()

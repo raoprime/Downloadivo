@@ -15,6 +15,7 @@ class DownloadivoApp : Application() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        com.raoprime.downloadivo.data.DownloadRepository.init(this)
     }
 
     private fun createNotificationChannel() {
