@@ -29,8 +29,11 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.raoprime.downloadivo.ui.theme.*
 
@@ -44,18 +47,37 @@ fun BuiltInPlayerSheet(
 ) {
     val context = LocalContext.current
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
+    var isBuffering by remember { mutableStateOf(false) }
 
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            val item = MediaItem.fromUri(Uri.parse(mediaUri))
-            setMediaItem(item)
-            prepare()
-            playWhenReady = true
-        }
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Downloadivo-Stream/3.6")
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(30000)
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(httpDataSourceFactory)
+
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build().apply {
+                val item = MediaItem.fromUri(Uri.parse(mediaUri))
+                setMediaItem(item)
+                prepare()
+                playWhenReady = true
+            }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                isBuffering = (state == Player.STATE_BUFFERING)
+            }
+        }
+        exoPlayer.addListener(listener)
         onDispose {
+            exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
     }
@@ -88,6 +110,7 @@ fun BuiltInPlayerSheet(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Header
+            val isOnlineStream = mediaUri.startsWith("http://") || mediaUri.startsWith("https://")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -121,11 +144,32 @@ fun BuiltInPlayerSheet(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            text = if (isAudio) "Built-in Audio Player • Studio 320k" else "Built-in Video Player • Line-Rate",
-                            fontSize = 11.sp,
-                            color = TextMuted
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isOnlineStream) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = SurfaceHighlight,
+                                    modifier = Modifier.padding(end = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "AD-FREE LIVE",
+                                        style = Typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextCrisp,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = if (isOnlineStream) {
+                                    if (isAudio) "Live Audio Stream • Studio 320k" else "Ad-Free Stream • 1080p / 4K"
+                                } else {
+                                    if (isAudio) "Local Audio Player • Studio 320k" else "Local Video Player • Offline"
+                                },
+                                fontSize = 11.sp,
+                                color = TextMuted
+                            )
+                        }
                     }
                 }
                 IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
@@ -200,6 +244,21 @@ fun BuiltInPlayerSheet(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
+                }
+
+                if (isBuffering) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(36.dp),
+                            color = TextCrisp,
+                            strokeWidth = 3.dp
+                        )
+                    }
                 }
             }
 

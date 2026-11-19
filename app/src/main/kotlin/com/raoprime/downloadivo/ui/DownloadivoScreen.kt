@@ -332,6 +332,11 @@ fun DownloadivoScreen(
                     onFormatSelect = { selectedFormat = it },
                     isResolving = isResolving,
                     errorMessage = errorMessage,
+                    onStreamPlay = { streamUrl, title, isAudio ->
+                        activePlaybackUri = streamUrl
+                        activePlaybackTitle = title
+                        activePlaybackIsAudio = isAudio
+                    },
                     onInspect = {
                         if (inputUrl.isNotBlank()) {
                             isCustomizeExpanded = true
@@ -645,6 +650,7 @@ private fun HomeDownloaderTab(
     isResolving: Boolean,
     errorMessage: String?,
     onInspect: () -> Unit,
+    onStreamPlay: (streamUrl: String, title: String, isAudio: Boolean) -> Unit,
     onInstantDownload: (url: String, format: String) -> Unit,
     onDownloadCustom: (info: MediaInfo, format: String, startTime: String?, endTime: String?) -> Unit,
     onClear: () -> Unit
@@ -1155,6 +1161,28 @@ private fun HomeDownloaderTab(
                             }
                         }
 
+                        // Center Play / Stream Circle Button
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(54.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.65f))
+                                .border(1.dp, BorderSubtle, CircleShape)
+                                .clickable {
+                                    val streamUrl = DownloadEngine.getStreamUrl(info.url, selectedFormat)
+                                    onStreamPlay(streamUrl, info.title, mediaMode == "audio")
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = "Stream Now",
+                                tint = TextCrisp,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+
                         // Bottom-Right Duration Badge
                         if (info.duration.isNotBlank()) {
                             Surface(
@@ -1433,37 +1461,79 @@ private fun HomeDownloaderTab(
                             }
                         }
 
-                        // High-Contrast Master Download CTA Button
+                        // Dual Action: Stream Ad-Free vs Download Offline
                         val selectedFmt = info.availableFormats.find { it.id == selectedFormat }
                         val selectedLabel = selectedFmt?.label?.replace(" Video", "")?.replace(" Audio", "") ?: selectedFormat.uppercase()
                         val sizeText = if (!selectedFmt?.sizeStr.isNullOrBlank()) " • ${selectedFmt!!.sizeStr}" else ""
 
-                        Button(
-                            onClick = {
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                val start = if (isTrimming) trimStart.ifBlank { null } else null
-                                val end = if (isTrimming) trimEnd.ifBlank { null } else null
-                                onDownloadCustom(info, selectedFormat, start, end)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(54.dp),
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TextCrisp,
-                                contentColor = CanvasDark
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (isTrimming) "Download Trimmed Clip" else "Download $selectedLabel$sizeText",
-                                style = Typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = CanvasDark
-                            )
+                            // Instant Stream Button (Play in Full HD/4K Ad-Free without downloading)
+                            Button(
+                                onClick = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    val streamUrl = DownloadEngine.getStreamUrl(info.url, selectedFormat)
+                                    onStreamPlay(streamUrl, info.title, mediaMode == "audio")
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceElevated,
+                                    contentColor = TextCrisp
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Stream Ad-Free",
+                                    style = Typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp
+                                )
+                            }
+
+                            // Master Download Button
+                            Button(
+                                onClick = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    val start = if (isTrimming) trimStart.ifBlank { null } else null
+                                    val end = if (isTrimming) trimEnd.ifBlank { null } else null
+                                    onDownloadCustom(info, selectedFormat, start, end)
+                                },
+                                modifier = Modifier
+                                    .weight(1.1f)
+                                    .height(52.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TextCrisp,
+                                    contentColor = CanvasDark
+                                )
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(19.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isTrimming) "Save Clip" else "Download",
+                                    style = Typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CanvasDark
+                                )
+                            }
                         }
+
+                        Text(
+                            text = if (isTrimming) "Trim mode active: $trimStart - $trimEnd" else "Selected: $selectedLabel$sizeText",
+                            style = Typography.bodySmall,
+                            color = TextTertiary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
             }
@@ -2070,8 +2140,9 @@ private fun SettingsTab() {
 
 private fun formatByteSize(bytes: Long): String {
     return when {
-        bytes >= 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
-        bytes >= 1024 -> String.format("%.0f KB", bytes / 1024.0)
+        bytes >= 1024L * 1024L * 1024L -> String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+        bytes >= 1024L * 1024L -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
+        bytes >= 1024L -> String.format("%.0f KB", bytes / 1024.0)
         else -> "$bytes B"
     }
 }
