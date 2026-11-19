@@ -24,6 +24,7 @@ import com.raoprime.downloadivo.MainActivity
 import com.raoprime.downloadivo.model.DownloadStatus
 import com.raoprime.downloadivo.model.DownloadTask
 import com.raoprime.downloadivo.network.DownloadEngine
+import com.raoprime.downloadivo.ui.theme.HapticUtil
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,6 +40,7 @@ data class QueuedDownload(
     val format: String,
     val thumbnail: String = "",
     val duration: String = "",
+    val expectedBytes: Long = 0L,
     val startTime: String? = null,
     val endTime: String? = null
 )
@@ -56,6 +58,7 @@ class DownloadService : Service() {
         const val EXTRA_FORMAT = "extra_format"
         const val EXTRA_THUMBNAIL = "extra_thumbnail"
         const val EXTRA_DURATION = "extra_duration"
+        const val EXTRA_EXPECTED_BYTES = "extra_expected_bytes"
         const val EXTRA_START_TIME = "extra_start_time"
         const val EXTRA_END_TIME = "extra_end_time"
 
@@ -72,6 +75,7 @@ class DownloadService : Service() {
             format: String,
             thumbnail: String = "",
             duration: String = "",
+            expectedBytes: Long = 0L,
             startTime: String? = null,
             endTime: String? = null
         ) {
@@ -82,6 +86,7 @@ class DownloadService : Service() {
                 putExtra(EXTRA_FORMAT, format)
                 putExtra(EXTRA_THUMBNAIL, thumbnail)
                 putExtra(EXTRA_DURATION, duration)
+                putExtra(EXTRA_EXPECTED_BYTES, expectedBytes)
                 putExtra(EXTRA_START_TIME, startTime)
                 putExtra(EXTRA_END_TIME, endTime)
             }
@@ -126,10 +131,11 @@ class DownloadService : Service() {
                 val format = intent.getStringExtra(EXTRA_FORMAT) ?: "best"
                 val thumbnail = intent.getStringExtra(EXTRA_THUMBNAIL) ?: ""
                 val duration = intent.getStringExtra(EXTRA_DURATION) ?: ""
+                val expectedBytes = intent.getLongExtra(EXTRA_EXPECTED_BYTES, 0L)
                 val startTime = intent.getStringExtra(EXTRA_START_TIME)
                 val endTime = intent.getStringExtra(EXTRA_END_TIME)
                 if (url.isNotBlank()) {
-                    enqueueDownload(url, title, format, thumbnail, duration, startTime, endTime)
+                    enqueueDownload(url, title, format, thumbnail, duration, expectedBytes, startTime, endTime)
                 }
             }
             ACTION_CANCEL_DOWNLOAD -> {
@@ -151,6 +157,7 @@ class DownloadService : Service() {
         format: String,
         thumbnail: String = "",
         duration: String = "",
+        expectedBytes: Long = 0L,
         startTime: String? = null,
         endTime: String? = null
     ) {
@@ -165,6 +172,7 @@ class DownloadService : Service() {
             format = format,
             thumbnail = thumbnail,
             duration = duration,
+            expectedBytes = expectedBytes,
             startTime = startTime,
             endTime = endTime
         )
@@ -179,6 +187,7 @@ class DownloadService : Service() {
                 format = format,
                 thumbnail = thumbnail,
                 duration = duration,
+                totalBytes = expectedBytes,
                 status = DownloadStatus.QUEUED,
                 isAudio = isAudio,
                 startTime = startTime,
@@ -200,6 +209,7 @@ class DownloadService : Service() {
                 format = q.format,
                 thumbnail = q.thumbnail,
                 duration = q.duration,
+                totalBytes = q.expectedBytes,
                 status = DownloadStatus.QUEUED,
                 isAudio = q.format.lowercase() == "mp3" || q.format.lowercase() == "m4a",
                 startTime = q.startTime,
@@ -231,6 +241,7 @@ class DownloadService : Service() {
             format = item.format,
             thumbnail = item.thumbnail,
             duration = item.duration,
+            totalBytes = item.expectedBytes,
             status = DownloadStatus.DOWNLOADING,
             isAudio = isAudio,
             startTime = item.startTime,
@@ -303,6 +314,7 @@ class DownloadService : Service() {
                     format = item.format,
                     startTime = item.startTime,
                     endTime = item.endTime,
+                    expectedTotalBytes = item.expectedBytes,
                     outputStream = outStream,
                     onProgress = { percent, speed, eta, current, total ->
                         val updated = _currentTask.value.copy(
@@ -319,23 +331,39 @@ class DownloadService : Service() {
                     }
                 )
 
-                if (result.isSuccess) {
+                if (result.isSuccess && (result.getOrNull() ?: 0L) > 0L) {
+                    try { outStream?.flush() } catch (_: Exception) {}
+                    try { outStream?.close() } catch (_: Exception) {}
+                    outStream = null
+
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         contentValues.clear()
                         contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
                         resolver.update(mediaUri, contentValues, null, null)
                     }
 
+                    try {
+                        applicationContext.grantUriPermission(
+                            applicationContext.packageName,
+                            mediaUri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        )
+                    } catch (_: Exception) {}
+
+                    val finalBytes = result.getOrNull() ?: _currentTask.value.totalBytes
                     val completed = _currentTask.value.copy(
                         progress = 100,
+                        bytesDownloaded = finalBytes,
+                        totalBytes = finalBytes,
                         status = DownloadStatus.SUCCESS,
                         filePath = mediaUri.toString()
                     )
                     _currentTask.value = completed
                     com.raoprime.downloadivo.data.DownloadRepository.updateTask(completed)
                     showCompletionNotification(cleanTitle, true, mediaUri, isAudio)
+                    HapticUtil.success(applicationContext)
                 } else {
-                    throw result.exceptionOrNull() ?: Exception("Download aborted")
+                    throw result.exceptionOrNull() ?: Exception("Download aborted or zero bytes received")
                 }
 
             } catch (e: Exception) {

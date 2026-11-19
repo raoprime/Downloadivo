@@ -60,13 +60,16 @@ class QuickShareActivity : ComponentActivity() {
                     url = sharedUrl,
                     onDismiss = { finish() },
                     onDownloadVideo = { info, format ->
+                        HapticUtil.heavyClick(this@QuickShareActivity)
+                        val expectedBytes = info?.availableFormats?.find { it.id == format }?.sizeBytes ?: 0L
                         DownloadService.startDownload(
                             context = this@QuickShareActivity,
                             url = sharedUrl,
                             title = info?.title ?: "Shared Video",
                             format = format,
                             thumbnail = info?.thumbnail ?: "",
-                            duration = info?.duration ?: ""
+                            duration = info?.duration ?: "",
+                            expectedBytes = expectedBytes
                         )
                         Toast.makeText(
                             this@QuickShareActivity,
@@ -76,13 +79,16 @@ class QuickShareActivity : ComponentActivity() {
                         finish()
                     },
                     onDownloadAudio = { info ->
+                        HapticUtil.heavyClick(this@QuickShareActivity)
+                        val expectedBytes = info?.availableFormats?.find { it.id == "mp3" }?.sizeBytes ?: 0L
                         DownloadService.startDownload(
                             context = this@QuickShareActivity,
                             url = sharedUrl,
                             title = info?.title ?: "Shared Audio",
                             format = "mp3",
                             thumbnail = info?.thumbnail ?: "",
-                            duration = info?.duration ?: ""
+                            duration = info?.duration ?: "",
+                            expectedBytes = expectedBytes
                         )
                         Toast.makeText(
                             this@QuickShareActivity,
@@ -447,6 +453,7 @@ fun QuickShareOverlay(
                 }
 
                 AnimatedVisibility(visible = showCustomOptions) {
+                    val context = androidx.compose.ui.platform.LocalContext.current
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         val videoFormats = info.availableFormats.filter { !it.isAudio }
                         Row(
@@ -456,7 +463,10 @@ fun QuickShareOverlay(
                             videoFormats.take(4).forEach { fmt ->
                                 val isSelected = selectedFormat == fmt.id
                                 Surface(
-                                    onClick = { selectedFormat = fmt.id },
+                                    onClick = {
+                                        HapticUtil.lightClick(context)
+                                        selectedFormat = fmt.id
+                                    },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(8.dp),
                                     color = if (isSelected) TextCrisp else SurfaceElevated,

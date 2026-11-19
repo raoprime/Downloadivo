@@ -34,6 +34,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -64,8 +65,10 @@ fun BuiltInPlayerSheet(
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(30000)
 
+        val defaultDataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            .setDataSourceFactory(httpDataSourceFactory)
+            .setDataSourceFactory(defaultDataSourceFactory)
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
@@ -323,7 +326,10 @@ fun BuiltInPlayerSheet(
                                 else -> q.uppercase()
                             }
                             Surface(
-                                onClick = { onQualitySelected(q) },
+                                onClick = {
+                                    HapticUtil.lightClick(context)
+                                    onQualitySelected(q)
+                                },
                                 shape = RoundedCornerShape(6.dp),
                                 color = if (isSelected) TextCrisp else SurfaceElevated,
                                 border = androidx.compose.foundation.BorderStroke(
@@ -364,6 +370,7 @@ fun BuiltInPlayerSheet(
                         val isSelected = currentSpeed == speed
                         Surface(
                             onClick = {
+                                HapticUtil.lightClick(context)
                                 currentSpeed = speed
                                 exoPlayer.playbackParameters = PlaybackParameters(speed)
                             },

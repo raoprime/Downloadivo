@@ -10,7 +10,8 @@ data class FormatOption(
     val isAudio: Boolean = false,
     val note: String = "",
     val resolution: Int = 0,
-    val sizeStr: String = ""
+    val sizeStr: String = "",
+    val sizeBytes: Long = 0L
 )
 
 @Serializable

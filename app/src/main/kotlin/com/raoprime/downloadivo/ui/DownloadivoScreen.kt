@@ -120,9 +120,11 @@ fun DownloadivoScreen(
         format: String,
         thumbnail: String = "",
         duration: String = "",
+        expectedBytes: Long = 0L,
         startTime: String? = null,
         endTime: String? = null
     ) {
+        HapticUtil.heavyClick(context)
         DownloadService.startDownload(
             context = context,
             url = url,
@@ -130,6 +132,7 @@ fun DownloadivoScreen(
             format = format,
             thumbnail = thumbnail,
             duration = duration,
+            expectedBytes = expectedBytes,
             startTime = startTime,
             endTime = endTime
         )
@@ -259,7 +262,10 @@ fun DownloadivoScreen(
             ) {
                 NavigationBarItem(
                     selected = currentTab == AppTab.HOME,
-                    onClick = { currentTab = AppTab.HOME },
+                    onClick = {
+                        HapticUtil.lightClick(context)
+                        currentTab = AppTab.HOME
+                    },
                     icon = { Icon(Icons.Default.Download, contentDescription = "Downloader") },
                     label = { Text("Download", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
@@ -272,7 +278,10 @@ fun DownloadivoScreen(
                 )
                 NavigationBarItem(
                     selected = currentTab == AppTab.QUEUE,
-                    onClick = { currentTab = AppTab.QUEUE },
+                    onClick = {
+                        HapticUtil.lightClick(context)
+                        currentTab = AppTab.QUEUE
+                    },
                     icon = {
                         val activeCount = (if (currentTask.status == DownloadStatus.DOWNLOADING) 1 else 0) + queuedTasks.size
                         BadgedBox(badge = {
@@ -296,7 +305,10 @@ fun DownloadivoScreen(
                 )
                 NavigationBarItem(
                     selected = currentTab == AppTab.LIBRARY,
-                    onClick = { currentTab = AppTab.LIBRARY },
+                    onClick = {
+                        HapticUtil.lightClick(context)
+                        currentTab = AppTab.LIBRARY
+                    },
                     icon = { Icon(Icons.Default.VideoLibrary, contentDescription = "Library") },
                     label = { Text("Library", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
@@ -309,7 +321,10 @@ fun DownloadivoScreen(
                 )
                 NavigationBarItem(
                     selected = currentTab == AppTab.SETTINGS,
-                    onClick = { currentTab = AppTab.SETTINGS },
+                    onClick = {
+                        HapticUtil.lightClick(context)
+                        currentTab = AppTab.SETTINGS
+                    },
                     icon = { Icon(Icons.Default.Tune, contentDescription = "Settings") },
                     label = { Text("Settings", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
@@ -374,21 +389,25 @@ fun DownloadivoScreen(
                             url.contains("spotify.com") -> "Spotify Audio"
                             else -> "Media Download"
                         }
+                        val matchedBytes = resolvedInfo?.availableFormats?.find { it.id == format }?.sizeBytes ?: 0L
                         triggerDownload(
                             url = url,
                             title = resolvedInfo?.title ?: defaultTitle,
                             format = format,
                             thumbnail = resolvedInfo?.thumbnail ?: "",
-                            duration = resolvedInfo?.duration ?: ""
+                            duration = resolvedInfo?.duration ?: "",
+                            expectedBytes = matchedBytes
                         )
                     },
                     onDownloadCustom = { info, format, startTime, endTime ->
+                        val matchedBytes = info.availableFormats.find { it.id == format }?.sizeBytes ?: 0L
                         triggerDownload(
                             url = info.url,
                             title = info.title,
                             format = format,
                             thumbnail = info.thumbnail,
                             duration = info.duration,
+                            expectedBytes = matchedBytes,
                             startTime = startTime,
                             endTime = endTime
                         )
@@ -419,6 +438,7 @@ fun DownloadivoScreen(
                 AppTab.LIBRARY -> LibraryTab(
                     history = historyList,
                     onPlay = { task ->
+                        HapticUtil.mediumClick(context)
                         task.filePath?.let { uriStr ->
                             activePlaybackUri = uriStr
                             activePlaybackTitle = task.title
@@ -429,6 +449,7 @@ fun DownloadivoScreen(
                         }
                     },
                     onShare = { task ->
+                        HapticUtil.lightClick(context)
                         task.filePath?.let { uriStr ->
                             try {
                                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -443,6 +464,7 @@ fun DownloadivoScreen(
                         }
                     },
                     onDelete = { task ->
+                        HapticUtil.lightClick(context)
                         DownloadRepository.removeTask(task.id)
                     }
                 )
@@ -1006,6 +1028,7 @@ private fun HomeDownloaderTab(
                     ) {
                         Button(
                             onClick = {
+                                HapticUtil.heavyClick(context)
                                 keyboardController?.hide()
                                 focusManager.clearFocus()
                                 detectedUrls.forEach { u ->
@@ -1027,6 +1050,7 @@ private fun HomeDownloaderTab(
 
                         Button(
                             onClick = {
+                                HapticUtil.heavyClick(context)
                                 keyboardController?.hide()
                                 focusManager.clearFocus()
                                 detectedUrls.forEach { u ->
@@ -1199,6 +1223,7 @@ private fun HomeDownloaderTab(
                                 .background(Color.Black.copy(alpha = 0.65f))
                                 .border(1.dp, BorderSubtle, CircleShape)
                                 .clickable {
+                                    HapticUtil.mediumClick(context)
                                     val streamUrl = DownloadEngine.getStreamUrl(info.url, selectedFormat)
                                     val qualities = info.availableFormats.filter { !it.isAudio }.map { it.id }
                                     onStreamPlay(streamUrl, info.url, info.title, mediaMode == "audio", qualities, selectedFormat, info.duration)
@@ -1283,6 +1308,7 @@ private fun HomeDownloaderTab(
                         ) {
                             Surface(
                                 onClick = {
+                                    HapticUtil.lightClick(context)
                                     mediaMode = "video"
                                     onFormatSelect("best")
                                 },
@@ -1313,6 +1339,7 @@ private fun HomeDownloaderTab(
 
                             Surface(
                                 onClick = {
+                                    HapticUtil.lightClick(context)
                                     mediaMode = "audio"
                                     onFormatSelect("mp3")
                                 },
@@ -1358,7 +1385,10 @@ private fun HomeDownloaderTab(
                                     rowFormats.forEach { fmt ->
                                         val isSelected = selectedFormat == fmt.id
                                         Surface(
-                                            onClick = { onFormatSelect(fmt.id) },
+                                            onClick = {
+                                                HapticUtil.lightClick(context)
+                                                onFormatSelect(fmt.id)
+                                            },
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .height(56.dp),
@@ -1445,7 +1475,10 @@ private fun HomeDownloaderTab(
                                     }
                                     Switch(
                                         checked = isTrimming,
-                                        onCheckedChange = { isTrimming = it },
+                                        onCheckedChange = {
+                                            HapticUtil.lightClick(context)
+                                            isTrimming = it
+                                        },
                                         colors = SwitchDefaults.colors(
                                             checkedThumbColor = CanvasDark,
                                             checkedTrackColor = TextCrisp
@@ -1503,6 +1536,7 @@ private fun HomeDownloaderTab(
                             // Instant Stream Button (Play in Full HD/4K Ad-Free without downloading)
                             Button(
                                 onClick = {
+                                    HapticUtil.mediumClick(context)
                                     keyboardController?.hide()
                                     focusManager.clearFocus()
                                     val streamUrl = DownloadEngine.getStreamUrl(info.url, selectedFormat)
@@ -1532,6 +1566,7 @@ private fun HomeDownloaderTab(
                             // Master Download Button
                             Button(
                                 onClick = {
+                                    HapticUtil.heavyClick(context)
                                     keyboardController?.hide()
                                     focusManager.clearFocus()
                                     val start = if (isTrimming) trimStart.ifBlank { null } else null
@@ -1593,6 +1628,7 @@ private fun HomeDownloaderTab(
                                 info.relatedFeed.forEach { feedItem ->
                                     Surface(
                                         onClick = {
+                                            HapticUtil.lightClick(context)
                                             onUrlChange(feedItem.url)
                                             onInspect(feedItem.url)
                                         },

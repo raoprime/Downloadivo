@@ -135,41 +135,59 @@ object DownloadEngine {
                 }
             }
 
+            val formatSizesBytesJson = json.optJSONObject("format_sizes_bytes")
+            val bytesMap = mutableMapOf<String, Long>()
+            if (formatSizesBytesJson != null) {
+                val keys = formatSizesBytesJson.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    bytesMap[k] = formatSizesBytesJson.optLong(k, 0L)
+                }
+            }
+
             // Build dynamic Seal-grade format matrix with file sizes
             val formats = mutableListOf<FormatOption>()
+            val maxRes = if (resolutions.isNotEmpty()) (resolutions.maxOrNull() ?: 1080) else 1080
             val bestSize = sizeMap["best"] ?: sizeMap["4k"] ?: sizeMap["2160"] ?: sizeMap["1080p"] ?: sizeMap["1080"] ?: ""
-            formats.add(FormatOption("best", "Best Video (Max Quality)", "mp4", false, "Original Quality", 0, bestSize))
+            val bestBytes = bytesMap["best"] ?: bytesMap["4k"] ?: bytesMap["2160"] ?: bytesMap["1080p"] ?: bytesMap["1080"] ?: 0L
+            formats.add(FormatOption("best", "Best Video (Max Quality)", "mp4", false, "Original Quality", 0, bestSize, bestBytes))
 
-            if (is4k || resolutions.contains(2160) || is8k) {
+            if (is4k || resolutions.contains(2160) || maxRes >= 2160 || is8k) {
                 val sz = sizeMap["4k"] ?: sizeMap["2160"] ?: sizeMap["2160p"] ?: ""
-                formats.add(FormatOption("4k", "4K UHD (2160p)", "mp4", false, "Ultra HD", 2160, sz))
+                val b = bytesMap["4k"] ?: bytesMap["2160"] ?: bytesMap["2160p"] ?: 0L
+                formats.add(FormatOption("4k", "4K UHD (2160p)", "mp4", false, "Ultra HD", 2160, sz, b))
             }
-            if (resolutions.contains(1440)) {
+            if (resolutions.contains(1440) || maxRes >= 1440) {
                 val sz = sizeMap["1440p"] ?: sizeMap["1440"] ?: sizeMap["2k"] ?: ""
-                formats.add(FormatOption("1440p", "2K QHD (1440p)", "mp4", false, "Quad HD", 1440, sz))
+                val b = bytesMap["1440p"] ?: bytesMap["1440"] ?: bytesMap["2k"] ?: 0L
+                formats.add(FormatOption("1440p", "2K QHD (1440p)", "mp4", false, "Quad HD", 1440, sz, b))
             }
-            if (resolutions.contains(1080) || (!resolutions.isEmpty() && resolutions.maxOrNull() ?: 0 >= 1080)) {
+            if (maxRes >= 1080 || resolutions.contains(1080) || resolutions.isEmpty()) {
                 val sz = sizeMap["1080p"] ?: sizeMap["1080"] ?: ""
-                formats.add(FormatOption("1080p", "1080p Full HD", "mp4", false, "1920x1080", 1080, sz))
+                val b = bytesMap["1080p"] ?: bytesMap["1080"] ?: 0L
+                formats.add(FormatOption("1080p", "1080p Full HD", "mp4", false, "1920x1080", 1080, sz, b))
             }
-            if (resolutions.contains(720) || resolutions.isEmpty()) {
+            if (maxRes >= 720 || resolutions.contains(720) || resolutions.isEmpty()) {
                 val sz = sizeMap["720p"] ?: sizeMap["720"] ?: ""
-                formats.add(FormatOption("720p", "720p HD", "mp4", false, "1280x720", 720, sz))
+                val b = bytesMap["720p"] ?: bytesMap["720"] ?: 0L
+                formats.add(FormatOption("720p", "720p HD", "mp4", false, "1280x720", 720, sz, b))
             }
-            if (resolutions.contains(480) || resolutions.isEmpty()) {
-                val sz = sizeMap["480p"] ?: sizeMap["480"] ?: ""
-                formats.add(FormatOption("480p", "480p Standard", "mp4", false, "854x480", 480, sz))
-            }
-            if (resolutions.contains(360) || resolutions.isEmpty()) {
-                val sz = sizeMap["360p"] ?: sizeMap["360"] ?: ""
-                formats.add(FormatOption("360p", "360p Data Saver", "mp4", false, "640x360", 360, sz))
-            }
+            // Standard and Data Saver formats are always available for bandwidth efficiency
+            val sz480 = sizeMap["480p"] ?: sizeMap["480"] ?: ""
+            val b480 = bytesMap["480p"] ?: bytesMap["480"] ?: 0L
+            formats.add(FormatOption("480p", "480p Standard", "mp4", false, "854x480", 480, sz480, b480))
+
+            val sz360 = sizeMap["360p"] ?: sizeMap["360"] ?: ""
+            val b360 = bytesMap["360p"] ?: bytesMap["360"] ?: 0L
+            formats.add(FormatOption("360p", "360p Data Saver", "mp4", false, "640x360", 360, sz360, b360))
 
             // High Fidelity Audio Options with file sizes
             val mp3Size = sizeMap["mp3"] ?: ""
+            val mp3Bytes = bytesMap["mp3"] ?: 0L
             val m4aSize = sizeMap["m4a"] ?: ""
-            formats.add(FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, "Studio Fidelity", 0, mp3Size))
-            formats.add(FormatOption("m4a", "Lossless AAC Stream", "m4a", true, "Original Sound", 0, m4aSize))
+            val m4aBytes = bytesMap["m4a"] ?: 0L
+            formats.add(FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, "Studio Fidelity", 0, mp3Size, mp3Bytes))
+            formats.add(FormatOption("m4a", "Lossless AAC Stream", "m4a", true, "Original Sound", 0, m4aSize, m4aBytes))
 
             val relatedFeed = mutableListOf<com.raoprime.downloadivo.model.FeedItem>()
             val relArr = json.optJSONArray("related_feed")
@@ -223,6 +241,7 @@ object DownloadEngine {
         format: String,
         startTime: String? = null,
         endTime: String? = null,
+        expectedTotalBytes: Long = 0L,
         outputStream: OutputStream,
         onProgress: (percent: Int, speedStr: String, etaStr: String, currentBytes: Long, totalBytes: Long) -> Unit
     ): Result<Long> = withContext(Dispatchers.IO) {
@@ -253,7 +272,18 @@ object DownloadEngine {
                 }
 
                 val body = response.body ?: throw Exception("No response data received from server")
-                val totalLength = body.contentLength()
+                val headerLength = response.header("X-Expected-Total-Bytes")?.toLongOrNull()
+                    ?: response.header("X-Total-Content-Length")?.toLongOrNull()
+                    ?: response.header("Content-Length")?.toLongOrNull()
+                    ?: body.contentLength()
+
+                val totalLength = if (headerLength != null && headerLength > 0L) {
+                    headerLength
+                } else if (expectedTotalBytes > 0L) {
+                    expectedTotalBytes
+                } else {
+                    -1L
+                }
                 val inputStream: InputStream = body.byteStream()
 
                 val buffer = ByteArray(256 * 1024)
@@ -276,7 +306,7 @@ object DownloadEngine {
                         val speedStr = formatSpeed(speedBytesPerSec)
 
                         val percent = if (totalLength > 0) {
-                            ((totalBytesRead * 100) / totalLength).toInt().coerceIn(0, 100)
+                            ((totalBytesRead * 100) / totalLength).toInt().coerceIn(0, 99)
                         } else {
                             -1
                         }
@@ -297,6 +327,9 @@ object DownloadEngine {
                 }
 
                 outputStream.flush()
+                if (totalBytesRead <= 0L) {
+                    return@withContext Result.failure(Exception("Zero bytes received from media stream"))
+                }
                 onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
                 Result.success(totalBytesRead)
             }
