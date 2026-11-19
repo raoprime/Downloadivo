@@ -1808,6 +1808,7 @@ async def get_info(request: Request, url: Optional[str] = None):
 
             # Simplified string map of format sizes for easy client consumption
             clean_sizes = {k: v["label"] for k, v in format_sizes.items()}
+            format_bytes_map = {k: int(v["bytes"]) for k, v in format_sizes.items() if "bytes" in v and v["bytes"]}
 
             # Dynamic Up Next / Related Feed extraction
             related_feed = []
@@ -1843,6 +1844,7 @@ async def get_info(request: Request, url: Optional[str] = None):
                 "is_4k": is_4k,
                 "resolutions": sorted_resolutions,
                 "format_sizes": clean_sizes,
+                "format_sizes_bytes": format_bytes_map,
                 "related_feed": related_feed,
             }
     except Exception as e:
@@ -1970,6 +1972,15 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
             raise HTTPException(status_code=400, detail="No audio stream available")
         direct_url = audio_fmts[0]["url"]
 
+        dur_sec = info.get("duration") or 0
+        audio_expected_bytes = int(320000 * dur_sec / 8) if dur_sec else (int(audio_fmts[0].get("filesize") or audio_fmts[0].get("filesize_approx") or 0) if audio_fmts else 0)
+        audio_headers = {
+            "Content-Disposition": f'attachment; filename="{safe_name}.mp3"',
+            "Accept-Ranges": "bytes",
+            "X-Expected-Total-Bytes": str(audio_expected_bytes),
+            "X-Total-Content-Length": str(audio_expected_bytes),
+        }
+
         if _FFMPEG_PATH:
             author = info.get("artist") or info.get("uploader") or info.get("creator") or "Downloadivo Studio"
             cmd = [
@@ -2002,10 +2013,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
             return StreamingResponse(
                 iter_mp3_pipe(),
                 media_type="audio/mpeg",
-                headers={
-                    "Content-Disposition": f'attachment; filename="{safe_name}.mp3"',
-                    "Accept-Ranges": "bytes",
-                }
+                headers=audio_headers
             )
 
         def iter_audio():
@@ -2018,10 +2026,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         return StreamingResponse(
             iter_audio(),
             media_type="audio/mpeg",
-            headers={
-                "Content-Disposition": f'attachment; filename="{safe_name}.mp3"',
-                "Accept-Ranges": "bytes",
-            }
+            headers=audio_headers
         )
 
     # 2. Video stream requested
@@ -2068,6 +2073,57 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
             if matches:
                 use_ffmpeg_mux = True
                 chosen_v = matches[-1]["url"]
+        elif fmt_lower in ["480p", "480"]:
+            matches = [f for f in video_fmts if (f.get("height") or 0) <= 480]
+            if matches:
+                use_ffmpeg_mux = True
+                chosen_v = matches[-1]["url"]
+        elif fmt_lower in ["360p", "360"]:
+            matches = [f for f in video_fmts if (f.get("height") or 0) <= 360]
+            if matches:
+                use_ffmpeg_mux = True
+                chosen_v = matches[-1]["url"]
+
+    # Fast progressive stream fallback candidate
+    chosen_url = None
+    if prog:
+        if fmt_lower == "720p":
+            matches = [f for f in prog if (f.get("height") or 0) <= 720]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower == "480p":
+            matches = [f for f in prog if (f.get("height") or 0) <= 480]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower == "360p":
+            matches = [f for f in prog if (f.get("height") or 0) <= 360]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower in ["best", "original"]:
+            chosen_url = prog[-1]["url"]
+
+    # Calculate estimated byte size for video stream
+    dur_sec = info.get("duration") or 0
+    best_a_size = (audio_fmts[-1].get("filesize") or audio_fmts[-1].get("filesize_approx") or (int(128000 * dur_sec / 8) if dur_sec else 0)) if audio_fmts else 0
+
+    expected_video_bytes = 0
+    if use_ffmpeg_mux and chosen_v:
+        for f in video_fmts:
+            if f.get("url") == chosen_v:
+                v_sz = f.get("filesize") or f.get("filesize_approx") or 0
+                expected_video_bytes = int(v_sz + best_a_size)
+                break
+    elif chosen_url:
+        for f in prog:
+            if f.get("url") == chosen_url:
+                expected_video_bytes = int(f.get("filesize") or f.get("filesize_approx") or 0)
+                break
+    if not expected_video_bytes and formats:
+        expected_video_bytes = int(formats[-1].get("filesize") or formats[-1].get("filesize_approx") or 0)
+
+    video_headers = {
+        "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
+        "Accept-Ranges": "bytes",
+        "X-Expected-Total-Bytes": str(expected_video_bytes),
+        "X-Total-Content-Length": str(expected_video_bytes),
+    }
 
     if use_ffmpeg_mux and chosen_v and chosen_a:
         def iter_ffmpeg_pipe():
@@ -2105,27 +2161,10 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         return StreamingResponse(
             iter_ffmpeg_pipe(),
             media_type="video/mp4",
-            headers={
-                "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
-                "Accept-Ranges": "bytes",
-            }
+            headers=video_headers
         )
 
     # Fast progressive stream path
-    chosen_url = None
-    if prog:
-        if fmt_lower == "720p":
-            matches = [f for f in prog if (f.get("height") or 0) <= 720]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower == "480p":
-            matches = [f for f in prog if (f.get("height") or 0) <= 480]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower == "360p":
-            matches = [f for f in prog if (f.get("height") or 0) <= 360]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower in ["best", "original"]:
-            chosen_url = prog[-1]["url"]
-
     if chosen_url:
         def iter_stream():
             import requests
@@ -2137,10 +2176,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         return StreamingResponse(
             iter_stream(),
             media_type="video/mp4",
-            headers={
-                "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
-                "Accept-Ranges": "bytes",
-            }
+            headers=video_headers
         )
 
     # 4. Fallback direct stream
@@ -2158,10 +2194,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
     return StreamingResponse(
         iter_fallback(),
         media_type="video/mp4",
-        headers={
-            "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
-            "Accept-Ranges": "bytes",
-        }
+        headers=video_headers
     )
 
 
