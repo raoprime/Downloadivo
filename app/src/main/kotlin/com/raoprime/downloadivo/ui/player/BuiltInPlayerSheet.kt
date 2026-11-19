@@ -47,6 +47,7 @@ fun BuiltInPlayerSheet(
     mediaUri: String,
     title: String,
     isAudio: Boolean,
+    duration: String = "",
     availableQualities: List<String> = emptyList(),
     currentQuality: String = "",
     onQualitySelected: ((String) -> Unit)? = null,
@@ -186,11 +187,12 @@ fun BuiltInPlayerSheet(
                                     )
                                 }
                             }
+                            val durSuffix = if (duration.isNotBlank()) " • $duration" else ""
                             Text(
                                 text = if (isOnlineStream) {
-                                    if (isAudio) "Live Audio Stream • Studio 320k" else "Ad-Free Stream • 1080p / 4K"
+                                    if (isAudio) "Live Audio Stream • Studio 320k$durSuffix" else "Ad-Free Stream • 1080p / 4K$durSuffix"
                                 } else {
-                                    if (isAudio) "Local Audio Player • Studio 320k" else "Local Video Player • Offline"
+                                    if (isAudio) "Local Audio Player • Studio 320k$durSuffix" else "Local Video Player • Offline$durSuffix"
                                 },
                                 fontSize = 11.sp,
                                 color = TextMuted

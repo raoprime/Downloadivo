@@ -89,6 +89,7 @@ fun DownloadivoScreen(
     var activePlaybackOriginalUrl by remember { mutableStateOf("") }
     var activePlaybackCurrentQuality by remember { mutableStateOf("best") }
     var activePlaybackQualities by remember { mutableStateOf<List<String>>(emptyList()) }
+    var activePlaybackDuration by remember { mutableStateOf("") }
 
     val currentTask by DownloadService.currentTask.collectAsState()
     val queuedTasks by DownloadService.queuedTasks.collectAsState()
@@ -118,6 +119,7 @@ fun DownloadivoScreen(
         title: String,
         format: String,
         thumbnail: String = "",
+        duration: String = "",
         startTime: String? = null,
         endTime: String? = null
     ) {
@@ -127,6 +129,7 @@ fun DownloadivoScreen(
             title = title,
             format = format,
             thumbnail = thumbnail,
+            duration = duration,
             startTime = startTime,
             endTime = endTime
         )
@@ -336,13 +339,14 @@ fun DownloadivoScreen(
                     onFormatSelect = { selectedFormat = it },
                     isResolving = isResolving,
                     errorMessage = errorMessage,
-                    onStreamPlay = { streamUrl, originalUrl, title, isAudio, qualities, initialQuality ->
+                    onStreamPlay = { streamUrl, originalUrl, title, isAudio, qualities, initialQuality, duration ->
                         activePlaybackUri = streamUrl
                         activePlaybackOriginalUrl = originalUrl
                         activePlaybackTitle = title
                         activePlaybackIsAudio = isAudio
                         activePlaybackQualities = qualities
                         activePlaybackCurrentQuality = initialQuality
+                        activePlaybackDuration = duration
                     },
                     onInspect = { targetUrl ->
                         val urlToInspect = (targetUrl ?: inputUrl).trim()
@@ -374,7 +378,8 @@ fun DownloadivoScreen(
                             url = url,
                             title = resolvedInfo?.title ?: defaultTitle,
                             format = format,
-                            thumbnail = resolvedInfo?.thumbnail ?: ""
+                            thumbnail = resolvedInfo?.thumbnail ?: "",
+                            duration = resolvedInfo?.duration ?: ""
                         )
                     },
                     onDownloadCustom = { info, format, startTime, endTime ->
@@ -383,6 +388,7 @@ fun DownloadivoScreen(
                             title = info.title,
                             format = format,
                             thumbnail = info.thumbnail,
+                            duration = info.duration,
                             startTime = startTime,
                             endTime = endTime
                         )
@@ -417,6 +423,9 @@ fun DownloadivoScreen(
                             activePlaybackUri = uriStr
                             activePlaybackTitle = task.title
                             activePlaybackIsAudio = task.isAudio
+                            activePlaybackDuration = task.duration
+                            activePlaybackQualities = emptyList()
+                            activePlaybackCurrentQuality = ""
                         }
                     },
                     onShare = { task ->
@@ -605,6 +614,9 @@ fun DownloadivoScreen(
                                         activePlaybackUri = filePath
                                         activePlaybackTitle = currentTask.title
                                         activePlaybackIsAudio = currentTask.isAudio
+                                        activePlaybackDuration = currentTask.duration
+                                        activePlaybackQualities = emptyList()
+                                        activePlaybackCurrentQuality = ""
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(
@@ -636,6 +648,7 @@ fun DownloadivoScreen(
                     mediaUri = uri,
                     title = activePlaybackTitle,
                     isAudio = activePlaybackIsAudio,
+                    duration = activePlaybackDuration,
                     availableQualities = activePlaybackQualities,
                     currentQuality = activePlaybackCurrentQuality,
                     onQualitySelected = { newQuality ->
@@ -666,7 +679,7 @@ private fun HomeDownloaderTab(
     isResolving: Boolean,
     errorMessage: String?,
     onInspect: (targetUrl: String?) -> Unit,
-    onStreamPlay: (streamUrl: String, originalUrl: String, title: String, isAudio: Boolean, qualities: List<String>, initialQuality: String) -> Unit,
+    onStreamPlay: (streamUrl: String, originalUrl: String, title: String, isAudio: Boolean, qualities: List<String>, initialQuality: String, duration: String) -> Unit,
     onInstantDownload: (url: String, format: String) -> Unit,
     onDownloadCustom: (info: MediaInfo, format: String, startTime: String?, endTime: String?) -> Unit,
     onClear: () -> Unit
@@ -1188,7 +1201,7 @@ private fun HomeDownloaderTab(
                                 .clickable {
                                     val streamUrl = DownloadEngine.getStreamUrl(info.url, selectedFormat)
                                     val qualities = info.availableFormats.filter { !it.isAudio }.map { it.id }
-                                    onStreamPlay(streamUrl, info.url, info.title, mediaMode == "audio", qualities, selectedFormat)
+                                    onStreamPlay(streamUrl, info.url, info.title, mediaMode == "audio", qualities, selectedFormat, info.duration)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -1494,7 +1507,7 @@ private fun HomeDownloaderTab(
                                     focusManager.clearFocus()
                                     val streamUrl = DownloadEngine.getStreamUrl(info.url, selectedFormat)
                                     val qualities = info.availableFormats.filter { !it.isAudio }.map { it.id }
-                                    onStreamPlay(streamUrl, info.url, info.title, mediaMode == "audio", qualities, selectedFormat)
+                                    onStreamPlay(streamUrl, info.url, info.title, mediaMode == "audio", qualities, selectedFormat, info.duration)
                                 },
                                 modifier = Modifier
                                     .weight(1f)
@@ -1778,6 +1791,10 @@ private fun QueueTab(
                         )
                         Text(
                             text = buildString {
+                                if (currentTask.duration.isNotBlank()) {
+                                    append(currentTask.duration)
+                                    append(" • ")
+                                }
                                 if (currentTask.speed.isNotBlank()) {
                                     append(currentTask.speed)
                                     append(" • ")
@@ -1847,7 +1864,13 @@ private fun QueueTab(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = if (task.isAudio) "Audio (MP3)" else "Video (Best)",
+                                    text = buildString {
+                                        append(if (task.isAudio) "Audio (MP3)" else "Video (Best)")
+                                        if (task.duration.isNotBlank()) {
+                                            append(" • ")
+                                            append(task.duration)
+                                        }
+                                    },
                                     style = Typography.bodySmall,
                                     color = TextTertiary
                                 )
@@ -2071,6 +2094,23 @@ private fun LibraryTab(
                                         tint = TextCrisp
                                     )
                                 }
+                                if (task.duration.isNotBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(3.dp),
+                                        color = Color.Black.copy(alpha = 0.85f),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(3.dp)
+                                    ) {
+                                        Text(
+                                            text = task.duration,
+                                            fontSize = 8.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(12.dp))
@@ -2103,6 +2143,13 @@ private fun LibraryTab(
                                     if (task.totalBytes > 0) {
                                         Text(
                                             text = formatByteSize(task.totalBytes),
+                                            style = Typography.bodySmall,
+                                            color = TextTertiary
+                                        )
+                                    }
+                                    if (task.duration.isNotBlank()) {
+                                        Text(
+                                            text = "• ${task.duration}",
                                             style = Typography.bodySmall,
                                             color = TextTertiary
                                         )

@@ -63,6 +63,7 @@ data class DownloadTask(
     val url: String = "",
     val format: String = "best",
     val thumbnail: String = "",
+    val duration: String = "",
     val progress: Int = 0,
     val speed: String = "",
     val eta: String = "",
@@ -76,3 +77,34 @@ data class DownloadTask(
     val startTime: String? = null,
     val endTime: String? = null
 )
+
+fun formatMediaDuration(raw: String?): String {
+    if (raw.isNullOrBlank()) return ""
+    val trimmed = raw.trim()
+    if (Regex("^\\d+:\\d{2}(:\\d{2})?$").matches(trimmed)) {
+        return trimmed
+    }
+    val sec = trimmed.toDoubleOrNull()?.toLong()
+    if (sec != null && sec > 0) {
+        val h = sec / 3600
+        val m = (sec % 3600) / 60
+        val s = sec % 60
+        return if (h > 0) {
+            String.format(java.util.Locale.US, "%d:%02d:%02d", h, m, s)
+        } else {
+            String.format(java.util.Locale.US, "%02d:%02d", m, s)
+        }
+    }
+    val iso = Regex("^PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
+    if (iso != null) {
+        val h = iso.groupValues[1].toLongOrNull() ?: 0L
+        val m = iso.groupValues[2].toLongOrNull() ?: 0L
+        val s = iso.groupValues[3].toLongOrNull() ?: 0L
+        return if (h > 0) {
+            String.format(java.util.Locale.US, "%d:%02d:%02d", h, m, s)
+        } else {
+            String.format(java.util.Locale.US, "%02d:%02d", m, s)
+        }
+    }
+    return trimmed
+}

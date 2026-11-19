@@ -38,6 +38,7 @@ data class QueuedDownload(
     val title: String,
     val format: String,
     val thumbnail: String = "",
+    val duration: String = "",
     val startTime: String? = null,
     val endTime: String? = null
 )
@@ -54,6 +55,7 @@ class DownloadService : Service() {
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_FORMAT = "extra_format"
         const val EXTRA_THUMBNAIL = "extra_thumbnail"
+        const val EXTRA_DURATION = "extra_duration"
         const val EXTRA_START_TIME = "extra_start_time"
         const val EXTRA_END_TIME = "extra_end_time"
 
@@ -69,6 +71,7 @@ class DownloadService : Service() {
             title: String,
             format: String,
             thumbnail: String = "",
+            duration: String = "",
             startTime: String? = null,
             endTime: String? = null
         ) {
@@ -78,6 +81,7 @@ class DownloadService : Service() {
                 putExtra(EXTRA_TITLE, title)
                 putExtra(EXTRA_FORMAT, format)
                 putExtra(EXTRA_THUMBNAIL, thumbnail)
+                putExtra(EXTRA_DURATION, duration)
                 putExtra(EXTRA_START_TIME, startTime)
                 putExtra(EXTRA_END_TIME, endTime)
             }
@@ -121,10 +125,11 @@ class DownloadService : Service() {
                 val title = intent.getStringExtra(EXTRA_TITLE) ?: "Media"
                 val format = intent.getStringExtra(EXTRA_FORMAT) ?: "best"
                 val thumbnail = intent.getStringExtra(EXTRA_THUMBNAIL) ?: ""
+                val duration = intent.getStringExtra(EXTRA_DURATION) ?: ""
                 val startTime = intent.getStringExtra(EXTRA_START_TIME)
                 val endTime = intent.getStringExtra(EXTRA_END_TIME)
                 if (url.isNotBlank()) {
-                    enqueueDownload(url, title, format, thumbnail, startTime, endTime)
+                    enqueueDownload(url, title, format, thumbnail, duration, startTime, endTime)
                 }
             }
             ACTION_CANCEL_DOWNLOAD -> {
@@ -145,6 +150,7 @@ class DownloadService : Service() {
         title: String,
         format: String,
         thumbnail: String = "",
+        duration: String = "",
         startTime: String? = null,
         endTime: String? = null
     ) {
@@ -158,6 +164,7 @@ class DownloadService : Service() {
             title = cleanTitle,
             format = format,
             thumbnail = thumbnail,
+            duration = duration,
             startTime = startTime,
             endTime = endTime
         )
@@ -171,6 +178,7 @@ class DownloadService : Service() {
                 url = url,
                 format = format,
                 thumbnail = thumbnail,
+                duration = duration,
                 status = DownloadStatus.QUEUED,
                 isAudio = isAudio,
                 startTime = startTime,
@@ -191,6 +199,7 @@ class DownloadService : Service() {
                 url = q.url,
                 format = q.format,
                 thumbnail = q.thumbnail,
+                duration = q.duration,
                 status = DownloadStatus.QUEUED,
                 isAudio = q.format.lowercase() == "mp3" || q.format.lowercase() == "m4a",
                 startTime = q.startTime,
@@ -221,6 +230,7 @@ class DownloadService : Service() {
             url = item.url,
             format = item.format,
             thumbnail = item.thumbnail,
+            duration = item.duration,
             status = DownloadStatus.DOWNLOADING,
             isAudio = isAudio,
             startTime = item.startTime,

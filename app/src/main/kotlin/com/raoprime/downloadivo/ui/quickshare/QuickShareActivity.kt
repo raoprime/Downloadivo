@@ -65,7 +65,8 @@ class QuickShareActivity : ComponentActivity() {
                             url = sharedUrl,
                             title = info?.title ?: "Shared Video",
                             format = format,
-                            thumbnail = info?.thumbnail ?: ""
+                            thumbnail = info?.thumbnail ?: "",
+                            duration = info?.duration ?: ""
                         )
                         Toast.makeText(
                             this@QuickShareActivity,
@@ -80,7 +81,8 @@ class QuickShareActivity : ComponentActivity() {
                             url = sharedUrl,
                             title = info?.title ?: "Shared Audio",
                             format = "mp3",
-                            thumbnail = info?.thumbnail ?: ""
+                            thumbnail = info?.thumbnail ?: "",
+                            duration = info?.duration ?: ""
                         )
                         Toast.makeText(
                             this@QuickShareActivity,

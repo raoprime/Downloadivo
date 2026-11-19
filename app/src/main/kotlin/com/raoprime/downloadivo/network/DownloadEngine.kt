@@ -2,6 +2,7 @@ package com.raoprime.downloadivo.network
 
 import com.raoprime.downloadivo.model.FormatOption
 import com.raoprime.downloadivo.model.MediaInfo
+import com.raoprime.downloadivo.model.formatMediaDuration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -100,7 +101,7 @@ object DownloadEngine {
             val json = JSONObject(responseBody!!)
             val title = json.optString("title", "Media Stream")
             val author = json.optString("uploader", json.optString("author", "Web Creator"))
-            val duration = json.optString("duration", "")
+            val duration = formatMediaDuration(json.optString("duration", ""))
             val thumbnail = json.optString("thumbnail", "")
             val extractor = json.optString("extractor", "Web Stream")
             val isYoutube = json.optBoolean("is_youtube", false)
@@ -182,7 +183,7 @@ object DownloadEngine {
                                 url = obj.optString("url", ""),
                                 thumbnail = obj.optString("thumbnail", ""),
                                 uploader = obj.optString("uploader", ""),
-                                duration = obj.optString("duration", "")
+                                duration = formatMediaDuration(obj.optString("duration", ""))
                             )
                         )
                     }
