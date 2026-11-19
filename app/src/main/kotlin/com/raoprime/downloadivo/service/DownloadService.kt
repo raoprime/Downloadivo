@@ -6,6 +6,7 @@ import android.app.Service
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
@@ -14,6 +15,10 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.graphics.drawable.toBitmap
+import coil.Coil
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.raoprime.downloadivo.DownloadivoApp
 import com.raoprime.downloadivo.MainActivity
 import com.raoprime.downloadivo.model.DownloadStatus
@@ -99,6 +104,7 @@ class DownloadService : Service() {
 
     private val pendingQueue = ArrayDeque<QueuedDownload>()
     private var isDownloading = false
+    private var currentThumbnailBitmap: Bitmap? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -224,6 +230,25 @@ class DownloadService : Service() {
         com.raoprime.downloadivo.data.DownloadRepository.addTask(initialTask)
 
         startForegroundNotification(cleanTitle, 0, "Starting download...", "")
+
+        // Asynchronously load thumbnail for rich notification shade
+        currentThumbnailBitmap = null
+        if (item.thumbnail.isNotBlank()) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val loader = Coil.imageLoader(applicationContext)
+                    val req = ImageRequest.Builder(applicationContext)
+                        .data(item.thumbnail)
+                        .allowHardware(false)
+                        .build()
+                    val result = loader.execute(req)
+                    if (result is SuccessResult) {
+                        currentThumbnailBitmap = result.drawable.toBitmap()
+                        updateForegroundNotification(cleanTitle, _currentTask.value.progress, _currentTask.value.speed, _currentTask.value.eta)
+                    }
+                } catch (_: Exception) {}
+            }
+        }
 
         downloadJob = scope.launch(Dispatchers.IO) {
             var mediaUri: Uri? = null
@@ -400,7 +425,7 @@ class DownloadService : Service() {
             append(queueSubtext)
         }
 
-        return NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_ID)
             .setContentTitle("⚡ Downloading: $title")
             .setContentText(statusText)
             .setSubText(if (speed.isNotBlank()) speed else "Downloadivo Turbo")
@@ -411,7 +436,12 @@ class DownloadService : Service() {
             .setContentIntent(contentIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+
+        currentThumbnailBitmap?.let {
+            builder.setLargeIcon(it)
+        }
+
+        return builder.build()
     }
 
     private fun showCompletionNotification(title: String, isSuccess: Boolean, mediaUri: Uri?, isAudio: Boolean) {
@@ -459,11 +489,10 @@ class DownloadService : Service() {
 
         val folderName = if (isAudio) "Music/Downloadivo" else "Movies/Downloadivo"
 
-        val notification = NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_COMPLETED_ID)
+        val builder = NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_COMPLETED_ID)
             .setContentTitle("✓ Download Complete")
             .setContentText(title)
             .setSubText("Saved to $folderName")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$title\nSaved to $folderName. Tap to play or share."))
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setAutoCancel(true)
             .setContentIntent(playPendingIntent)
@@ -471,9 +500,19 @@ class DownloadService : Service() {
             .addAction(android.R.drawable.ic_menu_share, "Share", sharePendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .build()
 
-        manager.notify(System.currentTimeMillis().toInt(), notification)
+        if (currentThumbnailBitmap != null) {
+            builder.setLargeIcon(currentThumbnailBitmap)
+            builder.setStyle(
+                NotificationCompat.BigPictureStyle()
+                    .bigPicture(currentThumbnailBitmap)
+                    .setSummaryText("$title • Saved to $folderName")
+            )
+        } else {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText("$title\nSaved to $folderName. Tap to play or share."))
+        }
+
+        manager.notify(System.currentTimeMillis().toInt(), builder.build())
     }
 
     override fun onDestroy() {
