@@ -261,6 +261,17 @@ def _clean_filename(text: str) -> str:
     return "".join(c for c in text if c.isalnum() or c in (" ", "-", "_", ".", "(", ")")).strip()[:90]
 
 
+def _safe_content_disposition(filename: str, ext: str) -> str:
+    import urllib.parse
+    clean_base = "".join(c for c in filename if c.isalnum() or c in (" ", "-", "_", ".", "(", ")")).strip()
+    ascii_name = "".join(c for c in clean_base if ord(c) < 128 and (c.isalnum() or c in (" ", "-", "_", ".", "(", ")"))).strip()
+    if not ascii_name:
+        ascii_name = "media_stream"
+    ascii_filename = f"{ascii_name[:60]}.{ext}"
+    utf8_filename = urllib.parse.quote(f"{clean_base[:90]}.{ext}".encode("utf-8"))
+    return f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{utf8_filename}'
+
+
 def _format_size(num_bytes: int) -> str:
     if not num_bytes:
         return "0 B"
@@ -1872,6 +1883,8 @@ async def start_download(req: DownloadRequest, request: Request):
 
 
 @app.api_route("/stream", methods=["GET", "HEAD"])
+@app.api_route("/stream.mp4", methods=["GET", "HEAD"])
+@app.api_route("/stream.mp3", methods=["GET", "HEAD"])
 def stream_media(url: str, format: str = "best", start_time: Optional[str] = None, end_time: Optional[str] = None, request: Request = None):
     """Zero-disk high-speed chunked stream proxy directly into client Chrome browser or Android app."""
     if request:
@@ -1959,7 +1972,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
             iter_trimmed_pipe(),
             media_type=media_type,
             headers={
-                "Content-Disposition": f'attachment; filename="{clip_name}"',
+                "Content-Disposition": _safe_content_disposition(f"{safe_name}_Clip_{s_clean}_to_{e_clean}", "mp3" if is_audio else "mp4"),
                 "Accept-Ranges": "bytes",
             }
         )
@@ -1975,7 +1988,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         dur_sec = info.get("duration") or 0
         audio_expected_bytes = int(320000 * dur_sec / 8) if dur_sec else (int(audio_fmts[0].get("filesize") or audio_fmts[0].get("filesize_approx") or 0) if audio_fmts else 0)
         audio_headers = {
-            "Content-Disposition": f'attachment; filename="{safe_name}.mp3"',
+            "Content-Disposition": _safe_content_disposition(safe_name, "mp3"),
             "Accept-Ranges": "bytes",
             "X-Expected-Total-Bytes": str(audio_expected_bytes),
             "X-Total-Content-Length": str(audio_expected_bytes),
@@ -2031,25 +2044,42 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
 
     # 2. Video stream requested
     video_fmts = [f for f in formats if f.get("vcodec") != "none" and f.get("url")]
-    video_fmts.sort(key=lambda x: (x.get("height") or 0, x.get("tbr") or 0))
+    def _v_score(f):
+        h = f.get("height") or 0
+        vcodec = (f.get("vcodec") or "").lower()
+        is_avc = 1 if ("avc" in vcodec or "h264" in vcodec) else 0
+        tbr = f.get("tbr") or 0
+        return (h, is_avc, tbr)
+    video_fmts.sort(key=_v_score)
     audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
     audio_fmts.sort(key=lambda x: (x.get("abr") or x.get("tbr") or 0))
     prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
     prog.sort(key=lambda x: (x.get("height") or 0, x.get("tbr") or 0))
 
-    # Determine if we should use separate video+audio pipe (for true Best / 1080p / 4K / 8K)
-    best_prog_h = prog[-1].get("height", 0) if prog else 0
-    best_video_h = video_fmts[-1].get("height", 0) if video_fmts else 0
+    # Fast progressive stream candidate (preferred for instant seek and mobile hardware compatibility)
+    chosen_url = None
+    if prog:
+        if fmt_lower in ["720p", "720"]:
+            matches = [f for f in prog if (f.get("height") or 0) <= 720]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower in ["480p", "480"]:
+            matches = [f for f in prog if (f.get("height") or 0) <= 480]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower in ["360p", "360"]:
+            matches = [f for f in prog if (f.get("height") or 0) <= 360]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower in ["best", "original"] and not video_fmts:
+            chosen_url = prog[-1]["url"]
 
     use_ffmpeg_mux = False
     chosen_v = None
     chosen_a = audio_fmts[-1]["url"] if audio_fmts else None
 
-    if video_fmts and chosen_a and _FFMPEG_PATH:
+    # Use FFmpeg muxer for high quality streams (1080p, 1440p, 4K, 8K) or when no matching progressive stream exists
+    if video_fmts and chosen_a and _FFMPEG_PATH and not chosen_url:
         if fmt_lower in ["best", "original"]:
-            if best_video_h > best_prog_h:
-                use_ffmpeg_mux = True
-                chosen_v = video_fmts[-1]["url"]
+            use_ffmpeg_mux = True
+            chosen_v = video_fmts[-1]["url"]
         elif fmt_lower in ["8k", "4320p", "4320"]:
             use_ffmpeg_mux = True
             chosen_v = video_fmts[-1]["url"]
@@ -2084,21 +2114,6 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 use_ffmpeg_mux = True
                 chosen_v = matches[-1]["url"]
 
-    # Fast progressive stream fallback candidate
-    chosen_url = None
-    if prog:
-        if fmt_lower == "720p":
-            matches = [f for f in prog if (f.get("height") or 0) <= 720]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower == "480p":
-            matches = [f for f in prog if (f.get("height") or 0) <= 480]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower == "360p":
-            matches = [f for f in prog if (f.get("height") or 0) <= 360]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower in ["best", "original"]:
-            chosen_url = prog[-1]["url"]
-
     # Calculate estimated byte size for video stream
     dur_sec = info.get("duration") or 0
     best_a_size = (audio_fmts[-1].get("filesize") or audio_fmts[-1].get("filesize_approx") or (int(128000 * dur_sec / 8) if dur_sec else 0)) if audio_fmts else 0
@@ -2119,7 +2134,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         expected_video_bytes = int(formats[-1].get("filesize") or formats[-1].get("filesize_approx") or 0)
 
     video_headers = {
-        "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
+        "Content-Disposition": _safe_content_disposition(safe_name, "mp4"),
         "Accept-Ranges": "bytes",
         "X-Expected-Total-Bytes": str(expected_video_bytes),
         "X-Total-Content-Length": str(expected_video_bytes),
@@ -2134,12 +2149,12 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 "-reconnect", "1",
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
-                "-reconnect_delay_max", "2",
+                "-reconnect_delay_max", "5",
                 "-i", chosen_v,
                 "-reconnect", "1",
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
-                "-reconnect_delay_max", "2",
+                "-reconnect_delay_max", "5",
                 "-i", chosen_a,
                 "-c:v", "copy",
                 "-c:a", "aac",
@@ -2150,7 +2165,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=1024 * 1024)
             try:
                 while True:
-                    data = proc.stdout.read(256 * 1024)
+                    data = proc.stdout.read(128 * 1024)
                     if not data:
                         break
                     yield data
@@ -2168,8 +2183,11 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
     if chosen_url:
         def iter_stream():
             import requests
-            with requests.get(chosen_url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as r:
-                for chunk in r.iter_content(chunk_size=1024 * 512):
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            with requests.get(chosen_url, stream=True, timeout=30, headers=headers) as r:
+                for chunk in r.iter_content(chunk_size=1024 * 256):
                     if chunk:
                         yield chunk
 

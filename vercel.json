@@ -15,6 +15,8 @@
     { "source": "/open-file", "destination": "https://always-letters-utility-connectivity.trycloudflare.com/open-file" },
     { "source": "/open-folder", "destination": "https://always-letters-utility-connectivity.trycloudflare.com/open-folder" },
     { "source": "/stream", "destination": "https://always-letters-utility-connectivity.trycloudflare.com/stream" },
+    { "source": "/stream.mp4", "destination": "https://always-letters-utility-connectivity.trycloudflare.com/stream.mp4" },
+    { "source": "/stream.mp3", "destination": "https://always-letters-utility-connectivity.trycloudflare.com/stream.mp3" },
     { "source": "/downloads", "destination": "https://always-letters-utility-connectivity.trycloudflare.com/downloads" },
     { "source": "/cancel/:path*", "destination": "https://always-letters-utility-connectivity.trycloudflare.com/cancel/:path*" }
   ]
