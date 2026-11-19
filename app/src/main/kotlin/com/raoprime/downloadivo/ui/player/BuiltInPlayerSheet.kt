@@ -27,9 +27,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -56,14 +58,15 @@ fun BuiltInPlayerSheet(
 ) {
     val context = LocalContext.current
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
-    var isBuffering by remember { mutableStateOf(false) }
+    var isBuffering by remember { mutableStateOf(true) }
+    var playerError by remember { mutableStateOf<String?>(null) }
 
     val exoPlayer = remember {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Downloadivo-Stream/3.6")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(30000)
+            .setConnectTimeoutMs(20000)
+            .setReadTimeoutMs(35000)
 
         val defaultDataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
 
@@ -72,11 +75,12 @@ fun BuiltInPlayerSheet(
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                1500,
-                15000,
-                500,
-                1000
+                2500,  // minBufferMs (2.5s)
+                30000, // maxBufferMs (30s)
+                1000,  // bufferForPlaybackMs (1s)
+                2000   // bufferForPlaybackAfterRebufferMs (2s)
             )
+            .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
         ExoPlayer.Builder(context)
@@ -86,8 +90,15 @@ fun BuiltInPlayerSheet(
     }
 
     LaunchedEffect(mediaUri) {
+        playerError = null
+        isBuffering = true
         val currentPos = exoPlayer.currentPosition
-        val item = MediaItem.fromUri(Uri.parse(mediaUri))
+        val uri = Uri.parse(mediaUri)
+        val mimeType = if (isAudio) MimeTypes.AUDIO_MPEG else MimeTypes.VIDEO_MP4
+        val item = MediaItem.Builder()
+            .setUri(uri)
+            .setMimeType(mimeType)
+            .build()
         exoPlayer.setMediaItem(item)
         if (currentPos > 0) {
             exoPlayer.seekTo(currentPos)
@@ -100,9 +111,13 @@ fun BuiltInPlayerSheet(
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 isBuffering = (state == Player.STATE_BUFFERING)
+                if (state == Player.STATE_READY) {
+                    playerError = null
+                }
             }
             override fun onPlayerError(error: PlaybackException) {
                 isBuffering = false
+                playerError = error.localizedMessage ?: "Stream error (${error.errorCodeName})"
             }
         }
         exoPlayer.addListener(listener)
@@ -278,7 +293,7 @@ fun BuiltInPlayerSheet(
                     )
                 }
 
-                if (isBuffering) {
+                if (isBuffering && playerError == null) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -290,6 +305,53 @@ fun BuiltInPlayerSheet(
                             color = TextCrisp,
                             strokeWidth = 3.dp
                         )
+                    }
+                }
+
+                if (playerError != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.88f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = "Stream Interrupted",
+                                style = Typography.titleSmall,
+                                color = TextCrisp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = playerError ?: "Connecting to media stream...",
+                                style = Typography.bodySmall,
+                                color = TextSecondary,
+                                textAlign = TextAlign.Center,
+                                maxLines = 2
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    playerError = null
+                                    isBuffering = true
+                                    exoPlayer.prepare()
+                                    exoPlayer.play()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TextCrisp,
+                                    contentColor = CanvasDark
+                                ),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Text("Retry", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
             }

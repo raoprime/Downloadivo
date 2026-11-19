@@ -233,7 +233,8 @@ object DownloadEngine {
         val cleanUrl = sanitizeUrl(targetUrl)
         val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
         val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
-        return "$activeBaseUrl/stream?url=$encodedUrl&format=$encodedFmt"
+        val endpoint = if (format.trim().lowercase() in listOf("mp3", "m4a", "audio")) "stream.mp3" else "stream.mp4"
+        return "$activeBaseUrl/$endpoint?url=$encodedUrl&format=$encodedFmt"
     }
 
     suspend fun downloadStream(
