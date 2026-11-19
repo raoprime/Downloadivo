@@ -14,6 +14,15 @@ data class FormatOption(
 )
 
 @Serializable
+data class FeedItem(
+    val title: String = "",
+    val url: String = "",
+    val thumbnail: String = "",
+    val uploader: String = "",
+    val duration: String = ""
+)
+
+@Serializable
 data class MediaInfo(
     val title: String = "",
     val author: String = "",
@@ -33,7 +42,8 @@ data class MediaInfo(
         FormatOption("360p", "360p Data Saver", "mp4", false, "640x360", 360),
         FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, "Studio Quality Audio"),
         FormatOption("m4a", "Lossless AAC Stream", "m4a", true, "Original Audio")
-    )
+    ),
+    val relatedFeed: List<FeedItem> = emptyList()
 )
 
 enum class DownloadStatus {

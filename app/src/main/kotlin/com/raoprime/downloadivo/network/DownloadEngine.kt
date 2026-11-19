@@ -170,6 +170,25 @@ object DownloadEngine {
             formats.add(FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, "Studio Fidelity", 0, mp3Size))
             formats.add(FormatOption("m4a", "Lossless AAC Stream", "m4a", true, "Original Sound", 0, m4aSize))
 
+            val relatedFeed = mutableListOf<com.raoprime.downloadivo.model.FeedItem>()
+            val relArr = json.optJSONArray("related_feed")
+            if (relArr != null) {
+                for (i in 0 until relArr.length()) {
+                    val obj = relArr.optJSONObject(i)
+                    if (obj != null) {
+                        relatedFeed.add(
+                            com.raoprime.downloadivo.model.FeedItem(
+                                title = obj.optString("title", ""),
+                                url = obj.optString("url", ""),
+                                thumbnail = obj.optString("thumbnail", ""),
+                                uploader = obj.optString("uploader", ""),
+                                duration = obj.optString("duration", "")
+                            )
+                        )
+                    }
+                }
+            }
+
             val info = MediaInfo(
                 title = title,
                 author = author,
@@ -181,7 +200,8 @@ object DownloadEngine {
                 is4k = is4k,
                 is8k = is8k,
                 resolutions = resolutions,
-                availableFormats = formats
+                availableFormats = formats,
+                relatedFeed = relatedFeed
             )
 
             Result.success(info)

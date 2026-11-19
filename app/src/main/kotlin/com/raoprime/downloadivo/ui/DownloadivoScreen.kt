@@ -1550,6 +1550,123 @@ private fun HomeDownloaderTab(
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        // Up Next / Related Videos Single Feed
+                        if (info.relatedFeed.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "UP NEXT & RELATED",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextSubtle,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Text(
+                                    text = "${info.relatedFeed.size} videos",
+                                    fontSize = 11.sp,
+                                    color = TextMuted
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                info.relatedFeed.forEach { feedItem ->
+                                    Surface(
+                                        onClick = {
+                                            onUrlChange(feedItem.url)
+                                            onInspect()
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = SurfaceCardDark,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // Thumbnail
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(width = 110.dp, height = 62.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(Color(0xFF141418))
+                                            ) {
+                                                if (feedItem.thumbnail.isNotBlank()) {
+                                                    AsyncImage(
+                                                        model = feedItem.thumbnail,
+                                                        contentDescription = null,
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
+                                                // Duration tag
+                                                if (feedItem.duration.isNotBlank()) {
+                                                    Surface(
+                                                        color = Color.Black.copy(alpha = 0.75f),
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        modifier = Modifier
+                                                            .align(Alignment.BottomEnd)
+                                                            .padding(4.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = feedItem.duration,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = TextCrisp,
+                                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                        )
+                                                    }
+                                                }
+                                                // Mini play overlay icon
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(24.dp)
+                                                        .align(Alignment.Center)
+                                                        .background(Color.Black.copy(alpha = 0.5f), CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.PlayArrow,
+                                                        contentDescription = null,
+                                                        tint = TextCrisp,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.width(12.dp))
+
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = feedItem.title,
+                                                    style = Typography.titleSmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = TextPrimary,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = feedItem.uploader,
+                                                    style = Typography.bodySmall,
+                                                    color = TextMuted,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
