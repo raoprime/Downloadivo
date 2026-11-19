@@ -267,17 +267,31 @@ _INFO_CACHE_LOCK = threading.Lock()
 _INFO_CACHE_TTL = 1800.0  # 30 minutes
 
 
+def _canonical_key(url_str: str) -> str:
+    if not url_str:
+        return ""
+    m = re.search(r"(?:v=|\/embed\/|\/shorts\/|youtu\.be\/|\/v\/)([a-zA-Z0-9_-]{11})", url_str)
+    if m:
+        return f"YT:{m.group(1)}"
+    m_ig = re.search(r"instagram\.com\/(?:p|reel|tv)\/([a-zA-Z0-9_-]+)", url_str)
+    if m_ig:
+        return f"IG:{m_ig.group(1)}"
+    return url_str.strip()
+
+
 def _get_cached_info(url_str: str) -> Optional[dict]:
     if not url_str:
         return None
     now = time.time()
     clean_k = url_str.strip()
+    canon_k = _canonical_key(clean_k)
     with _INFO_CACHE_LOCK:
-        if clean_k in _INFO_CACHE:
-            ts, val = _INFO_CACHE[clean_k]
-            if now - ts < _INFO_CACHE_TTL:
-                return val
-            del _INFO_CACHE[clean_k]
+        for k in (canon_k, clean_k, f"RESP:{canon_k}", f"RESP:{clean_k}"):
+            if k in _INFO_CACHE:
+                ts, val = _INFO_CACHE[k]
+                if now - ts < _INFO_CACHE_TTL:
+                    return val
+                del _INFO_CACHE[k]
     return None
 
 
@@ -285,11 +299,15 @@ def _set_cached_info(url_str: str, info_dict: dict):
     if not url_str or not info_dict:
         return
     clean_k = url_str.strip()
+    canon_k = _canonical_key(clean_k)
     with _INFO_CACHE_LOCK:
-        if len(_INFO_CACHE) > 200:
+        if len(_INFO_CACHE) > 500:
             oldest_k = min(_INFO_CACHE.keys(), key=lambda k: _INFO_CACHE[k][0])
             del _INFO_CACHE[oldest_k]
-        _INFO_CACHE[clean_k] = (time.time(), info_dict)
+        now = time.time()
+        _INFO_CACHE[clean_k] = (now, info_dict)
+        if canon_k:
+            _INFO_CACHE[canon_k] = (now, info_dict)
 
 
 def _safe_content_disposition(filename: str, ext: str) -> str:
@@ -1208,15 +1226,17 @@ def _info_ydl_opts() -> dict:
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "skip_download": True,
+        "youtube_include_dash_manifest": False,
+        "youtube_include_hls_manifest": False,
         "js_runtimes": js_runtimes,
-        "remote_components": {"ejs:github"},
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
         },
-        "socket_timeout": 20,
-        "retries": 4,
+        "socket_timeout": 12,
+        "retries": 2,
     }
 
 
