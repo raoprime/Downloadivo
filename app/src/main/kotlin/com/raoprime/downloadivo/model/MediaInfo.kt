@@ -44,6 +44,7 @@ data class MediaInfo(
         FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, "Studio Quality Audio"),
         FormatOption("m4a", "Lossless AAC Stream", "m4a", true, "Original Audio")
     ),
+    val audioTracks: List<String> = emptyList(),
     val relatedFeed: List<FeedItem> = emptyList()
 )
 

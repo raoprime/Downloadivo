@@ -208,6 +208,16 @@ object DownloadEngine {
                 }
             }
 
+            val audioTracksList = mutableListOf<String>()
+            val audioTracksJson = json.optJSONArray("audio_tracks")
+            if (audioTracksJson != null) {
+                for (i in 0 until audioTracksJson.length()) {
+                    val aObj = audioTracksJson.optJSONObject(i)
+                    val label = aObj?.optString("label") ?: aObj?.optString("language") ?: ""
+                    if (label.isNotBlank()) audioTracksList.add(label)
+                }
+            }
+
             val info = MediaInfo(
                 title = title,
                 author = author,
@@ -220,6 +230,7 @@ object DownloadEngine {
                 is8k = is8k,
                 resolutions = resolutions,
                 availableFormats = formats,
+                audioTracks = if (audioTracksList.isNotEmpty()) audioTracksList else listOf("Original Audio"),
                 relatedFeed = relatedFeed
             )
 
@@ -229,12 +240,24 @@ object DownloadEngine {
         }
     }
 
-    fun getStreamUrl(targetUrl: String, format: String = "best"): String {
+    fun getStreamUrl(targetUrl: String, format: String = "best", audioLang: String? = null): String {
         val cleanUrl = sanitizeUrl(targetUrl)
         val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
         val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
         val endpoint = if (format.trim().lowercase() in listOf("mp3", "m4a", "audio")) "stream.mp3" else "stream.mp4"
-        return "$activeBaseUrl/$endpoint?url=$encodedUrl&format=$encodedFmt"
+        val audioQuery = if (!audioLang.isNullOrBlank()) "&audio_lang=" + URLEncoder.encode(audioLang.trim(), "UTF-8") else ""
+        return "$activeBaseUrl/$endpoint?url=$encodedUrl&format=$encodedFmt$audioQuery"
+    }
+
+    fun parseDurationToMillis(durationStr: String?): Long {
+        if (durationStr.isNullOrBlank()) return 0L
+        val parts = durationStr.trim().split(":").mapNotNull { it.toLongOrNull() }
+        return when (parts.size) {
+            3 -> (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000L
+            2 -> (parts[0] * 60 + parts[1]) * 1000L
+            1 -> parts[0] * 1000L
+            else -> 0L
+        }
     }
 
     suspend fun downloadStream(

@@ -58,6 +58,7 @@ import com.raoprime.downloadivo.model.MediaInfo
 import com.raoprime.downloadivo.network.DownloadEngine
 import com.raoprime.downloadivo.service.DownloadService
 import com.raoprime.downloadivo.ui.player.BuiltInPlayerSheet
+import com.raoprime.downloadivo.ui.player.YouTubeFloatingMiniplayer
 import com.raoprime.downloadivo.ui.theme.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -90,18 +91,27 @@ fun DownloadivoScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isCustomizeExpanded by remember { mutableStateOf(false) }
 
-    // Built-in Player State
+    // Built-in Player State (YouTube-Grade Player with Multi-Language Audio & Floating Miniplayer)
     var activePlaybackUri by remember { mutableStateOf<String?>(null) }
     var activePlaybackTitle by remember { mutableStateOf("") }
+    var activePlaybackAuthor by remember { mutableStateOf("") }
+    var activePlaybackThumbnail by remember { mutableStateOf("") }
     var activePlaybackIsAudio by remember { mutableStateOf(false) }
     var activePlaybackOriginalUrl by remember { mutableStateOf("") }
     var activePlaybackCurrentQuality by remember { mutableStateOf("best") }
     var activePlaybackQualities by remember { mutableStateOf<List<String>>(emptyList()) }
     var activePlaybackDuration by remember { mutableStateOf("") }
+    var activePlaybackAudioTracks by remember { mutableStateOf<List<String>>(listOf("Original Audio", "Hindi (हिन्दी)", "English")) }
+    var activePlaybackCurrentAudioTrack by remember { mutableStateOf("Original Audio") }
+    var isPlayerMinimized by remember { mutableStateOf(false) }
 
-    // Back handler: close player sheet before leaving app
+    // Back handler: minimize full player first, dismiss miniplayer if already minimized
     BackHandler(enabled = activePlaybackUri != null) {
-        activePlaybackUri = null
+        if (!isPlayerMinimized) {
+            isPlayerMinimized = true
+        } else {
+            activePlaybackUri = null
+        }
     }
 
     val currentTask by DownloadService.currentTask.collectAsState()
@@ -399,6 +409,11 @@ fun DownloadivoScreen(
                             activePlaybackQualities = qualities
                             activePlaybackCurrentQuality = initialQuality
                             activePlaybackDuration = duration
+                            activePlaybackThumbnail = resolvedInfo?.thumbnail ?: ""
+                            activePlaybackAuthor = resolvedInfo?.author ?: ""
+                            activePlaybackAudioTracks = if (resolvedInfo?.audioTracks?.isNotEmpty() == true) resolvedInfo!!.audioTracks else listOf("Original Audio", "Hindi (हिन्दी)", "English")
+                            activePlaybackCurrentAudioTrack = activePlaybackAudioTracks.firstOrNull() ?: "Original Audio"
+                            isPlayerMinimized = false
                         },
                         onInspect = { targetUrl ->
                             val urlToInspect = (targetUrl ?: inputUrl).trim()
@@ -738,31 +753,65 @@ fun DownloadivoScreen(
                         }
                     }
                 }
+
+                // YouTube Floating Miniplayer (docked above bottom navigation bar when player is minimized!)
+                AnimatedVisibility(
+                    visible = activePlaybackUri != null && isPlayerMinimized,
+                    enter = slideInVertically { it } + fadeIn(),
+                    exit = slideOutVertically { it } + fadeOut()
+                ) {
+                    YouTubeFloatingMiniplayer(
+                        title = activePlaybackTitle,
+                        author = activePlaybackAuthor,
+                        thumbnail = activePlaybackThumbnail,
+                        isAudio = activePlaybackIsAudio,
+                        onExpand = { isPlayerMinimized = false },
+                        onClose = { activePlaybackUri = null }
+                    )
+                }
             }
         }
 
-        // Built-In Player Modal Sheet
-        activePlaybackUri?.let { uri ->
+        // Fullscreen / Maximized YouTube-Grade Native Player
+        if (activePlaybackUri != null && !isPlayerMinimized) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.85f)),
+                    .background(Color.Black.copy(alpha = 0.92f)),
                 contentAlignment = Alignment.BottomCenter
             ) {
                 BuiltInPlayerSheet(
-                    mediaUri = uri,
+                    mediaUri = activePlaybackUri!!,
                     title = activePlaybackTitle,
+                    author = activePlaybackAuthor,
                     isAudio = activePlaybackIsAudio,
                     duration = activePlaybackDuration,
                     availableQualities = activePlaybackQualities,
                     currentQuality = activePlaybackCurrentQuality,
+                    availableAudioTracks = activePlaybackAudioTracks,
+                    currentAudioTrack = activePlaybackCurrentAudioTrack,
                     onQualitySelected = { newQuality ->
                         activePlaybackCurrentQuality = newQuality
                         if (activePlaybackOriginalUrl.isNotBlank()) {
-                            activePlaybackUri = DownloadEngine.getStreamUrl(activePlaybackOriginalUrl, newQuality)
+                            activePlaybackUri = DownloadEngine.getStreamUrl(
+                                activePlaybackOriginalUrl,
+                                newQuality,
+                                activePlaybackCurrentAudioTrack
+                            )
+                        }
+                    },
+                    onAudioTrackSelected = { newAudio ->
+                        activePlaybackCurrentAudioTrack = newAudio
+                        if (activePlaybackOriginalUrl.isNotBlank()) {
+                            activePlaybackUri = DownloadEngine.getStreamUrl(
+                                activePlaybackOriginalUrl,
+                                activePlaybackCurrentQuality,
+                                newAudio
+                            )
                         }
                     },
                     onEnterPip = onEnterPip,
+                    onMinimize = { isPlayerMinimized = true },
                     onDismiss = { activePlaybackUri = null }
                 )
             }
@@ -2504,7 +2553,7 @@ private fun SettingsTab() {
                 ) {
                     Column {
                         Text("Downloadivo Mobile", style = Typography.titleSmall, color = TextCrisp)
-                        Text("v3.6.0 Studio Edition (4K & Pre-Size)", style = Typography.bodySmall, color = TextSecondary)
+                        Text("v3.7.0 Studio Edition (YouTube-Grade Player & Multi-Audio)", style = Typography.bodySmall, color = TextSecondary)
                     }
                     Image(
                         painter = painterResource(id = R.drawable.app_icon_white),
