@@ -1481,7 +1481,7 @@ private fun HomeDownloaderTab(
                         // Dual Action: Stream Ad-Free vs Download Offline
                         val selectedFmt = info.availableFormats.find { it.id == selectedFormat }
                         val selectedLabel = selectedFmt?.label?.replace(" Video", "")?.replace(" Audio", "") ?: selectedFormat.uppercase()
-                        val sizeText = if (!selectedFmt?.sizeStr.isNullOrBlank()) " • ${selectedFmt?.sizeStr}" else ""
+                        val sizeText = selectedFmt?.sizeStr?.takeIf { it.isNotBlank() }?.let { " • $it" } ?: ""
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),

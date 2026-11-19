@@ -255,7 +255,7 @@ object DownloadEngine {
                 val totalLength = body.contentLength()
                 val inputStream: InputStream = body.byteStream()
 
-                val buffer = ByteArray(64 * 1024)
+                val buffer = ByteArray(256 * 1024)
                 var bytesRead: Int
                 var totalBytesRead = 0L
 
