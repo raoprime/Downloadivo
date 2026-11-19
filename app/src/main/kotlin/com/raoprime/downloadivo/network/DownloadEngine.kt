@@ -20,6 +20,9 @@ object DownloadEngine {
     // Default Edge Cloud Endpoint (Can be overridden in Settings)
     var activeBaseUrl: String = "https://downloadivo.vercel.app"
 
+    // High-Speed Direct Tunnel Endpoint (Bypasses Vercel 60s Serverless timeouts for unlimited streams)
+    var directStreamBaseUrl: String = "https://always-letters-utility-connectivity.trycloudflare.com"
+
     private val apiClient = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
@@ -106,6 +109,13 @@ object DownloadEngine {
             }
 
             val json = JSONObject(responseBody!!)
+
+            // Auto-discover active high-speed streaming tunnel
+            val tunnelUrl = json.optString("tunnel_url").ifBlank { json.optString("public_url") }
+            if (tunnelUrl.isNotBlank() && (tunnelUrl.startsWith("http://") || tunnelUrl.startsWith("https://"))) {
+                directStreamBaseUrl = tunnelUrl.trim().trimEnd('/')
+            }
+
             val title = json.optString("title", "Media Stream")
             val author = json.optString("uploader", json.optString("author", "Web Creator"))
             val duration = formatMediaDuration(json.optString("duration", ""))
@@ -253,7 +263,8 @@ object DownloadEngine {
         val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
         val endpoint = if (format.trim().lowercase() in listOf("mp3", "m4a", "audio")) "stream.mp3" else "stream.mp4"
         val audioQuery = if (!audioLang.isNullOrBlank()) "&audio_lang=" + URLEncoder.encode(audioLang.trim(), "UTF-8") else ""
-        return "$activeBaseUrl/$endpoint?url=$encodedUrl&format=$encodedFmt$audioQuery"
+        val baseUrl = if (directStreamBaseUrl.isNotBlank()) directStreamBaseUrl else activeBaseUrl
+        return "$baseUrl/$endpoint?url=$encodedUrl&format=$encodedFmt$audioQuery"
     }
 
     fun parseDurationToMillis(durationStr: String?): Long {
@@ -276,11 +287,25 @@ object DownloadEngine {
         outputStream: OutputStream,
         onProgress: (percent: Int, speedStr: String, etaStr: String, currentBytes: Long, totalBytes: Long) -> Unit
     ): Result<Long> = withContext(Dispatchers.IO) {
-        try {
-            val cleanUrl = sanitizeUrl(targetUrl)
-            val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
-            val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
-            var streamUrl = "$activeBaseUrl/stream?url=$encodedUrl&format=$encodedFmt"
+        val bases = listOfNotNull(
+            directStreamBaseUrl.takeIf { it.isNotBlank() },
+            activeBaseUrl
+        ).distinct()
+
+        var totalBytesRead = 0L
+        var totalLength = if (expectedTotalBytes > 0L) expectedTotalBytes else -1L
+        var lastError: Exception? = null
+        val maxAttempts = 4
+        var attempt = 0
+
+        val cleanUrl = sanitizeUrl(targetUrl)
+        val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
+        val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
+
+        while (attempt < maxAttempts) {
+            attempt++
+            val currentBase = bases[(attempt - 1) % bases.size]
+            var streamUrl = "$currentBase/stream?url=$encodedUrl&format=$encodedFmt"
 
             if (!startTime.isNullOrBlank() && !endTime.isNullOrBlank()) {
                 val encStart = URLEncoder.encode(startTime.trim(), "UTF-8")
@@ -288,38 +313,40 @@ object DownloadEngine {
                 streamUrl += "&start_time=$encStart&end_time=$encEnd"
             }
 
-            val request = Request.Builder()
-                .url(streamUrl)
-                .header("User-Agent", "Downloadivo-Android/2.0")
-                .header("Accept-Encoding", "identity")
-                .get()
-                .build()
+            try {
+                val reqBuilder = Request.Builder()
+                    .url(streamUrl)
+                    .header("User-Agent", "Downloadivo-Android/3.9")
+                    .header("Accept-Encoding", "identity")
 
-            streamClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        Exception("Server returned HTTP error code: ${response.code}")
-                    )
+                if (totalBytesRead > 0L) {
+                    reqBuilder.header("Range", "bytes=$totalBytesRead-")
                 }
 
-                val body = response.body ?: throw Exception("No response data received from server")
-                val headerLength = response.header("X-Expected-Total-Bytes")?.toLongOrNull()
-                    ?: response.header("X-Total-Content-Length")?.toLongOrNull()
-                    ?: response.header("Content-Length")?.toLongOrNull()
-                    ?: body.contentLength()
+                val response = streamClient.newCall(reqBuilder.build()).execute()
 
-                val totalLength = if (headerLength != null && headerLength > 0L) {
-                    headerLength
-                } else if (expectedTotalBytes > 0L) {
-                    expectedTotalBytes
-                } else {
-                    -1L
+                if (!response.isSuccessful && response.code != 206) {
+                    val code = response.code
+                    response.close()
+                    throw Exception("Server returned HTTP error code: $code")
                 }
+
+                val body = response.body ?: throw Exception("No response body received")
+                val isPartial = response.code == 206 || response.header("Content-Range") != null
+
+                if (totalLength <= 0L) {
+                    val headerLength = response.header("X-Expected-Total-Bytes")?.toLongOrNull()
+                        ?: response.header("X-Total-Content-Length")?.toLongOrNull()
+                        ?: response.header("Content-Length")?.toLongOrNull()
+                        ?: body.contentLength()
+                    if (headerLength != null && headerLength > 0L) {
+                        totalLength = if (isPartial) totalBytesRead + headerLength else headerLength
+                    }
+                }
+
                 val inputStream: InputStream = body.byteStream()
-
                 val buffer = ByteArray(256 * 1024)
                 var bytesRead: Int
-                var totalBytesRead = 0L
 
                 var lastTime = System.currentTimeMillis()
                 var bytesSinceLastTime = 0L
@@ -358,14 +385,32 @@ object DownloadEngine {
                 }
 
                 outputStream.flush()
-                if (totalBytesRead <= 0L) {
-                    return@withContext Result.failure(Exception("Zero bytes received from media stream"))
+                response.close()
+
+                if (totalLength > 0L && totalBytesRead >= totalLength) {
+                    onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
+                    return@withContext Result.success(totalBytesRead)
+                } else if (totalLength <= 0L && totalBytesRead > 0L) {
+                    onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
+                    return@withContext Result.success(totalBytesRead)
                 }
-                onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
-                Result.success(totalBytesRead)
+            } catch (e: Exception) {
+                lastError = e
+                if (totalLength > 0L && totalBytesRead >= totalLength) {
+                    outputStream.flush()
+                    onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
+                    return@withContext Result.success(totalBytesRead)
+                }
+                kotlinx.coroutines.delay(1000L)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+        }
+
+        if (totalBytesRead > 0L) {
+            outputStream.flush()
+            onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
+            Result.success(totalBytesRead)
+        } else {
+            Result.failure(lastError ?: Exception("Download aborted or zero bytes received"))
         }
     }
 

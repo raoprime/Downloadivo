@@ -116,11 +116,12 @@ fun DownloadivoScreen(
     var activePlaybackAudioTracks by remember { mutableStateOf<List<String>>(listOf("Original Audio", "Hindi (हिन्दी)", "English")) }
     var activePlaybackCurrentAudioTrack by remember { mutableStateOf("Original Audio") }
     var isPlayerMinimized by remember { mutableStateOf(false) }
+    var isPlayerFullscreen by remember { mutableStateOf(false) }
 
     // Persistent Single ExoPlayer Instance across Miniplayer, Full Player & PiP
     val exoPlayer = remember(context) {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Downloadivo-Stream/3.8")
+            .setUserAgent("Downloadivo-Stream/3.9")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(20000)
             .setReadTimeoutMs(35000)
@@ -141,6 +142,8 @@ fun DownloadivoScreen(
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(androidx.media3.common.C.WAKE_MODE_NETWORK)
             .build()
     }
 
@@ -170,27 +173,25 @@ fun DownloadivoScreen(
 
     // Pure Video PiP Mode: When in PiP, display ONLY the video surface edge-to-edge
     if (inPipMode && activePlaybackUri != null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = exoPlayer
-                        useController = false
-                        keepScreenOn = true
-                        layoutParams = FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
+        BuiltInPlayerSheet(
+            exoPlayer = exoPlayer,
+            mediaUri = activePlaybackUri!!,
+            title = activePlaybackTitle,
+            author = activePlaybackAuthor,
+            isAudio = activePlaybackIsAudio,
+            duration = activePlaybackDuration,
+            availableQualities = activePlaybackQualities,
+            currentQuality = activePlaybackCurrentQuality,
+            availableAudioTracks = activePlaybackAudioTracks,
+            currentAudioTrack = activePlaybackCurrentAudioTrack,
+            inPipMode = true,
+            isFullscreen = true,
+            onMinimize = { isPlayerMinimized = true },
+            onDismiss = {
+                activePlaybackUri = null
+                exoPlayer.stop()
+            }
+        )
         return
     }
 
@@ -908,14 +909,18 @@ fun DownloadivoScreen(
                 contentAlignment = Alignment.BottomCenter
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 10.dp, end = 10.dp, bottom = 36.dp) // Lifted up from bottom edge!
-                        .navigationBarsPadding()
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
-                        ) {}
+                    modifier = if (isPlayerFullscreen) {
+                        Modifier.fillMaxSize()
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 12.dp, bottom = 54.dp) // Generously lifted above navigation bar
+                            .navigationBarsPadding()
+                    }
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) {}
                 ) {
                     BuiltInPlayerSheet(
                         exoPlayer = exoPlayer,
@@ -928,6 +933,9 @@ fun DownloadivoScreen(
                         currentQuality = activePlaybackCurrentQuality,
                         availableAudioTracks = activePlaybackAudioTracks,
                         currentAudioTrack = activePlaybackCurrentAudioTrack,
+                        inPipMode = false,
+                        isFullscreen = isPlayerFullscreen,
+                        onFullscreenChange = { isPlayerFullscreen = it },
                         onQualitySelected = { newQuality ->
                             activePlaybackCurrentQuality = newQuality
                             if (activePlaybackOriginalUrl.isNotBlank()) {
@@ -2853,7 +2861,7 @@ private fun SettingsTab() {
                 ) {
                     Column {
                         Text("Downloadivo Mobile", style = Typography.titleSmall, color = TextCrisp)
-                        Text("v3.9.0 Studio Edition (Ultra-Fast Engine, Pro Floating Bar & Studio Queue)", style = Typography.bodySmall, color = TextSecondary)
+                        Text("v3.9.5 Studio Pro Edition (Zero-Error Range Resume, Fluid PiP & Lifted Player)", style = Typography.bodySmall, color = TextSecondary)
                     }
                     Image(
                         painter = painterResource(id = R.drawable.app_icon_white),

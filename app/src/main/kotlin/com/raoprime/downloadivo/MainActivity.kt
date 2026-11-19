@@ -27,7 +27,13 @@ class MainActivity : ComponentActivity() {
     private var clipboardUrl by mutableStateOf<String?>(null)
 
     // Set true by BuiltInPlayerSheet while a video is playing, so Home press triggers PiP
-    var pipEnabled by mutableStateOf(false)
+    private val _pipEnabled = mutableStateOf(false)
+    var pipEnabled: Boolean
+        get() = _pipEnabled.value
+        set(value) {
+            _pipEnabled.value = value
+            updatePipParams(value)
+        }
     var inPipMode by mutableStateOf(false)
 
     @Deprecated("Deprecated in Java")
@@ -81,13 +87,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun updatePipParams(enabled: Boolean = pipEnabled) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val builder = PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(16, 9))
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    builder.setAutoEnterEnabled(enabled)
+                    builder.setSeamlessResizeEnabled(true)
+                }
+                setPictureInPictureParams(builder.build())
+            } catch (_: Exception) {}
+        }
+    }
+
     fun enterPipMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
-                val params = PictureInPictureParams.Builder()
+                val builder = PictureInPictureParams.Builder()
                     .setAspectRatio(Rational(16, 9))
-                    .build()
-                enterPictureInPictureMode(params)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    builder.setAutoEnterEnabled(true)
+                    builder.setSeamlessResizeEnabled(true)
+                }
+                enterPictureInPictureMode(builder.build())
             } catch (_: Exception) {}
         }
     }

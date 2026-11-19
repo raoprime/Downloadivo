@@ -62,6 +62,9 @@ fun BuiltInPlayerSheet(
     currentQuality: String = "",
     availableAudioTracks: List<String> = emptyList(),
     currentAudioTrack: String = "",
+    inPipMode: Boolean = false,
+    isFullscreen: Boolean = false,
+    onFullscreenChange: ((Boolean) -> Unit)? = null,
     onQualitySelected: ((String) -> Unit)? = null,
     onAudioTrackSelected: ((String) -> Unit)? = null,
     onEnterPip: (() -> Unit)? = null,
@@ -77,7 +80,6 @@ fun BuiltInPlayerSheet(
     var playerError by remember { mutableStateOf<String?>(null) }
     var showFullscreenControls by remember { mutableStateOf(true) }
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
-    var isFullscreen by remember { mutableStateOf(false) }
 
     // Double tap feedback
     var showDoubleTapRewind by remember { mutableStateOf(false) }
@@ -93,6 +95,37 @@ fun BuiltInPlayerSheet(
     var durationMs by remember(duration) { mutableLongStateOf(DownloadEngine.parseDurationToMillis(duration)) }
     var isScrubbing by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableLongStateOf(0L) }
+
+    // Pure Video PiP Mode: Full bleed zero-overlay video surface
+    if (inPipMode && !isAudio) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = false
+                        keepScreenOn = true
+                        layoutParams = FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    }
+                },
+                update = { pv ->
+                    if (pv.player != exoPlayer) {
+                        pv.player = exoPlayer
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        return
+    }
 
     // Lock orientation when toggling fullscreen
     DisposableEffect(isFullscreen) {
@@ -114,20 +147,19 @@ fun BuiltInPlayerSheet(
         }
     }
 
-    // Load or switch media URL
+    // Load or switch media URL only if not already loaded to prevent minimize resets
     LaunchedEffect(mediaUri) {
-        playerError = null
-        isBuffering = true
-        val savedPos = exoPlayer.currentPosition
-        val uri = Uri.parse(mediaUri)
-        val mimeType = if (isAudio) MimeTypes.AUDIO_MPEG else MimeTypes.VIDEO_MP4
-        val item = MediaItem.Builder().setUri(uri).setMimeType(mimeType).build()
-        exoPlayer.setMediaItem(item)
-        if (savedPos > 0) {
-            exoPlayer.seekTo(savedPos)
+        val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
+        if (currentUri != mediaUri) {
+            playerError = null
+            isBuffering = true
+            val uri = Uri.parse(mediaUri)
+            val mimeType = if (isAudio) MimeTypes.AUDIO_MPEG else MimeTypes.VIDEO_MP4
+            val item = MediaItem.Builder().setUri(uri).setMimeType(mimeType).build()
+            exoPlayer.setMediaItem(item)
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true
         }
-        exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
     }
 
     // Dynamic duration update if parsed from stream
@@ -510,7 +542,7 @@ fun BuiltInPlayerSheet(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
                                 )
-                                IconButton(onClick = { isFullscreen = false }, modifier = Modifier.size(36.dp)) {
+                                IconButton(onClick = { onFullscreenChange?.invoke(false) }, modifier = Modifier.size(36.dp)) {
                                     Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
                             }
@@ -650,7 +682,7 @@ fun BuiltInPlayerSheet(
 
                     if (!isAudio) {
                         IconButton(
-                            onClick = { isFullscreen = !isFullscreen },
+                            onClick = { onFullscreenChange?.invoke(!isFullscreen) },
                             modifier = Modifier.size(28.dp)
                         ) {
                             Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = TextCrisp, modifier = Modifier.size(22.dp))
@@ -987,7 +1019,7 @@ fun YouTubeFloatingMiniplayer(
         shadowElevation = 18.dp,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 4.dp)
+            .padding(horizontal = 14.dp, vertical = 10.dp)
             .clickable { onExpand() }
     ) {
         Row(
