@@ -1599,6 +1599,18 @@ def system_info(request: Request):
     }
 
 
+@app.api_route("/tunnel", methods=["GET", "POST"])
+@app.api_route("/api/endpoint", methods=["GET", "POST"])
+def get_tunnel_endpoint():
+    tunnel = _get_public_tunnel_url()
+    return {
+        "tunnel_url": tunnel,
+        "direct_stream_url": tunnel,
+        "active": bool(tunnel),
+        "public_url": tunnel
+    }
+
+
 @app.api_route("/info", methods=["GET", "POST"])
 async def get_info(request: Request, url: Optional[str] = None):
     client_ip = (
@@ -1932,6 +1944,8 @@ async def get_info(request: Request, url: Optional[str] = None):
                 "format_sizes_bytes": format_bytes_map,
                 "audio_tracks": audio_tracks,
                 "related_feed": related_feed,
+                "tunnel_url": _get_public_tunnel_url(),
+                "direct_stream_url": _get_public_tunnel_url(),
             }
             _set_cached_info(f"RESP:{url}", res_dict)
             if target_url and target_url != url:
