@@ -1105,7 +1105,7 @@ def _base_ydl_opts(outtmpl: str, hooks: list) -> dict:
             "Sec-Fetch-Mode": "navigate",
         },
         # High-Speed Multi-Threaded Fragment & Chunk Acceleration
-        "concurrent_fragment_downloads": 6,  # 6 parallel fragments (DASH/HLS line-rate saturation)
+        "concurrent_fragment_downloads": 8,  # 8 parallel fragments (DASH/HLS line-rate saturation)
         "http_chunk_size": 10485760,         # 10MB chunk range requests (prevents YouTube throttling dips)
         "buffersize": 1024 * 1024,           # 1MB socket buffer (prevents TCP pipeline stalls)
         "throttled_rate": 100 * 1024,        # Auto-drop and reconnect if YouTube CDN throttles below 100KB/s
@@ -2030,7 +2030,15 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 _FFMPEG_PATH,
                 "-y",
                 "-loglevel", "error",
+                "-reconnect", "1",
+                "-reconnect_at_eof", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "2",
                 "-i", chosen_v,
+                "-reconnect", "1",
+                "-reconnect_at_eof", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "2",
                 "-i", chosen_a,
                 "-c:v", "copy",
                 "-c:a", "aac",
@@ -2038,10 +2046,10 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 "-f", "mp4",
                 "pipe:1"
             ]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1024 * 1024)
             try:
                 while True:
-                    data = proc.stdout.read(64 * 1024)
+                    data = proc.stdout.read(256 * 1024)
                     if not data:
                         break
                     yield data
