@@ -1493,8 +1493,8 @@ def system_info(request: Request):
     }
 
 
-@app.post("/info")
-def get_info(req: InfoRequest, request: Request):
+@app.api_route("/info", methods=["GET", "POST"])
+async def get_info(request: Request, req: Optional[InfoRequest] = None, url: Optional[str] = None):
     client_ip = (
         request.headers.get("cf-connecting-ip")
         or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
@@ -1503,7 +1503,25 @@ def get_info(req: InfoRequest, request: Request):
     if not _check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many preview requests. Please wait a moment.")
 
-    url = req.url
+    target_url = None
+    if req and getattr(req, "url", None):
+        target_url = req.url
+    elif url:
+        target_url = url
+    else:
+        if request.method == "POST":
+            try:
+                body = await request.json()
+                target_url = body.get("url")
+            except Exception:
+                pass
+        if not target_url:
+            target_url = request.query_params.get("url")
+
+    if not target_url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    url = target_url.strip()
     url_lower = url.lower()
 
     # 0. YouTube Community Post
