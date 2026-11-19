@@ -1,5 +1,7 @@
 package com.raoprime.downloadivo.ui.player
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -15,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PictureInPicture
 import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,6 +45,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
+import com.raoprime.downloadivo.MainActivity
 import com.raoprime.downloadivo.ui.theme.*
 
 @OptIn(UnstableApi::class)
@@ -54,12 +58,33 @@ fun BuiltInPlayerSheet(
     availableQualities: List<String> = emptyList(),
     currentQuality: String = "",
     onQualitySelected: ((String) -> Unit)? = null,
+    onEnterPip: (() -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
     var isBuffering by remember { mutableStateOf(true) }
     var playerError by remember { mutableStateOf<String?>(null) }
+
+    // Lock to landscape for video; restore on exit
+    DisposableEffect(isAudio) {
+        if (!isAudio) {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // Signal MainActivity whether PiP auto-trigger should fire
+    val mainActivity = activity as? MainActivity
+    DisposableEffect(isAudio) {
+        mainActivity?.pipEnabled = !isAudio
+        onDispose {
+            mainActivity?.pipEnabled = false
+        }
+    }
 
     val exoPlayer = remember {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
@@ -218,6 +243,22 @@ fun BuiltInPlayerSheet(
                         }
                     }
                 }
+
+                // PiP button for video
+                if (!isAudio && onEnterPip != null) {
+                    IconButton(
+                        onClick = onEnterPip,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.PictureInPicture,
+                            contentDescription = "Picture in Picture",
+                            tint = TextMuted,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
                 IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
                 }
@@ -276,7 +317,7 @@ fun BuiltInPlayerSheet(
                         )
                     }
                 } else {
-                    // Video Mode: Full PlayerView
+                    // Video Mode: Full PlayerView with screen-on
                     AndroidView(
                         factory = { ctx ->
                             PlayerView(ctx).apply {

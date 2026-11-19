@@ -3,8 +3,13 @@ package com.raoprime.downloadivo.ui
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
@@ -70,6 +75,7 @@ fun DownloadivoScreen(
     sharedUrl: String? = null,
     clipboardUrl: String? = null,
     onClearClipboard: () -> Unit = {},
+    onEnterPip: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -92,6 +98,11 @@ fun DownloadivoScreen(
     var activePlaybackCurrentQuality by remember { mutableStateOf("best") }
     var activePlaybackQualities by remember { mutableStateOf<List<String>>(emptyList()) }
     var activePlaybackDuration by remember { mutableStateOf("") }
+
+    // Back handler: close player sheet before leaving app
+    BackHandler(enabled = activePlaybackUri != null) {
+        activePlaybackUri = null
+    }
 
     val currentTask by DownloadService.currentTask.collectAsState()
     val queuedTasks by DownloadService.queuedTasks.collectAsState()
@@ -135,6 +146,10 @@ fun DownloadivoScreen(
         startTime: String? = null,
         endTime: String? = null
     ) {
+        if (!isNetworkAvailable(context)) {
+            Toast.makeText(context, "No internet connection", Toast.LENGTH_SHORT).show()
+            return
+        }
         HapticUtil.heavyClick(context)
         DownloadService.startDownload(
             context = context,
@@ -487,6 +502,13 @@ fun DownloadivoScreen(
                         },
                         onDelete = { task ->
                             HapticUtil.lightClick(context)
+                            // Delete physical file from MediaStore
+                            task.filePath?.let { uriStr ->
+                                try {
+                                    val fileUri = Uri.parse(uriStr)
+                                    context.contentResolver.delete(fileUri, null, null)
+                                } catch (_: Exception) {}
+                            }
                             DownloadRepository.removeTask(task.id)
                         }
                     )
@@ -740,6 +762,7 @@ fun DownloadivoScreen(
                             activePlaybackUri = DownloadEngine.getStreamUrl(activePlaybackOriginalUrl, newQuality)
                         }
                     },
+                    onEnterPip = onEnterPip,
                     onDismiss = { activePlaybackUri = null }
                 )
             }
@@ -1809,6 +1832,63 @@ private fun QueueTab(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // Failed Task Retry Card
+        if (currentTask.status == DownloadStatus.ERROR) {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = SurfaceDark,
+                border = androidx.compose.foundation.BorderStroke(1.dp, StatusError.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.ErrorOutline,
+                        contentDescription = null,
+                        tint = StatusError,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Download Failed",
+                            style = Typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = StatusError
+                        )
+                        Text(
+                            text = currentTask.title.ifBlank { "Unknown" },
+                            style = Typography.bodySmall,
+                            color = TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        currentTask.error?.let {
+                            Text(
+                                text = it,
+                                style = Typography.bodySmall,
+                                color = TextTertiary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    FilledTonalButton(
+                        onClick = onNavigateHome,
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Retry", style = Typography.labelSmall)
+                    }
+                }
+            }
+        }
+
         // Active Downloading Task Card
         if (currentTask.status == DownloadStatus.DOWNLOADING) {
             Surface(
@@ -2393,6 +2473,29 @@ private fun SettingsTab() {
 
                 HorizontalDivider(color = BorderHairline)
 
+                // Clear Download History
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Clear History", style = Typography.titleSmall, color = TextCrisp)
+                        Text("Remove all entries from Library", style = Typography.bodySmall, color = TextSecondary)
+                    }
+                    FilledTonalButton(
+                        onClick = { DownloadRepository.clearHistory() },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Clear", style = Typography.labelSmall)
+                    }
+                }
+
+                HorizontalDivider(color = BorderHairline)
+
                 // App version & branding
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -2423,5 +2526,19 @@ private fun formatByteSize(bytes: Long): String {
         bytes >= 1024L * 1024L -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
         bytes >= 1024L -> String.format("%.0f KB", bytes / 1024.0)
         else -> "$bytes B"
+    }
+}
+
+private fun isNetworkAvailable(context: Context): Boolean {
+    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        ?: return false
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    } else {
+        @Suppress("DEPRECATION")
+        cm.activeNetworkInfo?.isConnected == true
     }
 }
