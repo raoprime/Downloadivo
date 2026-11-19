@@ -65,8 +65,8 @@ fun BuiltInPlayerSheet(
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Downloadivo-Stream/3.6")
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(20000)
-            .setReadTimeoutMs(35000)
+            .setConnectTimeoutMs(25000)
+            .setReadTimeoutMs(40000)
 
         val defaultDataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
 
@@ -75,10 +75,10 @@ fun BuiltInPlayerSheet(
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                2500,  // minBufferMs (2.5s)
+                1500,  // minBufferMs (1.5s)
                 30000, // maxBufferMs (30s)
-                1000,  // bufferForPlaybackMs (1s)
-                2000   // bufferForPlaybackAfterRebufferMs (2s)
+                500,   // bufferForPlaybackMs (0.5s)
+                1000   // bufferForPlaybackAfterRebufferMs (1s)
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()

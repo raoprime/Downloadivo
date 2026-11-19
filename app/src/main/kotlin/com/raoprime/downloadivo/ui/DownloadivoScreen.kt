@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,6 +54,7 @@ import com.raoprime.downloadivo.network.DownloadEngine
 import com.raoprime.downloadivo.service.DownloadService
 import com.raoprime.downloadivo.ui.player.BuiltInPlayerSheet
 import com.raoprime.downloadivo.ui.theme.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class AppTab(val label: String) {
@@ -95,6 +97,15 @@ fun DownloadivoScreen(
     val queuedTasks by DownloadService.queuedTasks.collectAsState()
     val historyList by DownloadRepository.history.collectAsState()
 
+    var showCompletionPill by remember { mutableStateOf(false) }
+    LaunchedEffect(currentTask.status) {
+        if (currentTask.status == DownloadStatus.SUCCESS) {
+            showCompletionPill = true
+            delay(5000)
+            showCompletionPill = false
+        }
+    }
+
     // Auto-fill when link is shared via Intent
     LaunchedEffect(sharedUrl) {
         if (!sharedUrl.isNullOrBlank()) {
@@ -136,11 +147,9 @@ fun DownloadivoScreen(
             startTime = startTime,
             endTime = endTime
         )
-        // Transition gracefully to Queue tab to let user see progress
-        currentTab = AppTab.QUEUE
         coroutineScope.launch {
             snackbarHostState.showSnackbar(
-                message = "Download queued for $title",
+                message = "Downloading: $title",
                 duration = SnackbarDuration.Short
             )
         }
@@ -343,137 +352,152 @@ fun DownloadivoScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            when (currentTab) {
-                AppTab.HOME -> HomeDownloaderTab(
-                    inputUrl = inputUrl,
-                    onUrlChange = { inputUrl = it; errorMessage = null },
-                    clipboardUrl = clipboardUrl,
-                    onClearClipboard = onClearClipboard,
-                    resolvedInfo = resolvedInfo,
-                    selectedFormat = selectedFormat,
-                    onFormatSelect = { selectedFormat = it },
-                    isResolving = isResolving,
-                    errorMessage = errorMessage,
-                    onStreamPlay = { streamUrl, originalUrl, title, isAudio, qualities, initialQuality, duration ->
-                        activePlaybackUri = streamUrl
-                        activePlaybackOriginalUrl = originalUrl
-                        activePlaybackTitle = title
-                        activePlaybackIsAudio = isAudio
-                        activePlaybackQualities = qualities
-                        activePlaybackCurrentQuality = initialQuality
-                        activePlaybackDuration = duration
-                    },
-                    onInspect = { targetUrl ->
-                        val urlToInspect = (targetUrl ?: inputUrl).trim()
-                        if (urlToInspect.isNotBlank()) {
-                            isCustomizeExpanded = true
-                            isResolving = true
+            AnimatedContent(
+                targetState = currentTab,
+                transitionSpec = {
+                    if (targetState.ordinal > initialState.ordinal) {
+                        (slideInHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(animationSpec = tween(220)))
+                            .togetherWith(slideOutHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { -it } + fadeOut(animationSpec = tween(220)))
+                    } else {
+                        (slideInHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { -it } + fadeIn(animationSpec = tween(220)))
+                            .togetherWith(slideOutHorizontally(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { it } + fadeOut(animationSpec = tween(220)))
+                    }
+                },
+                label = "tab_navigation_animated"
+            ) { targetTab ->
+                when (targetTab) {
+                    AppTab.HOME -> HomeDownloaderTab(
+                        inputUrl = inputUrl,
+                        onUrlChange = { inputUrl = it; errorMessage = null },
+                        clipboardUrl = clipboardUrl,
+                        onClearClipboard = onClearClipboard,
+                        resolvedInfo = resolvedInfo,
+                        selectedFormat = selectedFormat,
+                        onFormatSelect = { selectedFormat = it },
+                        isResolving = isResolving,
+                        errorMessage = errorMessage,
+                        onStreamPlay = { streamUrl, originalUrl, title, isAudio, qualities, initialQuality, duration ->
+                            activePlaybackUri = streamUrl
+                            activePlaybackOriginalUrl = originalUrl
+                            activePlaybackTitle = title
+                            activePlaybackIsAudio = isAudio
+                            activePlaybackQualities = qualities
+                            activePlaybackCurrentQuality = initialQuality
+                            activePlaybackDuration = duration
+                        },
+                        onInspect = { targetUrl ->
+                            val urlToInspect = (targetUrl ?: inputUrl).trim()
+                            if (urlToInspect.isNotBlank()) {
+                                isCustomizeExpanded = true
+                                isResolving = true
+                                errorMessage = null
+                                coroutineScope.launch {
+                                    val res = DownloadEngine.fetchMediaInfo(urlToInspect)
+                                    isResolving = false
+                                    res.onSuccess {
+                                        resolvedInfo = it
+                                    }.onFailure {
+                                        errorMessage = it.message ?: "Failed to resolve link"
+                                    }
+                                }
+                            }
+                        },
+                        onInstantDownload = { url, format ->
+                            val defaultTitle = when {
+                                url.contains("youtube") || url.contains("youtu.be") -> "YouTube Video"
+                                url.contains("instagram.com") -> "Instagram Reel"
+                                url.contains("tiktok.com") -> "TikTok Video"
+                                url.contains("twitter.com") || url.contains("x.com") -> "X Video"
+                                url.contains("spotify.com") -> "Spotify Audio"
+                                else -> "Media Download"
+                            }
+                            val matchedBytes = resolvedInfo?.availableFormats?.find { it.id == format }?.sizeBytes ?: 0L
+                            triggerDownload(
+                                url = url,
+                                title = resolvedInfo?.title ?: defaultTitle,
+                                format = format,
+                                thumbnail = resolvedInfo?.thumbnail ?: "",
+                                duration = resolvedInfo?.duration ?: "",
+                                expectedBytes = matchedBytes
+                            )
+                        },
+                        onDownloadCustom = { info, format, startTime, endTime ->
+                            val matchedBytes = info.availableFormats.find { it.id == format }?.sizeBytes ?: 0L
+                            triggerDownload(
+                                url = info.url,
+                                title = info.title,
+                                format = format,
+                                thumbnail = info.thumbnail,
+                                duration = info.duration,
+                                expectedBytes = matchedBytes,
+                                startTime = startTime,
+                                endTime = endTime
+                            )
+                        },
+                        onClear = {
+                            inputUrl = ""
+                            resolvedInfo = null
                             errorMessage = null
-                            coroutineScope.launch {
-                                val res = DownloadEngine.fetchMediaInfo(urlToInspect)
-                                isResolving = false
-                                res.onSuccess {
-                                    resolvedInfo = it
-                                }.onFailure {
-                                    errorMessage = it.message ?: "Failed to resolve link"
+                            isCustomizeExpanded = false
+                        }
+                    )
+
+                    AppTab.QUEUE -> QueueTab(
+                        currentTask = currentTask,
+                        queuedTasks = queuedTasks,
+                        onCancelCurrent = {
+                            val cancelIntent = Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_CANCEL_DOWNLOAD
+                            }
+                            context.startService(cancelIntent)
+                        },
+                        onRemoveQueued = { taskId ->
+                            DownloadService.removeQueuedTask(context, taskId)
+                        },
+                        onNavigateHome = { currentTab = AppTab.HOME }
+                    )
+
+                    AppTab.LIBRARY -> LibraryTab(
+                        history = historyList,
+                        onPlay = { task ->
+                            HapticUtil.mediumClick(context)
+                            task.filePath?.let { uriStr ->
+                                activePlaybackUri = uriStr
+                                activePlaybackTitle = task.title
+                                activePlaybackIsAudio = task.isAudio
+                                activePlaybackDuration = task.duration
+                                activePlaybackQualities = emptyList()
+                                activePlaybackCurrentQuality = ""
+                            }
+                        },
+                        onShare = { task ->
+                            HapticUtil.lightClick(context)
+                            task.filePath?.let { uriStr ->
+                                try {
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = if (task.isAudio) "audio/*" else "video/*"
+                                        putExtra(Intent.EXTRA_STREAM, Uri.parse(uriStr))
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share Media"))
+                                } catch (_: Exception) {
+                                    Toast.makeText(context, "Could not share file", Toast.LENGTH_SHORT).show()
                                 }
                             }
+                        },
+                        onDelete = { task ->
+                            HapticUtil.lightClick(context)
+                            DownloadRepository.removeTask(task.id)
                         }
-                    },
-                    onInstantDownload = { url, format ->
-                        val defaultTitle = when {
-                            url.contains("youtube") || url.contains("youtu.be") -> "YouTube Video"
-                            url.contains("instagram.com") -> "Instagram Reel"
-                            url.contains("tiktok.com") -> "TikTok Video"
-                            url.contains("twitter.com") || url.contains("x.com") -> "X Video"
-                            url.contains("spotify.com") -> "Spotify Audio"
-                            else -> "Media Download"
-                        }
-                        val matchedBytes = resolvedInfo?.availableFormats?.find { it.id == format }?.sizeBytes ?: 0L
-                        triggerDownload(
-                            url = url,
-                            title = resolvedInfo?.title ?: defaultTitle,
-                            format = format,
-                            thumbnail = resolvedInfo?.thumbnail ?: "",
-                            duration = resolvedInfo?.duration ?: "",
-                            expectedBytes = matchedBytes
-                        )
-                    },
-                    onDownloadCustom = { info, format, startTime, endTime ->
-                        val matchedBytes = info.availableFormats.find { it.id == format }?.sizeBytes ?: 0L
-                        triggerDownload(
-                            url = info.url,
-                            title = info.title,
-                            format = format,
-                            thumbnail = info.thumbnail,
-                            duration = info.duration,
-                            expectedBytes = matchedBytes,
-                            startTime = startTime,
-                            endTime = endTime
-                        )
-                    },
-                    onClear = {
-                        inputUrl = ""
-                        resolvedInfo = null
-                        errorMessage = null
-                        isCustomizeExpanded = false
-                    }
-                )
+                    )
 
-                AppTab.QUEUE -> QueueTab(
-                    currentTask = currentTask,
-                    queuedTasks = queuedTasks,
-                    onCancelCurrent = {
-                        val cancelIntent = Intent(context, DownloadService::class.java).apply {
-                            action = DownloadService.ACTION_CANCEL_DOWNLOAD
-                        }
-                        context.startService(cancelIntent)
-                    },
-                    onRemoveQueued = { taskId ->
-                        DownloadService.removeQueuedTask(context, taskId)
-                    },
-                    onNavigateHome = { currentTab = AppTab.HOME }
-                )
-
-                AppTab.LIBRARY -> LibraryTab(
-                    history = historyList,
-                    onPlay = { task ->
-                        HapticUtil.mediumClick(context)
-                        task.filePath?.let { uriStr ->
-                            activePlaybackUri = uriStr
-                            activePlaybackTitle = task.title
-                            activePlaybackIsAudio = task.isAudio
-                            activePlaybackDuration = task.duration
-                            activePlaybackQualities = emptyList()
-                            activePlaybackCurrentQuality = ""
-                        }
-                    },
-                    onShare = { task ->
-                        HapticUtil.lightClick(context)
-                        task.filePath?.let { uriStr ->
-                            try {
-                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = if (task.isAudio) "audio/*" else "video/*"
-                                    putExtra(Intent.EXTRA_STREAM, Uri.parse(uriStr))
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share Media"))
-                            } catch (_: Exception) {
-                                Toast.makeText(context, "Could not share file", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    },
-                    onDelete = { task ->
-                        HapticUtil.lightClick(context)
-                        DownloadRepository.removeTask(task.id)
-                    }
-                )
-
-                AppTab.SETTINGS -> SettingsTab()
+                    AppTab.SETTINGS -> SettingsTab()
+                }
             }
 
             // ═══════════════════════════════════════════════════════════════
             // FLOATING MINI-PLAYER & ACTIVE PROGRESS BAR
+            // (Only visible on Home/Library/Settings - never duplicates on Queue tab)
             // ═══════════════════════════════════════════════════════════════
             Column(
                 modifier = Modifier
@@ -481,145 +505,170 @@ fun DownloadivoScreen(
                     .fillMaxWidth()
                     .padding(bottom = 8.dp)
             ) {
-                // Active Download Pill
+                // Active Download Floating Bar
                 AnimatedVisibility(
-                    visible = currentTask.status == DownloadStatus.DOWNLOADING,
-                    enter = slideInVertically { it } + fadeIn(),
-                    exit = slideOutVertically { it } + fadeOut()
+                    visible = currentTask.status == DownloadStatus.DOWNLOADING && currentTab != AppTab.QUEUE,
+                    enter = slideInVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(),
+                    exit = slideOutVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { it } + fadeOut()
                 ) {
+                    val animatedProgress by animateFloatAsState(
+                        targetValue = if (currentTask.progress >= 0) currentTask.progress / 100f else 0f,
+                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+                        label = "pill_progress"
+                    )
+
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = SurfaceElevated,
                         border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                        shadowElevation = 12.dp,
+                        shadowElevation = 14.dp,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .clickable { currentTab = AppTab.QUEUE }
+                            .padding(horizontal = 14.dp, vertical = 4.dp)
+                            .clickable {
+                                HapticUtil.lightClick(context)
+                                currentTab = AppTab.QUEUE
+                            }
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(SurfaceHighlight),
-                                contentAlignment = Alignment.Center
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (currentTask.progress >= 0) {
-                                    CircularProgressIndicator(
-                                        progress = { currentTask.progress / 100f },
-                                        modifier = Modifier.size(26.dp),
-                                        color = TextCrisp,
-                                        strokeWidth = 2.5.dp,
-                                        trackColor = BorderHairline
-                                    )
-                                } else {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(26.dp),
-                                        color = TextCrisp,
-                                        strokeWidth = 2.5.dp
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(SurfaceHighlight),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        if (currentTask.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
+                                        contentDescription = null,
+                                        tint = TextCrisp,
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
-                                Icon(
-                                    if (currentTask.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
-                                    contentDescription = null,
-                                    tint = TextCrisp,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = currentTask.title.ifBlank { "Downloading media..." },
-                                    style = Typography.titleSmall,
-                                    color = TextCrisp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
-                                        style = Typography.labelMedium,
-                                        color = TextCrisp
+                                        text = currentTask.title.ifBlank { "Downloading media..." },
+                                        style = Typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextCrisp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                    if (currentTask.speed.isNotBlank()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
-                                            text = " • ${currentTask.speed}",
-                                            style = Typography.bodySmall,
+                                            text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
+                                            style = Typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
                                             color = TextCrisp
                                         )
-                                    }
-                                    if (currentTask.bytesDownloaded > 0) {
-                                        Text(
-                                            text = " (${formatByteSize(currentTask.bytesDownloaded)}${if (currentTask.totalBytes > 0) " / " + formatByteSize(currentTask.totalBytes) else ""})",
-                                            style = Typography.bodySmall,
-                                            color = TextSecondary
-                                        )
-                                    }
-                                    if (currentTask.eta.isNotBlank()) {
-                                        Text(
-                                            text = " • ${currentTask.eta}",
-                                            style = Typography.bodySmall,
-                                            color = TextTertiary
-                                        )
-                                    }
-                                    if (queuedTasks.isNotEmpty()) {
-                                        Text(
-                                            text = " (+${queuedTasks.size} queued)",
-                                            style = Typography.labelSmall,
-                                            color = TextSecondary
-                                        )
+                                        if (currentTask.speed.isNotBlank()) {
+                                            Text(
+                                                text = " • ${currentTask.speed}",
+                                                style = Typography.bodySmall,
+                                                color = TextCrisp
+                                            )
+                                        }
+                                        if (currentTask.bytesDownloaded > 0) {
+                                            Text(
+                                                text = " (${formatByteSize(currentTask.bytesDownloaded)}${if (currentTask.totalBytes > 0) " / " + formatByteSize(currentTask.totalBytes) else ""})",
+                                                style = Typography.bodySmall,
+                                                color = TextSecondary
+                                            )
+                                        }
+                                        if (currentTask.eta.isNotBlank()) {
+                                            Text(
+                                                text = " • ${currentTask.eta}",
+                                                style = Typography.bodySmall,
+                                                color = TextTertiary
+                                            )
+                                        }
+                                        if (queuedTasks.isNotEmpty()) {
+                                            Text(
+                                                text = " (+${queuedTasks.size} queued)",
+                                                style = Typography.labelSmall,
+                                                color = TextSecondary
+                                            )
+                                        }
                                     }
                                 }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(
+                                    onClick = {
+                                        HapticUtil.lightClick(context)
+                                        val cancelIntent = Intent(context, DownloadService::class.java).apply {
+                                            action = DownloadService.ACTION_CANCEL_DOWNLOAD
+                                        }
+                                        context.startService(cancelIntent)
+                                    },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Cancel", tint = TextTertiary)
+                                }
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            IconButton(
-                                onClick = {
-                                    val cancelIntent = Intent(context, DownloadService::class.java).apply {
-                                        action = DownloadService.ACTION_CANCEL_DOWNLOAD
-                                    }
-                                    context.startService(cancelIntent)
-                                },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(Icons.Default.Close, contentDescription = "Cancel", tint = TextTertiary)
+
+                            // Sleek Horizontal Linear Progress Bar
+                            Spacer(modifier = Modifier.height(8.dp))
+                            if (currentTask.progress >= 0) {
+                                LinearProgressIndicator(
+                                    progress = { animatedProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.5.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = TextCrisp,
+                                    trackColor = BorderHairline
+                                )
+                            } else {
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.5.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = TextCrisp,
+                                    trackColor = BorderHairline
+                                )
                             }
                         }
                     }
                 }
 
-                // Completion Pill
+                // Completion Pill (Auto-dismisses in 5s or tap X to close, only on non-queue tabs)
                 AnimatedVisibility(
-                    visible = currentTask.status == DownloadStatus.SUCCESS,
-                    enter = slideInVertically { it } + fadeIn(),
-                    exit = slideOutVertically { it } + fadeOut()
+                    visible = currentTask.status == DownloadStatus.SUCCESS && currentTab != AppTab.QUEUE && showCompletionPill,
+                    enter = slideInVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(),
+                    exit = slideOutVertically(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) { it } + fadeOut()
                 ) {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = SurfaceElevated,
                         border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                        shadowElevation = 14.dp,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .padding(horizontal = 14.dp, vertical = 4.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 Icons.Default.CheckCircle,
                                 contentDescription = null,
                                 tint = TextCrisp,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = "Download Complete",
                                     style = Typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
                                     color = TextCrisp
                                 )
                                 Text(
@@ -630,9 +679,11 @@ fun DownloadivoScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
+                            Spacer(modifier = Modifier.width(8.dp))
                             currentTask.filePath?.let { filePath ->
                                 Button(
                                     onClick = {
+                                        HapticUtil.mediumClick(context)
                                         activePlaybackUri = filePath
                                         activePlaybackTitle = currentTask.title
                                         activePlaybackIsAudio = currentTask.isAudio
@@ -651,6 +702,16 @@ fun DownloadivoScreen(
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Play", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
                                 }
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+                            IconButton(
+                                onClick = {
+                                    HapticUtil.lightClick(context)
+                                    showCompletionPill = false
+                                },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = TextTertiary, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
