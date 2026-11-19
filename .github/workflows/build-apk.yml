@@ -2,11 +2,11 @@ name: 🚀 Build & Release Downloadivo Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, android ]
     tags:
       - 'v*'
   pull_request:
-    branches: [ main ]
+    branches: [ main, android ]
   workflow_dispatch:
 
 permissions:
