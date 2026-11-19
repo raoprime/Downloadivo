@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -125,26 +126,22 @@ fun DownloadivoScreen(
             startTime = startTime,
             endTime = endTime
         )
+        // Transition gracefully to Queue tab to let user see progress
+        currentTab = AppTab.QUEUE
         coroutineScope.launch {
-            val result = snackbarHostState.showSnackbar(
-                message = "Download started in background",
-                actionLabel = "View",
+            snackbarHostState.showSnackbar(
+                message = "Download queued for $title",
                 duration = SnackbarDuration.Short
             )
-            if (result == SnackbarResult.ActionPerformed) {
-                currentTab = AppTab.QUEUE
-            }
         }
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = CanvasDark,
+        contentColor = TextCrisp,
         snackbarHost = {
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = 8.dp)
-            ) { data ->
+            SnackbarHost(snackbarHostState) { data ->
                 Snackbar(
                     snackbarData = data,
                     containerColor = SurfaceElevated,
@@ -157,25 +154,56 @@ fun DownloadivoScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Image(
-                        painter = painterResource(id = R.drawable.app_logo_white),
-                        contentDescription = "Downloadivo",
-                        modifier = Modifier.height(24.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                },
-                actions = {
-                    IconButton(onClick = { currentTab = AppTab.SETTINGS }) {
-                        Icon(Icons.Default.Tune, contentDescription = "Settings", tint = TextSecondary)
+                    when (currentTab) {
+                        AppTab.HOME -> {
+                            Image(
+                                painter = painterResource(id = R.drawable.app_logo_white),
+                                contentDescription = "Downloadivo",
+                                modifier = Modifier.height(24.dp),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+                        AppTab.QUEUE -> {
+                            Text(
+                                text = "Queue",
+                                style = Typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp
+                            )
+                        }
+                        AppTab.LIBRARY -> {
+                            Text(
+                                text = "Library",
+                                style = Typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp
+                            )
+                        }
+                        AppTab.SETTINGS -> {
+                            Text(
+                                text = "Settings",
+                                style = Typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp
+                            )
+                        }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
+                actions = {
+                    if (currentTab == AppTab.LIBRARY && historyList.isNotEmpty()) {
+                        TextButton(
+                            onClick = { DownloadRepository.clearHistory() }
+                        ) {
+                            Text("Clear", color = TextSecondary, style = Typography.labelMedium)
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = CanvasDark
                 )
             )
         },
         bottomBar = {
-            // Stable 4-Tab Bottom Navigation Bar (Fixed Height, Zero Jitter)
             NavigationBar(
                 containerColor = SurfaceDark,
                 contentColor = TextCrisp,
@@ -263,19 +291,6 @@ fun DownloadivoScreen(
                     onFormatSelect = { selectedFormat = it },
                     isResolving = isResolving,
                     errorMessage = errorMessage,
-                    isCustomizeExpanded = isCustomizeExpanded,
-                    onToggleCustomize = {
-                        isCustomizeExpanded = !isCustomizeExpanded
-                        if (isCustomizeExpanded && resolvedInfo == null && inputUrl.isNotBlank()) {
-                            isResolving = true
-                            errorMessage = null
-                            coroutineScope.launch {
-                                val res = DownloadEngine.fetchMediaInfo(inputUrl)
-                                isResolving = false
-                                res.onSuccess { resolvedInfo = it }.onFailure { errorMessage = it.message }
-                            }
-                        }
-                    },
                     onInspect = {
                         if (inputUrl.isNotBlank()) {
                             isCustomizeExpanded = true
@@ -366,9 +381,6 @@ fun DownloadivoScreen(
                     },
                     onDelete = { task ->
                         DownloadRepository.removeTask(task.id)
-                    },
-                    onClearAll = {
-                        DownloadRepository.clearHistory()
                     }
                 )
 
@@ -376,7 +388,7 @@ fun DownloadivoScreen(
             }
 
             // ═══════════════════════════════════════════════════════════════
-            // FLOATING DYNAMIC MINI-BAR & NOTIFICATION (ABOVE BOTTOM NAV)
+            // FLOATING MINI-PLAYER & ACTIVE PROGRESS BAR
             // ═══════════════════════════════════════════════════════════════
             Column(
                 modifier = Modifier
@@ -558,7 +570,7 @@ fun DownloadivoScreen(
             }
         }
 
-        // Built-In Player Sheet
+        // Built-In Player Modal Sheet
         activePlaybackUri?.let { uri ->
             Box(
                 modifier = Modifier
@@ -578,7 +590,7 @@ fun DownloadivoScreen(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 1: REDESIGNED FLUID HOME DOWNLOADER
+// TAB 1: STUDIO HOME DOWNLOADER TAB (NO CLUTTER, PURE LUXURY)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun HomeDownloaderTab(
@@ -591,8 +603,6 @@ private fun HomeDownloaderTab(
     onFormatSelect: (String) -> Unit,
     isResolving: Boolean,
     errorMessage: String?,
-    isCustomizeExpanded: Boolean,
-    onToggleCustomize: () -> Unit,
     onInspect: () -> Unit,
     onInstantDownload: (url: String, format: String) -> Unit,
     onDownloadCustom: (info: MediaInfo, format: String, startTime: String?, endTime: String?) -> Unit,
@@ -627,45 +637,56 @@ private fun HomeDownloaderTab(
             .fillMaxSize()
             .verticalScroll(scrollState)
             .imePadding()
-            .padding(horizontal = 18.dp, vertical = 6.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .animateContentSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // ═══════════════════════════════════════════════════════════════
-        // STUDIO BRANDING SUBTITLE (SLEEK & REFINED)
+        // SUPPORTED PLATFORMS MARQUEE STRIP (WHEN NO LINK ACTIVE)
         // ═══════════════════════════════════════════════════════════════
-        AnimatedVisibility(
-            visible = resolvedInfo == null && !isResolving,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Column(
+        if (resolvedInfo == null && !isResolving) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "Studio Downloader",
-                    style = Typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = TextCrisp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Extract 4K UHD, 1080p Full HD video or high-bitrate audio",
-                    style = Typography.bodySmall,
-                    color = TextTertiary,
-                    textAlign = TextAlign.Center
-                )
+                listOf(
+                    "YouTube", "Instagram", "TikTok", "X / Twitter", "Spotify", "Facebook", "Reddit"
+                ).forEach { platform ->
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = SurfaceDark,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(TextSecondary)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = platform,
+                                style = Typography.labelSmall,
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
             }
         }
 
         // ═══════════════════════════════════════════════════════════════
         // SMART CLIPBOARD DETECTION PILL
         // ═══════════════════════════════════════════════════════════════
-        if (!clipboardUrl.isNullOrBlank() && clipboardUrl != inputUrl) {
+        if (!clipboardUrl.isNullOrBlank() && clipboardUrl != inputUrl && resolvedInfo == null) {
             Surface(
                 shape = RoundedCornerShape(14.dp),
                 color = SurfaceElevated,
@@ -706,7 +727,7 @@ private fun HomeDownloaderTab(
                             onClearClipboard()
                             onInspect()
                         },
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TextCrisp,
                             contentColor = CanvasDark
@@ -726,269 +747,228 @@ private fun HomeDownloaderTab(
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // CENTRAL UNIFIED INPUT CARD (EXACT WEBSITE STYLING)
+        // SEAMLESS UNIFIED INPUT CAPSULE (56dp APPLE / SEAL STYLE)
         // ═══════════════════════════════════════════════════════════════
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(16.dp),
             color = SurfaceDark,
             border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(
-                modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
+                if (detectedPlatform != null) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = SurfaceHighlight,
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text(
+                            text = detectedPlatform,
+                            style = Typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = TextCrisp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                } else {
+                    Icon(
+                        Icons.Default.Link,
+                        contentDescription = null,
+                        tint = TextTertiary,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .padding(end = 4.dp)
+                    )
+                }
+
+                BasicTextField(
                     value = inputUrl,
                     onValueChange = onUrlChange,
-                    placeholder = {
-                        Text("Paste link to download...", color = TextQuaternary, fontSize = 14.sp)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = false,
-                    maxLines = 3,
-                    shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.weight(1f),
+                    textStyle = Typography.bodyLarge.copy(color = TextCrisp),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(
-                        onDone = {
+                        onSearch = {
                             keyboardController?.hide()
                             focusManager.clearFocus()
-                            if (inputUrl.startsWith("http")) {
-                                onInspect()
-                            }
+                            if (inputUrl.startsWith("http")) onInspect()
                         }
                     ),
-                    leadingIcon = {
-                        if (detectedPlatform != null) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = SurfaceElevated,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                                modifier = Modifier.padding(start = 8.dp)
-                            ) {
-                                Text(
-                                    text = detectedPlatform,
-                                    style = Typography.labelSmall,
-                                    color = TextCrisp,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        } else {
-                            Icon(Icons.Default.Link, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(18.dp))
+                    decorationBox = { innerTextField ->
+                        if (inputUrl.isEmpty()) {
+                            Text(
+                                "Paste video or audio link...",
+                                style = Typography.bodyLarge,
+                                color = TextQuaternary
+                            )
                         }
-                    },
-                    trailingIcon = {
-                        if (inputUrl.isNotBlank()) {
-                            IconButton(onClick = {
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                onClear()
-                            }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextSecondary)
-                            }
-                        } else {
-                            IconButton(onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                val clean = DownloadEngine.sanitizeUrl(clip)
-                                if (clean.startsWith("http")) {
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                    onUrlChange(clean)
-                                    onInspect()
-                                } else {
-                                    Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
-                                }
-                            }) {
-                                Icon(Icons.Default.ContentPaste, contentDescription = "Paste", tint = TextCrisp)
-                            }
-                        }
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = TextCrisp,
-                        unfocusedBorderColor = BorderHairline,
-                        focusedTextColor = TextCrisp,
-                        unfocusedTextColor = TextCrisp,
-                        cursorColor = TextCrisp
-                    )
+                        innerTextField()
+                    }
                 )
 
-                // Master Dual Actions: Batch Mode vs Single Mode
-                if (resolvedInfo == null && !isResolving) {
-                    val detectedUrls = remember(inputUrl) { DownloadEngine.extractAllUrls(inputUrl) }
-                    if (detectedUrls.size > 1) {
-                        Surface(
-                            shape = RoundedCornerShape(14.dp),
-                            color = SurfaceElevated,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Icons.Default.Layers,
-                                            contentDescription = null,
-                                            tint = TextCrisp,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Batch Queue Mode",
-                                            style = Typography.titleSmall,
-                                            color = TextCrisp
-                                        )
-                                    }
-                                    Surface(
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = SurfaceHighlight
-                                    ) {
-                                        Text(
-                                            text = "${detectedUrls.size} LINKS",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextCrisp,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-
-                                Text(
-                                    text = "Queue all ${detectedUrls.size} items simultaneously into turbo background engine.",
-                                    style = Typography.bodySmall,
-                                    color = TextSecondary
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = {
-                                            keyboardController?.hide()
-                                            focusManager.clearFocus()
-                                            detectedUrls.forEach { u ->
-                                                onInstantDownload(u, "best")
-                                            }
-                                            onClear()
-                                        },
-                                        modifier = Modifier.weight(1f).height(46.dp),
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = TextCrisp,
-                                            contentColor = CanvasDark
-                                        )
-                                    ) {
-                                        Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("All Videos (${detectedUrls.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CanvasDark)
-                                    }
-
-                                    Button(
-                                        onClick = {
-                                            keyboardController?.hide()
-                                            focusManager.clearFocus()
-                                            detectedUrls.forEach { u ->
-                                                onInstantDownload(u, "mp3")
-                                            }
-                                            onClear()
-                                        },
-                                        modifier = Modifier.weight(1f).height(46.dp),
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = SurfaceDark,
-                                            contentColor = TextCrisp
-                                        ),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
-                                    ) {
-                                        Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("All MP3s (${detectedUrls.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextCrisp)
-                                    }
-                                }
+                if (inputUrl.isNotBlank()) {
+                    IconButton(
+                        onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                            onClear()
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextTertiary, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Button(
+                        onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                            if (inputUrl.startsWith("http")) onInspect()
+                        },
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TextCrisp,
+                            contentColor = CanvasDark
+                        ),
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.size(38.dp)
+                    ) {
+                        Icon(Icons.Default.ArrowForward, contentDescription = "Inspect", tint = CanvasDark, modifier = Modifier.size(18.dp))
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                            val clean = DownloadEngine.sanitizeUrl(clip)
+                            if (clean.startsWith("http")) {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                onUrlChange(clean)
+                                onInspect()
+                            } else {
+                                Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
                             }
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SurfaceElevated,
+                            contentColor = TextCrisp
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Icon(Icons.Default.ContentPaste, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Paste", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = TextCrisp)
+                    }
+                }
+            }
+        }
+
+        // Master Batch Queue Mode Card (Triggered when user pastes multiple links)
+        val detectedUrls = remember(inputUrl) { DownloadEngine.extractAllUrls(inputUrl) }
+        if (detectedUrls.size > 1 && resolvedInfo == null && !isResolving) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = SurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Layers,
+                                contentDescription = null,
+                                tint = TextCrisp,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Batch Queue Mode",
+                                style = Typography.titleSmall,
+                                color = TextCrisp
+                            )
                         }
-                    } else {
-                        // High-Impact Primary Action: Inspect Formats & 4K Options
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = SurfaceHighlight
+                        ) {
+                            Text(
+                                text = "${detectedUrls.size} LINKS",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Queue all ${detectedUrls.size} items simultaneously into turbo background engine.",
+                        style = Typography.bodySmall,
+                        color = TextSecondary
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Button(
                             onClick = {
                                 keyboardController?.hide()
                                 focusManager.clearFocus()
-                                if (inputUrl.isNotBlank()) {
-                                    onInspect()
-                                } else {
-                                    Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
+                                detectedUrls.forEach { u ->
+                                    onInstantDownload(u, "best")
                                 }
+                                onClear()
                             },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = TextCrisp,
                                 contentColor = CanvasDark
                             )
                         ) {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Inspect Formats & 4K Options", style = Typography.labelLarge, fontWeight = FontWeight.Bold, color = CanvasDark)
+                            Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("All Videos (${detectedUrls.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CanvasDark)
                         }
 
-                        // Quick 1-Tap Action Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Button(
+                            onClick = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                detectedUrls.forEach { u ->
+                                    onInstantDownload(u, "mp3")
+                                }
+                                onClear()
+                            },
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SurfaceDark,
+                                contentColor = TextCrisp
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
                         ) {
-                            OutlinedButton(
-                                onClick = {
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                    if (inputUrl.isNotBlank()) {
-                                        onInstantDownload(inputUrl, "best")
-                                    } else {
-                                        Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.weight(1f).height(42.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = TextCrisp
-                                )
-                            ) {
-                                Icon(Icons.Default.FlashOn, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Quick Video", style = Typography.labelMedium, color = TextCrisp)
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                    if (inputUrl.isNotBlank()) {
-                                        onInstantDownload(inputUrl, "mp3")
-                                    } else {
-                                        Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.weight(1f).height(42.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = TextCrisp
-                                )
-                            ) {
-                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Quick MP3", style = Typography.labelMedium, color = TextCrisp)
-                            }
+                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("All MP3s (${detectedUrls.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextCrisp)
                         }
                     }
                 }
@@ -996,7 +976,7 @@ private fun HomeDownloaderTab(
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // ERROR BANNER WITH RETRY
+        // ERROR BANNER WITH RETRY ACTION
         // ═══════════════════════════════════════════════════════════════
         AnimatedVisibility(visible = errorMessage != null) {
             Surface(
@@ -1028,7 +1008,7 @@ private fun HomeDownloaderTab(
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // RESOLVING STATE (SLEEK PULSE CARD)
+        // RESOLVING STATE (SLEEK MINIMALIST LOADER)
         // ═══════════════════════════════════════════════════════════════
         AnimatedVisibility(visible = isResolving) {
             Surface(
@@ -1051,360 +1031,409 @@ private fun HomeDownloaderTab(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("Analyzing media streams...", style = Typography.bodyMedium, color = TextCrisp, fontWeight = FontWeight.Medium)
-                    Text("Extracting 1080p, 4K & 320k audio tracks", style = Typography.bodySmall, color = TextTertiary)
+                    Text("Extracting 4K, 1080p formats & exact sizes", style = Typography.bodySmall, color = TextTertiary)
                 }
             }
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // CINEMATIC PREVIEW & FORMAT SELECTOR (ALWAYS VISIBLE WHEN LOADED)
+        // CROWN JEWEL: 16:9 CINEMATIC MEDIA STUDIO CARD
         // ═══════════════════════════════════════════════════════════════
         resolvedInfo?.let { info ->
             Surface(
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = SurfaceDark,
                 border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    // Compact Horizontal Preview (Seal-Style Precision Layout)
-                    Row(
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // 16:9 Widescreen Cinematic Thumbnail Banner
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                             .background(CanvasDark)
-                            .border(1.dp, BorderHairline, RoundedCornerShape(14.dp))
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (info.thumbnail.isNotBlank()) {
+                            AsyncImage(
+                                model = info.thumbnail,
+                                contentDescription = "Video Thumbnail",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
                             Box(
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(SurfaceDark)
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
                             ) {
-                                AsyncImage(
-                                    model = info.thumbnail,
-                                    contentDescription = "Thumbnail",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                                Icon(
+                                    Icons.Default.Videocam,
+                                    contentDescription = null,
+                                    tint = TextTertiary,
+                                    modifier = Modifier.size(48.dp)
                                 )
-                                if (info.duration.isNotBlank()) {
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = Color.Black.copy(alpha = 0.85f),
-                                        modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(3.dp)
-                                    ) {
-                                        Text(
-                                            text = info.duration,
-                                            fontSize = 9.sp,
-                                            color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                        )
-                                    }
-                                }
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
                         }
 
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        // Top-Left Platform Badge
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color.Black.copy(alpha = 0.8f),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderSubtle),
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(12.dp)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = SurfaceHighlight,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline)
-                            ) {
-                                Text(
-                                    text = info.extractor.uppercase(),
-                                    fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextCrisp,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            Text(
+                                text = info.extractor.uppercase(),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+
+                        // Top-Right Dismiss "X" Button
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.8f),
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .size(32.dp)
+                                .clickable { onClear() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Close preview",
+                                    tint = TextCrisp,
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
+                        }
+
+                        // Bottom-Right Duration Badge
+                        if (info.duration.isNotBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color.Black.copy(alpha = 0.85f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(10.dp)
+                            ) {
+                                Text(
+                                    text = info.duration,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Content & Action Hierarchy
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        // Title & Channel Header
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
                                 text = info.title.ifBlank { "Media Stream" },
-                                style = Typography.titleSmall,
+                                style = Typography.titleMedium,
                                 color = TextCrisp,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
                             if (info.author.isNotBlank()) {
-                                Text(
-                                    text = info.author,
-                                    style = Typography.bodySmall,
-                                    color = TextTertiary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = TextTertiary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = info.author,
+                                        style = Typography.bodyMedium,
+                                        color = TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
 
-                        IconButton(
-                            onClick = onClear,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextTertiary)
-                        }
-                    }
+                        HorizontalDivider(color = BorderHairline)
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Mode Segmented Switch: Video vs Audio
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(CanvasDark)
-                            .padding(3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Surface(
-                            onClick = { mediaMode = "video"; onFormatSelect("best") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (mediaMode == "video") SurfaceElevated else Color.Transparent
+                        // Mode Segmented Bar: Video vs Audio
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(CanvasDark)
+                                .border(1.dp, BorderHairline, RoundedCornerShape(12.dp))
+                                .padding(3.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+                            Surface(
+                                onClick = {
+                                    mediaMode = "video"
+                                    onFormatSelect("best")
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(9.dp),
+                                color = if (mediaMode == "video") TextCrisp else Color.Transparent
                             ) {
-                                Icon(
-                                    Icons.Default.Videocam,
-                                    contentDescription = null,
-                                    tint = if (mediaMode == "video") TextCrisp else TextTertiary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Video",
-                                    style = Typography.labelMedium,
-                                    color = if (mediaMode == "video") TextCrisp else TextTertiary,
-                                    fontWeight = if (mediaMode == "video") FontWeight.Bold else FontWeight.Normal
-                                )
+                                Row(
+                                    modifier = Modifier.padding(vertical = 9.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Videocam,
+                                        contentDescription = null,
+                                        tint = if (mediaMode == "video") CanvasDark else TextSecondary,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Video",
+                                        style = Typography.labelMedium,
+                                        color = if (mediaMode == "video") CanvasDark else TextSecondary,
+                                        fontWeight = if (mediaMode == "video") FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
                             }
-                        }
-                        Surface(
-                            onClick = { mediaMode = "audio"; onFormatSelect("mp3") },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (mediaMode == "audio") SurfaceElevated else Color.Transparent
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
+
+                            Surface(
+                                onClick = {
+                                    mediaMode = "audio"
+                                    onFormatSelect("mp3")
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(9.dp),
+                                color = if (mediaMode == "audio") TextCrisp else Color.Transparent
                             ) {
-                                Icon(
-                                    Icons.Default.MusicNote,
-                                    contentDescription = null,
-                                    tint = if (mediaMode == "audio") TextCrisp else TextTertiary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Audio",
-                                    style = Typography.labelMedium,
-                                    color = if (mediaMode == "audio") TextCrisp else TextTertiary,
-                                    fontWeight = if (mediaMode == "audio") FontWeight.Bold else FontWeight.Normal
-                                )
+                                Row(
+                                    modifier = Modifier.padding(vertical = 9.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = if (mediaMode == "audio") CanvasDark else TextSecondary,
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Audio",
+                                        style = Typography.labelMedium,
+                                        color = if (mediaMode == "audio") CanvasDark else TextSecondary,
+                                        fontWeight = if (mediaMode == "audio") FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        // Responsive 2-Column Format Matrix
+                        val formatsToShow = if (mediaMode == "video") {
+                            info.availableFormats.filter { !it.isAudio }
+                        } else {
+                            info.availableFormats.filter { it.isAudio }
+                        }
 
-                    // Quality & Resolution Matrix
-                    Text(
-                        text = if (mediaMode == "video") "Select resolution" else "Select audio format",
-                        style = Typography.labelSmall,
-                        color = TextTertiary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    if (mediaMode == "video") {
-                        val videoFormats = info.availableFormats.filter { !it.isAudio }
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            videoFormats.chunked(3).forEach { rowList ->
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            formatsToShow.chunked(2).forEach { rowFormats ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    rowList.forEach { fmt ->
-                                        val chipText = buildString {
-                                            append(fmt.label.replace(" Video", "").replace(" Quality", ""))
-                                            if (fmt.sizeStr.isNotBlank()) {
-                                                append("\n")
-                                                append(fmt.sizeStr)
+                                    rowFormats.forEach { fmt ->
+                                        val isSelected = selectedFormat == fmt.id
+                                        Surface(
+                                            onClick = { onFormatSelect(fmt.id) },
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(56.dp),
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isSelected) TextCrisp else SurfaceElevated,
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                1.dp,
+                                                if (isSelected) TextCrisp else BorderHairline
+                                            )
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    val cleanLabel = fmt.label
+                                                        .replace(" Video", "")
+                                                        .replace(" Quality", "")
+                                                        .replace(" Audio", "")
+                                                    Text(
+                                                        text = cleanLabel,
+                                                        style = Typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isSelected) CanvasDark else TextCrisp,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        text = if (fmt.sizeStr.isNotBlank()) fmt.sizeStr else fmt.note.ifBlank { fmt.ext.uppercase() },
+                                                        style = Typography.bodySmall,
+                                                        color = if (isSelected) CanvasDark.copy(alpha = 0.8f) else TextSecondary,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                if (isSelected) {
+                                                    Icon(
+                                                        Icons.Default.Check,
+                                                        contentDescription = "Selected",
+                                                        tint = CanvasDark,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
                                             }
                                         }
-                                        SyncedChip(
-                                            key = fmt.id,
-                                            label = chipText,
-                                            currentSelected = selectedFormat,
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            onFormatSelect(it)
-                                        }
                                     }
-                                    for (i in 0 until (3 - rowList.size)) {
+                                    // Filler if odd number
+                                    if (rowFormats.size == 1) {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
                                 }
                             }
                         }
-                    } else {
-                        val audioFormats = info.availableFormats.filter { it.isAudio }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+
+                        // Precision Clip Trimmer
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = CanvasDark,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            audioFormats.forEach { fmt ->
-                                val chipText = buildString {
-                                    append(fmt.label)
-                                    if (fmt.sizeStr.isNotBlank()) {
-                                        append("\n")
-                                        append(fmt.sizeStr)
-                                    }
-                                }
-                                SyncedChip(
-                                    key = fmt.id,
-                                    label = chipText,
-                                    currentSelected = selectedFormat,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    onFormatSelect(it)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Collapsible Precision Clip Trimmer
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = CanvasDark,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCut,
-                                        contentDescription = null,
-                                        tint = TextCrisp,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Precision Clip Trimmer",
-                                        style = Typography.titleSmall,
-                                        color = TextCrisp
-                                    )
-                                }
-                                Switch(
-                                    checked = isTrimming,
-                                    onCheckedChange = { isTrimming = it },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = CanvasDark,
-                                        checkedTrackColor = TextCrisp
-                                    )
-                                )
-                            }
-                            if (isTrimming) {
-                                Spacer(modifier = Modifier.height(10.dp))
+                            Column(modifier = Modifier.padding(12.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    OutlinedTextField(
-                                        value = trimStart,
-                                        onValueChange = { trimStart = it },
-                                        placeholder = { Text("Start: 00:00", fontSize = 11.sp, color = TextQuaternary) },
-                                        modifier = Modifier.weight(1f),
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = TextCrisp,
-                                            unfocusedBorderColor = BorderHairline,
-                                            focusedTextColor = TextCrisp,
-                                            unfocusedTextColor = TextCrisp
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCut,
+                                            contentDescription = null,
+                                            tint = TextCrisp,
+                                            modifier = Modifier.size(16.dp)
                                         )
-                                    )
-                                    OutlinedTextField(
-                                        value = trimEnd,
-                                        onValueChange = { trimEnd = it },
-                                        placeholder = { Text("End: 01:00", fontSize = 11.sp, color = TextQuaternary) },
-                                        modifier = Modifier.weight(1f),
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = TextCrisp,
-                                            unfocusedBorderColor = BorderHairline,
-                                            focusedTextColor = TextCrisp,
-                                            unfocusedTextColor = TextCrisp
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Clip Trimmer",
+                                            style = Typography.titleSmall,
+                                            color = TextCrisp
+                                        )
+                                    }
+                                    Switch(
+                                        checked = isTrimming,
+                                        onCheckedChange = { isTrimming = it },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = CanvasDark,
+                                            checkedTrackColor = TextCrisp
                                         )
                                     )
                                 }
+                                if (isTrimming) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        OutlinedTextField(
+                                            value = trimStart,
+                                            onValueChange = { trimStart = it },
+                                            placeholder = { Text("Start: 00:00", fontSize = 11.sp, color = TextQuaternary) },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true,
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = TextCrisp,
+                                                unfocusedBorderColor = BorderHairline,
+                                                focusedTextColor = TextCrisp,
+                                                unfocusedTextColor = TextCrisp
+                                            )
+                                        )
+                                        OutlinedTextField(
+                                            value = trimEnd,
+                                            onValueChange = { trimEnd = it },
+                                            placeholder = { Text("End: 01:00", fontSize = 11.sp, color = TextQuaternary) },
+                                            modifier = Modifier.weight(1f),
+                                            singleLine = true,
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = TextCrisp,
+                                                unfocusedBorderColor = BorderHairline,
+                                                focusedTextColor = TextCrisp,
+                                                unfocusedTextColor = TextCrisp
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Master Download Action Button
-                    Button(
-                        onClick = {
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
-                            val start = if (isTrimming) trimStart.ifBlank { null } else null
-                            val end = if (isTrimming) trimEnd.ifBlank { null } else null
-                            onDownloadCustom(info, selectedFormat, start, end)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TextCrisp,
-                            contentColor = CanvasDark
-                        )
-                    ) {
-                        Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(19.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
+                        // High-Contrast Master Download CTA Button
                         val selectedFmt = info.availableFormats.find { it.id == selectedFormat }
-                        val selectedLabel = selectedFmt?.label ?: selectedFormat.uppercase()
-                        val sizePart = if (!selectedFmt?.sizeStr.isNullOrBlank()) " • ${selectedFmt!!.sizeStr}" else ""
-                        Text(
-                            text = if (isTrimming) "Download Trimmed Clip" else "Download $selectedLabel$sizePart",
-                            style = Typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = CanvasDark
-                        )
+                        val selectedLabel = selectedFmt?.label?.replace(" Video", "")?.replace(" Audio", "") ?: selectedFormat.uppercase()
+                        val sizeText = if (!selectedFmt?.sizeStr.isNullOrBlank()) " • ${selectedFmt!!.sizeStr}" else ""
+
+                        Button(
+                            onClick = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                val start = if (isTrimming) trimStart.ifBlank { null } else null
+                                val end = if (isTrimming) trimEnd.ifBlank { null } else null
+                                onDownloadCustom(info, selectedFormat, start, end)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(54.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TextCrisp,
+                                contentColor = CanvasDark
+                            )
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isTrimming) "Download Trimmed Clip" else "Download $selectedLabel$sizeText",
+                                style = Typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = CanvasDark
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Padding at bottom to ensure no overlap with floating mini-player
         Spacer(modifier = Modifier.height(72.dp))
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 2: ACTIVE QUEUE
+// TAB 2: ACTIVE QUEUE TAB (ZERO DUPLICATE HEADERS)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun QueueTab(
@@ -1420,36 +1449,10 @@ private fun QueueTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(18.dp),
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Downloads",
-                style = Typography.titleLarge,
-                color = TextCrisp
-            )
-            if (currentTask.status == DownloadStatus.DOWNLOADING) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = SurfaceHighlight,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline)
-                ) {
-                    Text(
-                        text = currentTask.speed.ifBlank { "Active" },
-                        color = TextCrisp,
-                        style = Typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                }
-            }
-        }
-
         // Active Downloading Task Card
         if (currentTask.status == DownloadStatus.DOWNLOADING) {
             Surface(
@@ -1466,15 +1469,16 @@ private fun QueueTab(
                     ) {
                         Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                             Surface(
-                                shape = RoundedCornerShape(4.dp),
+                                shape = RoundedCornerShape(6.dp),
                                 color = SurfaceHighlight,
-                                modifier = Modifier.padding(end = 8.dp)
+                                modifier = Modifier.padding(end = 10.dp)
                             ) {
                                 Text(
                                     text = if (currentTask.isAudio) "MP3" else "MP4",
                                     style = Typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
                                     color = TextCrisp,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                                 )
                             }
                             Text(
@@ -1497,7 +1501,7 @@ private fun QueueTab(
                             progress = { currentTask.progress / 100f },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(6.dp)
+                                .height(5.dp)
                                 .clip(RoundedCornerShape(3.dp)),
                             color = TextCrisp,
                             trackColor = SurfaceHighlight
@@ -1506,14 +1510,14 @@ private fun QueueTab(
                         LinearProgressIndicator(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(6.dp)
+                                .height(5.dp)
                                 .clip(RoundedCornerShape(3.dp)),
                             color = TextCrisp,
                             trackColor = SurfaceHighlight
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1523,6 +1527,7 @@ private fun QueueTab(
                         Text(
                             text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
                             style = Typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
                             color = TextCrisp
                         )
                         Text(
@@ -1542,7 +1547,7 @@ private fun QueueTab(
                                 }
                             },
                             style = Typography.bodySmall,
-                            color = TextCrisp
+                            color = TextSecondary
                         )
                     }
                 }
@@ -1556,7 +1561,7 @@ private fun QueueTab(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    text = "Queue (${queuedTasks.size})",
+                    text = "Queued (${queuedTasks.size})",
                     style = Typography.titleSmall,
                     color = TextSecondary
                 )
@@ -1569,18 +1574,19 @@ private fun QueueTab(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = CanvasDark,
+                                color = SurfaceElevated,
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
                                         text = "${index + 1}",
                                         style = Typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
                                         color = TextCrisp
                                     )
                                 }
@@ -1617,7 +1623,7 @@ private fun QueueTab(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(280.dp),
+                    .height(300.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1625,7 +1631,7 @@ private fun QueueTab(
                         Icons.Default.DownloadDone,
                         contentDescription = null,
                         tint = TextTertiary,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(44.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
@@ -1634,15 +1640,17 @@ private fun QueueTab(
                         color = TextSecondary
                     )
                     Spacer(modifier = Modifier.height(14.dp))
-                    FilledTonalButton(
+                    Button(
                         onClick = onNavigateHome,
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = SurfaceElevated,
-                            contentColor = TextCrisp
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TextCrisp,
+                            contentColor = CanvasDark
                         )
                     ) {
-                        Text("Add new download", style = Typography.labelMedium)
+                        Icon(Icons.Default.Add, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("New Download", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1652,15 +1660,14 @@ private fun QueueTab(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 3: REDESIGNED LIBRARY
+// TAB 3: REDESIGNED LIBRARY TAB (16:9 THUMBNAILS, SLEEK FILTER)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun LibraryTab(
     history: List<DownloadTask>,
     onPlay: (DownloadTask) -> Unit,
     onShare: (DownloadTask) -> Unit,
-    onDelete: (DownloadTask) -> Unit,
-    onClearAll: () -> Unit
+    onDelete: (DownloadTask) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var filterType by remember { mutableStateOf("All") }
@@ -1680,40 +1687,22 @@ private fun LibraryTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Library (${history.size})",
-                style = Typography.titleLarge,
-                color = TextCrisp
-            )
-            if (history.isNotEmpty()) {
-                TextButton(onClick = onClearAll) {
-                    Text("Clear All", color = StatusError, style = Typography.labelMedium)
-                }
-            }
-        }
-
         if (history.isNotEmpty()) {
+            // Search Capsule
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search library...", style = Typography.bodyMedium, color = TextQuaternary) },
+                placeholder = { Text("Search downloaded media...", style = Typography.bodyMedium, color = TextQuaternary) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextTertiary) },
+                shape = RoundedCornerShape(14.dp),
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(18.dp)) },
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextTertiary)
+                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextTertiary, modifier = Modifier.size(16.dp))
                         }
                     }
                 },
@@ -1721,12 +1710,15 @@ private fun LibraryTab(
                     focusedBorderColor = TextCrisp,
                     unfocusedBorderColor = BorderHairline,
                     focusedTextColor = TextCrisp,
-                    unfocusedTextColor = TextCrisp
+                    unfocusedTextColor = TextCrisp,
+                    focusedContainerColor = SurfaceDark,
+                    unfocusedContainerColor = SurfaceDark
                 )
             )
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Filter Chips Row
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -1736,7 +1728,7 @@ private fun LibraryTab(
                     Surface(
                         onClick = { filterType = filter },
                         shape = RoundedCornerShape(20.dp),
-                        color = if (isSelected) SurfaceHighlight else SurfaceDark,
+                        color = if (isSelected) TextCrisp else SurfaceDark,
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
                             if (isSelected) TextCrisp else BorderHairline
@@ -1745,8 +1737,9 @@ private fun LibraryTab(
                         Text(
                             text = filter,
                             style = Typography.labelMedium,
-                            color = if (isSelected) TextCrisp else TextSecondary,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) CanvasDark else TextSecondary,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
                     }
                 }
@@ -1767,7 +1760,7 @@ private fun LibraryTab(
                         Icons.Default.FolderOpen,
                         contentDescription = null,
                         tint = TextTertiary,
-                        modifier = Modifier.size(48.dp)
+                        modifier = Modifier.size(44.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
@@ -1795,10 +1788,12 @@ private fun LibraryTab(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // 16:9 Thumbnail with Play overlay
                             Box(
                                 modifier = Modifier
-                                    .size(54.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .width(76.dp)
+                                    .height(44.dp)
+                                    .clip(RoundedCornerShape(8.dp))
                                     .background(CanvasDark)
                                     .clickable { onPlay(task) },
                                 contentAlignment = Alignment.Center
@@ -1820,12 +1815,12 @@ private fun LibraryTab(
                                             Icons.Default.PlayArrow,
                                             contentDescription = "Play",
                                             tint = Color.White,
-                                            modifier = Modifier.size(22.dp)
+                                            modifier = Modifier.size(20.dp)
                                         )
                                     }
                                 } else {
                                     Icon(
-                                        if (task.isAudio) Icons.Default.MusicNote else Icons.Default.SmartDisplay,
+                                        if (task.isAudio) Icons.Default.MusicNote else Icons.Default.PlayArrow,
                                         contentDescription = null,
                                         tint = TextCrisp
                                     )
@@ -1842,7 +1837,7 @@ private fun LibraryTab(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.height(2.dp))
+                                Spacer(modifier = Modifier.height(3.dp))
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1855,7 +1850,8 @@ private fun LibraryTab(
                                             text = if (task.isAudio) "MP3" else "MP4",
                                             color = TextCrisp,
                                             style = Typography.labelSmall,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                         )
                                     }
                                     if (task.totalBytes > 0) {
@@ -1869,13 +1865,13 @@ private fun LibraryTab(
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                IconButton(onClick = { onPlay(task) }, modifier = Modifier.size(34.dp)) {
+                                IconButton(onClick = { onPlay(task) }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = TextCrisp)
                                 }
-                                IconButton(onClick = { onShare(task) }, modifier = Modifier.size(34.dp)) {
+                                IconButton(onClick = { onShare(task) }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Default.Share, contentDescription = "Share", tint = TextSecondary)
                                 }
-                                IconButton(onClick = { onDelete(task) }, modifier = Modifier.size(34.dp)) {
+                                IconButton(onClick = { onDelete(task) }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = TextTertiary)
                                 }
                             }
@@ -1891,7 +1887,7 @@ private fun LibraryTab(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 4: REDESIGNED SETTINGS
+// TAB 4: REDESIGNED SETTINGS TAB (CLEAN SECTIONS, ZERO DUPLICATE TITLE)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun SettingsTab() {
@@ -1906,15 +1902,9 @@ private fun SettingsTab() {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text(
-            text = "Settings",
-            style = Typography.titleLarge,
-            color = TextCrisp
-        )
-
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = SurfaceDark,
@@ -1922,6 +1912,7 @@ private fun SettingsTab() {
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Cloud Turbo Toggle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1929,7 +1920,7 @@ private fun SettingsTab() {
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Cloud Turbo", style = Typography.titleSmall, color = TextCrisp)
-                        Text("Line-rate edge acceleration", style = Typography.bodySmall, color = TextSecondary)
+                        Text("Line-rate edge stream multiplexing", style = Typography.bodySmall, color = TextSecondary)
                     }
                     Switch(
                         checked = true,
@@ -1943,6 +1934,7 @@ private fun SettingsTab() {
 
                 HorizontalDivider(color = BorderHairline)
 
+                // Backend Endpoint
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Backend Endpoint", style = Typography.titleSmall, color = TextCrisp)
                     OutlinedTextField(
@@ -2002,6 +1994,7 @@ private fun SettingsTab() {
 
                 HorizontalDivider(color = BorderHairline)
 
+                // Storage location
                 Column {
                     Text("Storage location", style = Typography.titleSmall, color = TextCrisp)
                     Spacer(modifier = Modifier.height(4.dp))
@@ -2010,6 +2003,7 @@ private fun SettingsTab() {
 
                 HorizontalDivider(color = BorderHairline)
 
+                // App version & branding
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -2017,7 +2011,7 @@ private fun SettingsTab() {
                 ) {
                     Column {
                         Text("Downloadivo Mobile", style = Typography.titleSmall, color = TextCrisp)
-                        Text("v3.6.0 Studio Edition (4K & Pre-Size)", style = Typography.bodySmall, color = TextCrisp)
+                        Text("v3.6.0 Studio Edition (4K & Pre-Size)", style = Typography.bodySmall, color = TextSecondary)
                     }
                     Image(
                         painter = painterResource(id = R.drawable.app_icon),
@@ -2030,39 +2024,6 @@ private fun SettingsTab() {
             }
         }
         Spacer(modifier = Modifier.height(76.dp))
-    }
-}
-
-@Composable
-private fun SyncedChip(
-    key: String,
-    label: String,
-    currentSelected: String,
-    modifier: Modifier = Modifier,
-    onSelect: (String) -> Unit
-) {
-    val isSelected = currentSelected == key
-    Surface(
-        onClick = { onSelect(key) },
-        shape = RoundedCornerShape(10.dp),
-        color = if (isSelected) TextCrisp else SurfaceElevated,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (isSelected) TextCrisp else BorderHairline
-        ),
-        modifier = modifier
-    ) {
-        Text(
-            text = label,
-            style = Typography.labelSmall,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) CanvasDark else TextSecondary,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            lineHeight = 14.sp,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 7.dp)
-        )
     }
 }
 
