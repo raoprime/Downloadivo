@@ -1764,6 +1764,29 @@ async def get_info(request: Request, url: Optional[str] = None):
             # Simplified string map of format sizes for easy client consumption
             clean_sizes = {k: v["label"] for k, v in format_sizes.items()}
 
+            # Dynamic Up Next / Related Feed extraction
+            related_feed = []
+            uploader_name = info.get("uploader") or info.get("channel") or ""
+            video_title = info.get("title") or ""
+            search_query = f"{uploader_name} {video_title}".strip()
+            if search_query:
+                try:
+                    with yt_dlp.YoutubeDL({'extract_flat': True, 'quiet': True}) as rel_ydl:
+                        rel_res = rel_ydl.extract_info(f"ytsearch6:{search_query[:40]}", download=False)
+                        for re_entry in rel_res.get("entries", []):
+                            re_id = re_entry.get("id")
+                            if re_id and re_id != info.get("id"):
+                                thumb = re_entry.get("thumbnails", [{}])[-1].get("url", "") if re_entry.get("thumbnails") else ""
+                                related_feed.append({
+                                    "title": re_entry.get("title", ""),
+                                    "url": f"https://www.youtube.com/watch?v={re_id}",
+                                    "thumbnail": thumb,
+                                    "uploader": re_entry.get("uploader") or uploader_name or "Creator",
+                                    "duration": re_entry.get("duration_string") or "",
+                                })
+                except Exception:
+                    pass
+
             return {
                 "title": info.get("title", "Untitled Media"),
                 "thumbnail": info.get("thumbnail", ""),
@@ -1775,6 +1798,7 @@ async def get_info(request: Request, url: Optional[str] = None):
                 "is_4k": is_4k,
                 "resolutions": sorted_resolutions,
                 "format_sizes": clean_sizes,
+                "related_feed": related_feed,
             }
     except Exception as e:
         err = str(e).replace("ERROR: ", "").replace("[youtube] ", "")
