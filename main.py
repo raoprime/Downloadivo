@@ -1123,11 +1123,6 @@ def _info_ydl_opts() -> dict:
         "noplaylist": True,
         "js_runtimes": js_runtimes,
         "remote_components": {"ejs:github"},
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["ios", "android", "mweb", "web"]
-            }
-        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
             "Accept": "*/*",
@@ -1699,17 +1694,51 @@ async def get_info(request: Request, url: Optional[str] = None):
                 info = info["entries"][0]
             
             formats = info.get("formats") or []
+            duration = info.get("duration") or 0
+
+            # Best audio size estimate
+            audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("vcodec") == "none"]
+            best_a_size = 0
+            if audio_fmts:
+                audio_fmts.sort(key=lambda x: x.get("abr") or 0, reverse=True)
+                best_a_size = audio_fmts[0].get("filesize") or audio_fmts[0].get("filesize_approx") or (128000 * duration / 8)
+
             heights = set()
+            format_sizes = {}
             for f in formats:
                 h = f.get("height")
                 if h and isinstance(h, int) and h >= 360:
                     heights.add(h)
-            
+                    sz = f.get("filesize") or f.get("filesize_approx") or 0
+                    if f.get("acodec") == "none":
+                        sz += best_a_size
+                    if str(h) not in format_sizes or sz > format_sizes[str(h)]["bytes"]:
+                        mb = sz / (1024 * 1024)
+                        format_sizes[str(h)] = {"bytes": sz, "label": f"{mb:.1f} MB" if mb >= 1 else f"{sz/1024:.0f} KB"}
+
             sorted_resolutions = sorted(list(heights), reverse=True)
             extractor = (info.get("extractor_key") or "Web").capitalize()
             is_youtube = "youtube" in url_lower or "youtu.be" in url_lower
             is_8k = 4320 in heights or any((f.get("height") or 0) >= 4320 for f in formats)
             is_4k = 2160 in heights or any((f.get("height") or 0) >= 2160 for f in formats)
+
+            # High fidelity MP3 size
+            mp3_bytes = (320000 * duration / 8) if duration else (best_a_size or 8 * 1024 * 1024)
+            mp3_mb = mp3_bytes / (1024 * 1024)
+            format_sizes["mp3"] = {"bytes": mp3_bytes, "label": f"{mp3_mb:.1f} MB"}
+
+            # Lossless M4A size
+            m4a_bytes = best_a_size if best_a_size else (128000 * duration / 8 if duration else 5 * 1024 * 1024)
+            m4a_mb = m4a_bytes / (1024 * 1024)
+            format_sizes["m4a"] = {"bytes": m4a_bytes, "label": f"{m4a_mb:.1f} MB"}
+
+            if sorted_resolutions:
+                best_h = str(sorted_resolutions[0])
+                if best_h in format_sizes:
+                    format_sizes["best"] = format_sizes[best_h]
+
+            # Simplified string map of format sizes for easy client consumption
+            clean_sizes = {k: v["label"] for k, v in format_sizes.items()}
 
             return {
                 "title": info.get("title", "Untitled Media"),
@@ -1721,6 +1750,7 @@ async def get_info(request: Request, url: Optional[str] = None):
                 "is_8k": is_8k,
                 "is_4k": is_4k,
                 "resolutions": sorted_resolutions,
+                "format_sizes": clean_sizes,
             }
     except Exception as e:
         err = str(e).replace("ERROR: ", "").replace("[youtube] ", "")
