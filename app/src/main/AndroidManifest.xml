@@ -19,6 +19,7 @@
         android:windowSoftInputMode="adjustResize"
         android:theme="@style/Theme.Downloadivo">
 
+        <!-- Main Full App Activity -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -27,7 +28,16 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- ⚡ 1-Tap System Share Sheet Integration (YouTube, Insta, X, TikTok, Browser) -->
+        </activity>
+
+        <!-- ⚡ Seal-Style 10X Translucent Quick Share Sheet -->
+        <activity
+            android:name=".ui.quickshare.QuickShareActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Downloadivo.Translucent"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />

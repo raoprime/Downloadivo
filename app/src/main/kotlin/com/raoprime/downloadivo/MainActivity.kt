@@ -68,6 +68,12 @@ class MainActivity : ComponentActivity() {
     private fun handleShareIntent(intent: Intent?) {
         if (intent == null) return
 
+        val directUrl = intent.getStringExtra("shared_url")
+        if (!directUrl.isNullOrBlank()) {
+            sharedUrl = extractUrl(directUrl)
+            return
+        }
+
         when (intent.action) {
             Intent.ACTION_SEND -> {
                 if (intent.type == "text/plain") {
