@@ -1781,10 +1781,27 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         s_clean = start_time.replace(":", ".")
         e_clean = end_time.replace(":", ".")
         if is_audio:
+            author = info.get("artist") or info.get("uploader") or info.get("creator") or "Downloadivo Studio"
             audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
             audio_fmts.sort(key=lambda x: x.get("abr") or 0, reverse=True)
             src_url = audio_fmts[0]["url"] if audio_fmts else formats[-1]["url"]
-            cmd = [_FFMPEG_PATH, "-y", "-loglevel", "error", "-ss", start_time, "-to", end_time, "-i", src_url, "-vn", "-c:a", "libmp3lame", "-b:a", "320k", "-f", "mp3", "pipe:1"]
+            cmd = [
+                _FFMPEG_PATH,
+                "-y",
+                "-loglevel", "error",
+                "-ss", start_time,
+                "-to", end_time,
+                "-i", src_url,
+                "-vn",
+                "-c:a", "libmp3lame",
+                "-b:a", "320k",
+                "-metadata", f"title={title}",
+                "-metadata", f"artist={author}",
+                "-id3v2_version", "3",
+                "-write_id3v1", "1",
+                "-f", "mp3",
+                "pipe:1"
+            ]
             media_type = "audio/mpeg"
             clip_name = f"{safe_name}_Clip_{s_clean}_to_{e_clean}.mp3"
         else:
@@ -1831,6 +1848,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         direct_url = audio_fmts[0]["url"]
 
         if _FFMPEG_PATH:
+            author = info.get("artist") or info.get("uploader") or info.get("creator") or "Downloadivo Studio"
             cmd = [
                 _FFMPEG_PATH,
                 "-y",
@@ -1839,6 +1857,10 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 "-vn",
                 "-c:a", "libmp3lame",
                 "-b:a", "320k",
+                "-metadata", f"title={title}",
+                "-metadata", f"artist={author}",
+                "-id3v2_version", "3",
+                "-write_id3v1", "1",
                 "-f", "mp3",
                 "pipe:1"
             ]
