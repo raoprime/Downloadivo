@@ -50,6 +50,7 @@ class DownloadService : Service() {
     companion object {
         const val ACTION_START_DOWNLOAD = "com.raoprime.downloadivo.START_DOWNLOAD"
         const val ACTION_CANCEL_DOWNLOAD = "com.raoprime.downloadivo.CANCEL_DOWNLOAD"
+        const val ACTION_CANCEL_ALL = "com.raoprime.downloadivo.CANCEL_ALL"
         const val ACTION_REMOVE_QUEUED = "com.raoprime.downloadivo.REMOVE_QUEUED"
 
         const val EXTRA_TASK_ID = "extra_task_id"
@@ -104,6 +105,13 @@ class DownloadService : Service() {
             }
             context.startService(intent)
         }
+
+        fun cancelAll(context: Context) {
+            val intent = Intent(context, DownloadService::class.java).apply {
+                action = ACTION_CANCEL_ALL
+            }
+            context.startService(intent)
+        }
     }
 
     private val serviceJob = Job()
@@ -139,6 +147,11 @@ class DownloadService : Service() {
                 }
             }
             ACTION_CANCEL_DOWNLOAD -> {
+                cancelCurrentDownload()
+            }
+            ACTION_CANCEL_ALL -> {
+                pendingQueue.clear()
+                updateQueuedState()
                 cancelCurrentDownload()
             }
             ACTION_REMOVE_QUEUED -> {
@@ -309,6 +322,7 @@ class DownloadService : Service() {
                 outStream = resolver.openOutputStream(mediaUri)
                     ?: throw Exception("Could not open destination stream")
 
+                var lastNotifUpdate = 0L
                 val result = DownloadEngine.downloadStream(
                     targetUrl = item.url,
                     format = item.format,
@@ -327,7 +341,11 @@ class DownloadService : Service() {
                         )
                         _currentTask.value = updated
                         com.raoprime.downloadivo.data.DownloadRepository.updateTask(updated)
-                        updateForegroundNotification(cleanTitle, percent, speed, eta)
+                        val now = System.currentTimeMillis()
+                        if (now - lastNotifUpdate >= 1000L || percent == 100) {
+                            lastNotifUpdate = now
+                            updateForegroundNotification(cleanTitle, percent, speed, eta)
+                        }
                     }
                 )
 

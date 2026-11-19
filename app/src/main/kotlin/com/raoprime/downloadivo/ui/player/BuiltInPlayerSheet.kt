@@ -42,11 +42,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import com.raoprime.downloadivo.MainActivity
 import com.raoprime.downloadivo.network.DownloadEngine
@@ -56,6 +52,7 @@ import kotlinx.coroutines.delay
 @OptIn(UnstableApi::class)
 @Composable
 fun BuiltInPlayerSheet(
+    exoPlayer: ExoPlayer,
     mediaUri: String,
     title: String,
     author: String = "",
@@ -75,10 +72,10 @@ fun BuiltInPlayerSheet(
     val activity = context as? Activity
     val mainActivity = activity as? MainActivity
 
-    var isPlaying by remember { mutableStateOf(true) }
-    var isBuffering by remember { mutableStateOf(true) }
+    var isPlaying by remember { mutableStateOf(exoPlayer.isPlaying) }
+    var isBuffering by remember { mutableStateOf(exoPlayer.playbackState == Player.STATE_BUFFERING) }
     var playerError by remember { mutableStateOf<String?>(null) }
-    var showControls by remember { mutableStateOf(true) }
+    var showFullscreenControls by remember { mutableStateOf(true) }
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
     var isFullscreen by remember { mutableStateOf(false) }
 
@@ -92,8 +89,8 @@ fun BuiltInPlayerSheet(
     var showSpeedSheet by remember { mutableStateOf(false) }
 
     // Playback Progress & Duration
-    var currentPositionMs by remember { mutableLongStateOf(0L) }
-    var durationMs by remember { mutableLongStateOf(DownloadEngine.parseDurationToMillis(duration)) }
+    var currentPositionMs by remember { mutableLongStateOf(exoPlayer.currentPosition) }
+    var durationMs by remember(duration) { mutableLongStateOf(DownloadEngine.parseDurationToMillis(duration)) }
     var isScrubbing by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableLongStateOf(0L) }
 
@@ -117,32 +114,6 @@ fun BuiltInPlayerSheet(
         }
     }
 
-    val exoPlayer = remember {
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Downloadivo-Stream/3.7")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(20000)
-            .setReadTimeoutMs(35000)
-
-        val defaultDataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
-        val mediaSourceFactory = DefaultMediaSourceFactory(context).setDataSourceFactory(defaultDataSourceFactory)
-
-        val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(
-                1200,  // minBufferMs (1.2s start)
-                25000, // maxBufferMs
-                400,   // bufferForPlaybackMs (0.4s instant start)
-                800    // bufferForPlaybackAfterRebufferMs (0.8s)
-            )
-            .setPrioritizeTimeOverSizeThresholds(true)
-            .build()
-
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .setLoadControl(loadControl)
-            .build()
-    }
-
     // Load or switch media URL
     LaunchedEffect(mediaUri) {
         playerError = null
@@ -159,6 +130,14 @@ fun BuiltInPlayerSheet(
         exoPlayer.playWhenReady = true
     }
 
+    // Dynamic duration update if parsed from stream
+    LaunchedEffect(duration) {
+        val parsed = DownloadEngine.parseDurationToMillis(duration)
+        if (parsed > 0) {
+            durationMs = parsed
+        }
+    }
+
     // Ticker for currentPosition
     LaunchedEffect(exoPlayer) {
         while (true) {
@@ -173,11 +152,11 @@ fun BuiltInPlayerSheet(
         }
     }
 
-    // Auto-hide controls after 3.5 seconds of no activity when playing
-    LaunchedEffect(showControls, isPlaying) {
-        if (showControls && isPlaying) {
+    // Auto-hide fullscreen controls after 3.5 seconds
+    LaunchedEffect(showFullscreenControls, isPlaying, isFullscreen) {
+        if (isFullscreen && showFullscreenControls && isPlaying) {
             delay(3500)
-            showControls = false
+            showFullscreenControls = false
         }
     }
 
@@ -203,7 +182,6 @@ fun BuiltInPlayerSheet(
         exoPlayer.addListener(listener)
         onDispose {
             exoPlayer.removeListener(listener)
-            exoPlayer.release()
         }
     }
 
@@ -222,19 +200,98 @@ fun BuiltInPlayerSheet(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (isFullscreen) Modifier.fillMaxSize() else Modifier.wrapContentHeight())
-            .navigationBarsPadding(),
-        shape = if (isFullscreen) RoundedCornerShape(0.dp) else RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
-        color = CanvasDark,
-        border = if (isFullscreen) null else androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark)
+            .then(if (isFullscreen) Modifier.fillMaxSize() else Modifier.wrapContentHeight()),
+        shape = if (isFullscreen) RoundedCornerShape(0.dp) else RoundedCornerShape(22.dp),
+        color = SurfaceDark,
+        border = if (isFullscreen) null else androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+        shadowElevation = 24.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(if (isFullscreen) 0.dp else 12.dp)
+                .padding(if (isFullscreen) 0.dp else 14.dp)
         ) {
             // ═════════════════════════════════════════════════════════════════
-            // YOUTUBE-STYLE VIDEO / AUDIO STAGE CONTAINER
+            // PROMINENT TOP HEADER (LIFTED & VISIBLE OUTSIDE VIDEO STAGE)
+            // ═════════════════════════════════════════════════════════════════
+            if (!isFullscreen) {
+                // Top drag handle indicator
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 2.dp, bottom = 10.dp)
+                        .width(42.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(BorderSubtle)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(SurfaceElevated),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isAudio) Icons.Default.MusicNote else Icons.Default.SmartDisplay,
+                                contentDescription = null,
+                                tint = TextCrisp,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = title.ifBlank { "Now Playing" },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = TextCrisp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = if (author.isNotBlank()) author else (if (isAudio) "Live Audio Stream • Studio 320k" else "HD Video Stream • Ad-Free"),
+                                fontSize = 11.sp,
+                                color = TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Minimize Button (dock to bottom floating miniplayer)
+                        IconButton(onClick = onMinimize, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize", tint = TextCrisp, modifier = Modifier.size(24.dp))
+                        }
+                        // PiP Button
+                        if (!isAudio && onEnterPip != null) {
+                            IconButton(onClick = onEnterPip, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Default.PictureInPicture, contentDescription = "PiP", tint = TextCrisp, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        // Close Button
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(34.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextTertiary, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+
+            // ═════════════════════════════════════════════════════════════════
+            // VIDEO / AUDIO STAGE CONTAINER
             // ═════════════════════════════════════════════════════════════════
             Box(
                 modifier = Modifier
@@ -271,12 +328,12 @@ fun BuiltInPlayerSheet(
                         }
                     }
                 } else {
-                    // Video Mode Stage: Native ExoPlayer view with NO default controller (custom Jetpack Compose controller overlay)
+                    // Video Mode Stage: Native ExoPlayer view
                     AndroidView(
                         factory = { ctx ->
                             PlayerView(ctx).apply {
                                 player = exoPlayer
-                                useController = false // We render our own YouTube overlay!
+                                useController = false
                                 keepScreenOn = true
                                 layoutParams = FrameLayout.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -288,7 +345,7 @@ fun BuiltInPlayerSheet(
                     )
                 }
 
-                // Double Tap Detection Surface (Left = -10s, Right = +10s, Center = toggle controls)
+                // Double Tap Detection Surface (Left = -10s, Right = +10s, Center = toggle play/pause or fullscreen overlay)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -297,13 +354,11 @@ fun BuiltInPlayerSheet(
                                 onDoubleTap = { offset ->
                                     val width = size.width
                                     if (offset.x < width / 2f) {
-                                        // Left double tap: seek -10s
                                         val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
                                         exoPlayer.seekTo(target)
                                         currentPositionMs = target
                                         showDoubleTapRewind = true
                                     } else {
-                                        // Right double tap: seek +10s
                                         val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
                                         val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
                                         exoPlayer.seekTo(target)
@@ -312,7 +367,12 @@ fun BuiltInPlayerSheet(
                                     }
                                 },
                                 onTap = {
-                                    showControls = !showControls
+                                    if (isFullscreen) {
+                                        showFullscreenControls = !showFullscreenControls
+                                    } else {
+                                        if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                        isPlaying = !isPlaying
+                                    }
                                 }
                             )
                         }
@@ -411,197 +471,130 @@ fun BuiltInPlayerSheet(
                     }
                 }
 
-                // ═════════════════════════════════════════════════════════════
-                // YOUTUBE CONTROLS OVERLAY (Tap to reveal, auto-hide in 3.5s)
-                // ═════════════════════════════════════════════════════════════
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showControls || !isPlaying,
-                    enter = fadeIn(tween(180)),
-                    exit = fadeOut(tween(180)),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.75f),
-                                        Color.Black.copy(alpha = 0.25f),
-                                        Color.Black.copy(alpha = 0.85f)
+                // Fullscreen On-Screen Overlay Controls
+                if (isFullscreen) {
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showFullscreenControls || !isPlaying,
+                        enter = fadeIn(tween(180)),
+                        exit = fadeOut(tween(180)),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.75f),
+                                            Color.Black.copy(alpha = 0.25f),
+                                            Color.Black.copy(alpha = 0.85f)
+                                        )
                                     )
                                 )
-                            )
-                    ) {
-                        // Top Header Bar inside Video Stage
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.TopCenter)
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // YouTube-style Minimize Button
-                            IconButton(onClick = onMinimize, modifier = Modifier.size(36.dp)) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize", tint = Color.White, modifier = Modifier.size(28.dp))
-                            }
-
-                            // Title & Author
-                            Column(
+                            // Top Bar inside Fullscreen
+                            Row(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 8.dp)
+                                    .fillMaxWidth()
+                                    .align(Alignment.TopCenter)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
                                     text = title.ifBlank { "Now Playing" },
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.5.sp,
+                                    fontSize = 14.sp,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
-                                if (author.isNotBlank()) {
-                                    Text(
-                                        text = author,
-                                        color = TextSecondary,
-                                        fontSize = 10.5.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                IconButton(onClick = { isFullscreen = false }, modifier = Modifier.size(36.dp)) {
+                                    Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
                             }
 
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (!isAudio && onEnterPip != null) {
-                                    IconButton(onClick = onEnterPip, modifier = Modifier.size(34.dp)) {
-                                        Icon(Icons.Default.PictureInPicture, contentDescription = "PiP", tint = Color.White, modifier = Modifier.size(20.dp))
-                                    }
-                                }
-                                IconButton(onClick = onDismiss, modifier = Modifier.size(34.dp)) {
-                                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
-                                }
-                            }
-                        }
-
-                        // Center Playback Controls (Rewind -10s, Play/Pause, Forward +10s)
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .fillMaxWidth(0.70f),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(
-                                onClick = {
-                                    val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
-                                    exoPlayer.seekTo(target)
-                                    currentPositionMs = target
-                                },
-                                modifier = Modifier.size(46.dp)
-                            ) {
-                                Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s", tint = Color.White, modifier = Modifier.size(32.dp))
-                            }
-
-                            // Big Center Play / Pause Button
-                            Surface(
-                                shape = CircleShape,
-                                color = Color.Black.copy(alpha = 0.55f),
-                                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White.copy(alpha = 0.8f)),
-                                modifier = Modifier
-                                    .size(58.dp)
-                                    .clickable {
-                                        if (isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                        isPlaying = !isPlaying
-                                    }
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = if (isPlaying) "Pause" else "Play",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(32.dp)
-                                    )
-                                }
-                            }
-
-                            IconButton(
-                                onClick = {
-                                    val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
-                                    val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
-                                    exoPlayer.seekTo(target)
-                                    currentPositionMs = target
-                                },
-                                modifier = Modifier.size(46.dp)
-                            ) {
-                                Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = Color.White, modifier = Modifier.size(32.dp))
-                            }
-                        }
-
-                        // Bottom Scrubber Bar & Timestamps
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            // Scrubber Slider
-                            val totalDur = if (durationMs > 0) durationMs else 1L
-                            val pos = if (isScrubbing) scrubPositionMs else currentPositionMs
-                            val progressFrac = (pos.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f)
-
-                            Slider(
-                                value = progressFrac,
-                                onValueChange = { frac ->
-                                    isScrubbing = true
-                                    scrubPositionMs = (frac * totalDur).toLong()
-                                },
-                                onValueChangeFinished = {
-                                    exoPlayer.seekTo(scrubPositionMs)
-                                    currentPositionMs = scrubPositionMs
-                                    isScrubbing = false
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(20.dp),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = Color.White,
-                                    activeTrackColor = Color.White,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.30f)
-                                )
-                            )
-
-                            // Timestamp row & Fullscreen Toggle
+                            // Center Playback Buttons in Fullscreen
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .fillMaxWidth(0.55f),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // EXACT CURRENT & TOTAL DURATION DISPLAY
-                                val curStr = formatMsToTime(if (isScrubbing) scrubPositionMs else currentPositionMs)
-                                val durStr = if (duration.isNotBlank()) duration else formatMsToTime(durationMs)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = "$curStr / $durStr",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 11.5.sp
-                                    )
+                                IconButton(
+                                    onClick = {
+                                        val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
+                                        exoPlayer.seekTo(target)
+                                        currentPositionMs = target
+                                    },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(Icons.Default.Replay10, contentDescription = "-10s", tint = Color.White, modifier = Modifier.size(34.dp))
                                 }
 
-                                if (!isAudio) {
-                                    IconButton(
-                                        onClick = { isFullscreen = !isFullscreen },
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White),
+                                    modifier = Modifier
+                                        .size(60.dp)
+                                        .clickable {
+                                            if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                            isPlaying = !isPlaying
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                            contentDescription = "Fullscreen",
+                                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                            contentDescription = null,
                                             tint = Color.White,
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(34.dp)
                                         )
                                     }
                                 }
+
+                                IconButton(
+                                    onClick = {
+                                        val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
+                                        val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
+                                        exoPlayer.seekTo(target)
+                                        currentPositionMs = target
+                                    },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(Icons.Default.Forward10, contentDescription = "+10s", tint = Color.White, modifier = Modifier.size(34.dp))
+                                }
+                            }
+
+                            // Bottom Scrubber in Fullscreen
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                            ) {
+                                val totalDur = if (durationMs > 0) durationMs else 1L
+                                val pos = if (isScrubbing) scrubPositionMs else currentPositionMs
+                                val progressFrac = (pos.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f)
+                                Slider(
+                                    value = progressFrac,
+                                    onValueChange = { frac ->
+                                        isScrubbing = true
+                                        scrubPositionMs = (frac * totalDur).toLong()
+                                    },
+                                    onValueChangeFinished = {
+                                        exoPlayer.seekTo(scrubPositionMs)
+                                        currentPositionMs = scrubPositionMs
+                                        isScrubbing = false
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(20.dp),
+                                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.35f))
+                                )
+                                val curStr = formatMsToTime(if (isScrubbing) scrubPositionMs else currentPositionMs)
+                                val durStr = if (duration.isNotBlank()) duration else formatMsToTime(durationMs)
+                                Text(text = "$curStr / $durStr", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             }
                         }
                     }
@@ -609,9 +602,124 @@ fun BuiltInPlayerSheet(
             }
 
             // ═════════════════════════════════════════════════════════════════
-            // QUICK CONTROLS BAR: AUDIO TRACK, QUALITY & SPEED (When not fullscreen)
+            // DEDICATED EXTERNAL SCRUBBER & CONTROLS (ALWAYS VISIBLE & EASY TO REACH)
             // ═════════════════════════════════════════════════════════════════
             if (!isFullscreen) {
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Progress Slider
+                val totalDur = if (durationMs > 0) durationMs else 1L
+                val pos = if (isScrubbing) scrubPositionMs else currentPositionMs
+                val progressFrac = (pos.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f)
+
+                Slider(
+                    value = progressFrac,
+                    onValueChange = { frac ->
+                        isScrubbing = true
+                        scrubPositionMs = (frac * totalDur).toLong()
+                    },
+                    onValueChangeFinished = {
+                        exoPlayer.seekTo(scrubPositionMs)
+                        currentPositionMs = scrubPositionMs
+                        isScrubbing = false
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(22.dp),
+                    colors = SliderDefaults.colors(
+                        thumbColor = TextCrisp,
+                        activeTrackColor = TextCrisp,
+                        inactiveTrackColor = CardBorderDark
+                    )
+                )
+
+                // Timestamps & Fullscreen Toggle Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val curStr = formatMsToTime(if (isScrubbing) scrubPositionMs else currentPositionMs)
+                    val durStr = if (duration.isNotBlank()) duration else formatMsToTime(durationMs)
+                    Text(
+                        text = "$curStr / $durStr",
+                        color = TextCrisp,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+
+                    if (!isAudio) {
+                        IconButton(
+                            onClick = { isFullscreen = !isFullscreen },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = TextCrisp, modifier = Modifier.size(22.dp))
+                        }
+                    }
+                }
+
+                // Dedicated Playback Control Row (-10s, Play/Pause, +10s)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
+                            exoPlayer.seekTo(target)
+                            currentPositionMs = target
+                        },
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s", tint = TextCrisp, modifier = Modifier.size(30.dp))
+                    }
+
+                    Spacer(modifier = Modifier.width(20.dp))
+
+                    Surface(
+                        shape = CircleShape,
+                        color = TextCrisp,
+                        shadowElevation = 6.dp,
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clickable {
+                                if (isPlaying) {
+                                    exoPlayer.pause()
+                                    isPlaying = false
+                                } else {
+                                    exoPlayer.play()
+                                    isPlaying = true
+                                }
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play",
+                                tint = CanvasDark,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(20.dp))
+
+                    IconButton(
+                        onClick = {
+                            val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
+                            val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
+                            exoPlayer.seekTo(target)
+                            currentPositionMs = target
+                        },
+                        modifier = Modifier.size(46.dp)
+                    ) {
+                        Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = TextCrisp, modifier = Modifier.size(30.dp))
+                    }
+                }
+
+                // Quick Controls Chips Row: Audio Track, Quality, Speed
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier
@@ -620,7 +728,7 @@ fun BuiltInPlayerSheet(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 1. Audio Track / Multi-Language Button (डिफॉल्ट लैंग्वेज पर नहीं होती। ऑडियो ट्रैक का ऑप्शन दो।)
+                    // Audio Track / Multi-Language Button
                     val activeAudioLabel = if (currentAudioTrack.isNotBlank()) currentAudioTrack else "Default Audio"
                     Surface(
                         onClick = { showAudioTrackSheet = true },
@@ -643,7 +751,7 @@ fun BuiltInPlayerSheet(
                         }
                     }
 
-                    // 2. Video Quality Button
+                    // Video Quality Button
                     if (!isAudio) {
                         val activeQualLabel = when {
                             currentQuality.contains("4k", ignoreCase = true) || currentQuality.contains("2160") -> "4K UHD"
@@ -676,7 +784,7 @@ fun BuiltInPlayerSheet(
                         }
                     }
 
-                    // 3. Speed Selector Button
+                    // Speed Selector Button
                     Surface(
                         onClick = { showSpeedSheet = true },
                         shape = RoundedCornerShape(8.dp),
@@ -703,7 +811,7 @@ fun BuiltInPlayerSheet(
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // AUDIO TRACK SELECTOR MODAL SHEET (Hindi, English, Original, etc.)
+    // AUDIO TRACK SELECTOR MODAL DIALOG (Hindi, English, Original, etc.)
     // ═════════════════════════════════════════════════════════════════════════
     if (showAudioTrackSheet) {
         val tracks = if (availableAudioTracks.isNotEmpty()) availableAudioTracks else listOf("Original Audio", "Hindi (हिन्दी)", "English")
@@ -751,7 +859,7 @@ fun BuiltInPlayerSheet(
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // QUALITY SELECTOR MODAL SHEET
+    // QUALITY SELECTOR MODAL DIALOG
     // ═════════════════════════════════════════════════════════════════════════
     if (showQualitySheet && onQualitySelected != null) {
         val defaultQualities = if (availableQualities.isNotEmpty()) availableQualities else listOf("best", "1080p", "720p", "480p", "360p")
@@ -808,7 +916,7 @@ fun BuiltInPlayerSheet(
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    // SPEED SELECTOR MODAL SHEET
+    // SPEED SELECTOR MODAL DIALOG
     // ═════════════════════════════════════════════════════════════════════════
     if (showSpeedSheet) {
         val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -866,15 +974,17 @@ fun YouTubeFloatingMiniplayer(
     author: String = "",
     thumbnail: String = "",
     isAudio: Boolean,
+    isPlaying: Boolean = true,
+    onTogglePlay: () -> Unit = {},
     onExpand: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         color = SurfaceElevated,
         border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-        shadowElevation = 16.dp,
+        shadowElevation = 18.dp,
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -887,7 +997,7 @@ fun YouTubeFloatingMiniplayer(
             // Miniature 16:9 Thumbnail
             Box(
                 modifier = Modifier
-                    .width(52.dp)
+                    .width(54.dp)
                     .height(34.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(Color.Black),
@@ -926,6 +1036,14 @@ fun YouTubeFloatingMiniplayer(
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(onClick = onTogglePlay, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    tint = TextCrisp
                 )
             }
 

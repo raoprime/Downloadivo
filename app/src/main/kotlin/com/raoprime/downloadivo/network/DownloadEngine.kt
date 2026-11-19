@@ -20,10 +20,17 @@ object DownloadEngine {
     // Default Edge Cloud Endpoint (Can be overridden in Settings)
     var activeBaseUrl: String = "https://downloadivo.vercel.app"
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(35, TimeUnit.SECONDS)
-        .readTimeout(180, TimeUnit.SECONDS)
-        .writeTimeout(35, TimeUnit.SECONDS)
+    private val apiClient = OkHttpClient.Builder()
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(25, TimeUnit.SECONDS)
+        .writeTimeout(12, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
+
+    private val streamClient = OkHttpClient.Builder()
+        .connectTimeout(25, TimeUnit.SECONDS)
+        .readTimeout(300, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .build()
 
@@ -60,7 +67,7 @@ object DownloadEngine {
             var responseCode = 0
 
             try {
-                client.newCall(getReq).execute().use { resp ->
+                apiClient.newCall(getReq).execute().use { resp ->
                     responseCode = resp.code
                     if (resp.isSuccessful) {
                         responseBody = resp.body?.string()
@@ -83,7 +90,7 @@ object DownloadEngine {
                     .post(requestBody)
                     .build()
 
-                client.newCall(postReq).execute().use { resp ->
+                apiClient.newCall(postReq).execute().use { resp ->
                     responseCode = resp.code
                     if (!resp.isSuccessful) {
                         return@withContext Result.failure(
@@ -288,7 +295,7 @@ object DownloadEngine {
                 .get()
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            streamClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(
                         Exception("Server returned HTTP error code: ${response.code}")

@@ -8,6 +8,8 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
@@ -48,6 +50,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.raoprime.downloadivo.R
 import com.raoprime.downloadivo.data.DownloadRepository
@@ -70,13 +81,14 @@ enum class AppTab(val label: String) {
     SETTINGS("Settings")
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
 @Composable
 fun DownloadivoScreen(
     sharedUrl: String? = null,
     clipboardUrl: String? = null,
     onClearClipboard: () -> Unit = {},
     onEnterPip: () -> Unit = {},
+    inPipMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -105,12 +117,90 @@ fun DownloadivoScreen(
     var activePlaybackCurrentAudioTrack by remember { mutableStateOf("Original Audio") }
     var isPlayerMinimized by remember { mutableStateOf(false) }
 
+    // Persistent Single ExoPlayer Instance across Miniplayer, Full Player & PiP
+    val exoPlayer = remember(context) {
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Downloadivo-Stream/3.8")
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(20000)
+            .setReadTimeoutMs(35000)
+
+        val defaultDataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+        val mediaSourceFactory = DefaultMediaSourceFactory(context).setDataSourceFactory(defaultDataSourceFactory)
+
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                1200,  // minBufferMs (1.2s start)
+                25000, // maxBufferMs
+                400,   // bufferForPlaybackMs (0.4s instant start)
+                800    // bufferForPlaybackAfterRebufferMs (0.8s)
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
+            .build()
+    }
+
+    var isExoPlaying by remember { mutableStateOf(false) }
+
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isExoPlaying = playing
+            }
+            override fun onPlaybackStateChanged(state: Int) {
+                isExoPlaying = exoPlayer.isPlaying
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
+        }
+    }
+
+    // Keep MainActivity pipEnabled in sync whenever active video playback is running
+    LaunchedEffect(activePlaybackUri, activePlaybackIsAudio) {
+        val act = context as? com.raoprime.downloadivo.MainActivity
+        act?.pipEnabled = (activePlaybackUri != null && !activePlaybackIsAudio)
+    }
+
+    // Pure Video PiP Mode: When in PiP, display ONLY the video surface edge-to-edge
+    if (inPipMode && activePlaybackUri != null) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        player = exoPlayer
+                        useController = false
+                        keepScreenOn = true
+                        layoutParams = FrameLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        return
+    }
+
     // Back handler: minimize full player first, dismiss miniplayer if already minimized
     BackHandler(enabled = activePlaybackUri != null) {
         if (!isPlayerMinimized) {
             isPlayerMinimized = true
         } else {
             activePlaybackUri = null
+            exoPlayer.stop()
         }
     }
 
@@ -481,6 +571,9 @@ fun DownloadivoScreen(
                             }
                             context.startService(cancelIntent)
                         },
+                        onCancelAll = {
+                            DownloadService.cancelAll(context)
+                        },
                         onRemoveQueued = { taskId ->
                             DownloadService.removeQueuedTask(context, taskId)
                         },
@@ -542,7 +635,7 @@ fun DownloadivoScreen(
                     .fillMaxWidth()
                     .padding(bottom = 8.dp)
             ) {
-                // Active Download Floating Bar
+                // Active Download Floating Bar (Professional Studio Pill with Thumbnail & Live Speed)
                 AnimatedVisibility(
                     visible = currentTask.status == DownloadStatus.DOWNLOADING && currentTab != AppTab.QUEUE,
                     enter = slideInVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(),
@@ -550,91 +643,123 @@ fun DownloadivoScreen(
                 ) {
                     val animatedProgress by animateFloatAsState(
                         targetValue = if (currentTask.progress >= 0) currentTask.progress / 100f else 0f,
-                        animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
                         label = "pill_progress"
                     )
 
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = SurfaceElevated,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                        shadowElevation = 14.dp,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                        shadowElevation = 16.dp,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 4.dp)
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
                             .clickable {
                                 HapticUtil.lightClick(context)
                                 currentTab = AppTab.QUEUE
                             }
                     ) {
                         Column(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                         ) {
                             Row(
+                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // Miniature Thumbnail with live indicator
                                 Box(
                                     modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(SurfaceHighlight),
+                                        .size(46.dp, 30.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color.Black),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        if (currentTask.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
-                                        contentDescription = null,
-                                        tint = TextCrisp,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = currentTask.title.ifBlank { "Downloading media..." },
-                                        style = Typography.titleSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = TextCrisp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
-                                            style = Typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextCrisp
+                                    if (currentTask.thumbnail.isNotBlank()) {
+                                        AsyncImage(
+                                            model = currentTask.thumbnail,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
                                         )
-                                        if (currentTask.speed.isNotBlank()) {
+                                    } else {
+                                        Icon(
+                                            if (currentTask.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
+                                            contentDescription = null,
+                                            tint = TextCrisp,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = SurfaceHighlight,
+                                            modifier = Modifier.padding(end = 6.dp)
+                                        ) {
                                             Text(
-                                                text = " • ${currentTask.speed}",
-                                                style = Typography.bodySmall,
-                                                color = TextCrisp
+                                                text = if (currentTask.isAudio) "MP3" else (if (currentTask.format.contains("1080")) "1080p" else (if (currentTask.format.contains("720")) "720p" else currentTask.format.uppercase())),
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextCrisp,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                             )
                                         }
-                                        if (currentTask.bytesDownloaded > 0) {
+                                        Text(
+                                            text = currentTask.title.ifBlank { "Downloading media..." },
+                                            style = Typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = TextCrisp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = " (${formatByteSize(currentTask.bytesDownloaded)}${if (currentTask.totalBytes > 0) " / " + formatByteSize(currentTask.totalBytes) else ""})",
-                                                style = Typography.bodySmall,
-                                                color = TextSecondary
+                                                text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
+                                                style = Typography.labelMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextCrisp
                                             )
+                                            if (currentTask.speed.isNotBlank()) {
+                                                Text(
+                                                    text = " • ${currentTask.speed}",
+                                                    style = Typography.bodySmall,
+                                                    color = TextCrisp
+                                                )
+                                            }
+                                            if (currentTask.totalBytes > 0) {
+                                                Text(
+                                                    text = " (${formatByteSize(currentTask.bytesDownloaded)} / ${formatByteSize(currentTask.totalBytes)})",
+                                                    style = Typography.bodySmall,
+                                                    color = TextSecondary
+                                                )
+                                            }
                                         }
                                         if (currentTask.eta.isNotBlank()) {
                                             Text(
-                                                text = " • ${currentTask.eta}",
-                                                style = Typography.bodySmall,
-                                                color = TextTertiary
-                                            )
-                                        }
-                                        if (queuedTasks.isNotEmpty()) {
-                                            Text(
-                                                text = " (+${queuedTasks.size} queued)",
+                                                text = currentTask.eta,
                                                 style = Typography.labelSmall,
-                                                color = TextSecondary
+                                                color = TextTertiary
                                             )
                                         }
                                     }
                                 }
+
                                 Spacer(modifier = Modifier.width(8.dp))
+
                                 IconButton(
                                     onClick = {
                                         HapticUtil.lightClick(context)
@@ -645,32 +770,21 @@ fun DownloadivoScreen(
                                     },
                                     modifier = Modifier.size(28.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, contentDescription = "Cancel", tint = TextTertiary)
+                                    Icon(Icons.Default.Close, contentDescription = "Cancel", tint = TextTertiary, modifier = Modifier.size(16.dp))
                                 }
                             }
 
-                            // Sleek Horizontal Linear Progress Bar
-                            Spacer(modifier = Modifier.height(8.dp))
-                            if (currentTask.progress >= 0) {
-                                LinearProgressIndicator(
-                                    progress = { animatedProgress },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.5.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = TextCrisp,
-                                    trackColor = BorderHairline
-                                )
-                            } else {
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.5.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = TextCrisp,
-                                    trackColor = BorderHairline
-                                )
-                            }
+                            // High Precision Sleek Linear Progress Bar
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = { animatedProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.5.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = TextCrisp,
+                                trackColor = SurfaceHighlight
+                            )
                         }
                     }
                 }
@@ -755,7 +869,7 @@ fun DownloadivoScreen(
                 }
 
                 // YouTube Floating Miniplayer (docked above bottom navigation bar when player is minimized!)
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = activePlaybackUri != null && isPlayerMinimized,
                     enter = slideInVertically { it } + fadeIn(),
                     exit = slideOutVertically { it } + fadeOut()
@@ -765,8 +879,15 @@ fun DownloadivoScreen(
                         author = activePlaybackAuthor,
                         thumbnail = activePlaybackThumbnail,
                         isAudio = activePlaybackIsAudio,
+                        isPlaying = isExoPlaying,
+                        onTogglePlay = {
+                            if (isExoPlaying) exoPlayer.pause() else exoPlayer.play()
+                        },
                         onExpand = { isPlayerMinimized = false },
-                        onClose = { activePlaybackUri = null }
+                        onClose = {
+                            activePlaybackUri = null
+                            exoPlayer.stop()
+                        }
                     )
                 }
             }
@@ -777,43 +898,64 @@ fun DownloadivoScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.92f)),
+                    .background(Color.Black.copy(alpha = 0.88f))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        isPlayerMinimized = true
+                    },
                 contentAlignment = Alignment.BottomCenter
             ) {
-                BuiltInPlayerSheet(
-                    mediaUri = activePlaybackUri!!,
-                    title = activePlaybackTitle,
-                    author = activePlaybackAuthor,
-                    isAudio = activePlaybackIsAudio,
-                    duration = activePlaybackDuration,
-                    availableQualities = activePlaybackQualities,
-                    currentQuality = activePlaybackCurrentQuality,
-                    availableAudioTracks = activePlaybackAudioTracks,
-                    currentAudioTrack = activePlaybackCurrentAudioTrack,
-                    onQualitySelected = { newQuality ->
-                        activePlaybackCurrentQuality = newQuality
-                        if (activePlaybackOriginalUrl.isNotBlank()) {
-                            activePlaybackUri = DownloadEngine.getStreamUrl(
-                                activePlaybackOriginalUrl,
-                                newQuality,
-                                activePlaybackCurrentAudioTrack
-                            )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 10.dp, end = 10.dp, bottom = 36.dp) // Lifted up from bottom edge!
+                        .navigationBarsPadding()
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) {}
+                ) {
+                    BuiltInPlayerSheet(
+                        exoPlayer = exoPlayer,
+                        mediaUri = activePlaybackUri!!,
+                        title = activePlaybackTitle,
+                        author = activePlaybackAuthor,
+                        isAudio = activePlaybackIsAudio,
+                        duration = activePlaybackDuration,
+                        availableQualities = activePlaybackQualities,
+                        currentQuality = activePlaybackCurrentQuality,
+                        availableAudioTracks = activePlaybackAudioTracks,
+                        currentAudioTrack = activePlaybackCurrentAudioTrack,
+                        onQualitySelected = { newQuality ->
+                            activePlaybackCurrentQuality = newQuality
+                            if (activePlaybackOriginalUrl.isNotBlank()) {
+                                activePlaybackUri = DownloadEngine.getStreamUrl(
+                                    activePlaybackOriginalUrl,
+                                    newQuality,
+                                    activePlaybackCurrentAudioTrack
+                                )
+                            }
+                        },
+                        onAudioTrackSelected = { newAudio ->
+                            activePlaybackCurrentAudioTrack = newAudio
+                            if (activePlaybackOriginalUrl.isNotBlank()) {
+                                activePlaybackUri = DownloadEngine.getStreamUrl(
+                                    activePlaybackOriginalUrl,
+                                    activePlaybackCurrentQuality,
+                                    newAudio
+                                )
+                            }
+                        },
+                        onEnterPip = onEnterPip,
+                        onMinimize = { isPlayerMinimized = true },
+                        onDismiss = {
+                            activePlaybackUri = null
+                            exoPlayer.stop()
                         }
-                    },
-                    onAudioTrackSelected = { newAudio ->
-                        activePlaybackCurrentAudioTrack = newAudio
-                        if (activePlaybackOriginalUrl.isNotBlank()) {
-                            activePlaybackUri = DownloadEngine.getStreamUrl(
-                                activePlaybackOriginalUrl,
-                                activePlaybackCurrentQuality,
-                                newAudio
-                            )
-                        }
-                    },
-                    onEnterPip = onEnterPip,
-                    onMinimize = { isPlayerMinimized = true },
-                    onDismiss = { activePlaybackUri = null }
-                )
+                    )
+                }
             }
         }
     }
@@ -1861,17 +2003,20 @@ private fun HomeDownloaderTab(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 2: ACTIVE QUEUE TAB (ZERO DUPLICATE HEADERS)
+// TAB 2: ACTIVE QUEUE TAB (STUDIO-GRADE DOWNLOAD MANAGER)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun QueueTab(
     currentTask: DownloadTask,
     queuedTasks: List<DownloadTask>,
     onCancelCurrent: () -> Unit,
+    onCancelAll: () -> Unit = {},
     onRemoveQueued: (String) -> Unit,
     onNavigateHome: () -> Unit
 ) {
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
+    val isAnyActive = currentTask.status == DownloadStatus.DOWNLOADING || queuedTasks.isNotEmpty()
 
     Column(
         modifier = Modifier
@@ -1879,14 +2024,62 @@ private fun QueueTab(
             .verticalScroll(scrollState)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Failed Task Retry Card
+        // ── TOP DASHBOARD HEADER BAR ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Download Manager",
+                    style = Typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = TextCrisp
+                )
+                Text(
+                    text = if (currentTask.status == DownloadStatus.DOWNLOADING) {
+                        "1 active • ${queuedTasks.size} queued"
+                    } else if (queuedTasks.isNotEmpty()) {
+                        "${queuedTasks.size} queued"
+                    } else {
+                        "Queue idle"
+                    },
+                    style = Typography.bodySmall,
+                    color = if (currentTask.status == DownloadStatus.DOWNLOADING) TextCrisp else TextTertiary
+                )
+            }
+
+            if (isAnyActive) {
+                Surface(
+                    onClick = {
+                        HapticUtil.mediumClick(context)
+                        onCancelAll()
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    color = StatusError.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, StatusError.copy(alpha = 0.4f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.ClearAll, contentDescription = null, tint = StatusError, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Cancel All", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = StatusError)
+                    }
+                }
+            }
+        }
+
+        // ── FAILED TASK RETRY ALERT ──
         if (currentTask.status == DownloadStatus.ERROR) {
             Surface(
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = SurfaceDark,
-                border = androidx.compose.foundation.BorderStroke(1.dp, StatusError.copy(alpha = 0.4f)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, StatusError.copy(alpha = 0.5f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -1897,18 +2090,18 @@ private fun QueueTab(
                         Icons.Default.ErrorOutline,
                         contentDescription = null,
                         tint = StatusError,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Download Failed",
+                            text = "Download Interrupted",
                             style = Typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = StatusError
                         )
                         Text(
-                            text = currentTask.title.ifBlank { "Unknown" },
+                            text = currentTask.title.ifBlank { "Media Stream" },
                             style = Typography.bodySmall,
                             color = TextSecondary,
                             maxLines = 1,
@@ -1928,7 +2121,7 @@ private fun QueueTab(
                     FilledTonalButton(
                         onClick = onNavigateHome,
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -1938,120 +2131,167 @@ private fun QueueTab(
             }
         }
 
-        // Active Downloading Task Card
+        // ── ACTIVE DOWNLOADING HERO CARD ──
         if (currentTask.status == DownloadStatus.DOWNLOADING) {
+            val animatedTaskProgress by animateFloatAsState(
+                targetValue = if (currentTask.progress >= 0) currentTask.progress / 100f else 0f,
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                label = "hero_progress"
+            )
+
             Surface(
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(20.dp),
                 color = SurfaceDark,
-                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                shadowElevation = 18.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
+                    // Header Row with Thumbnail
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = SurfaceHighlight,
-                                modifier = Modifier.padding(end = 10.dp)
-                            ) {
-                                Text(
-                                    text = if (currentTask.isAudio) "MP3" else "MP4",
-                                    style = Typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextCrisp,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        // 16:9 Thumbnail Image
+                        Box(
+                            modifier = Modifier
+                                .size(88.dp, 54.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.Black),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (currentTask.thumbnail.isNotBlank()) {
+                                AsyncImage(
+                                    model = currentTask.thumbnail,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Icon(
+                                    if (currentTask.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
+                                    contentDescription = null,
+                                    tint = TextCrisp,
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = RoundedCornerShape(5.dp),
+                                    color = SurfaceHighlight,
+                                    modifier = Modifier.padding(end = 6.dp)
+                                ) {
+                                    Text(
+                                        text = if (currentTask.isAudio) "MP3 320k" else (if (currentTask.format.contains("1080")) "1080p FHD" else (if (currentTask.format.contains("720")) "720p HD" else currentTask.format.uppercase())),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextCrisp,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                                if (currentTask.duration.isNotBlank()) {
+                                    Text(
+                                        text = currentTask.duration,
+                                        style = Typography.bodySmall,
+                                        color = TextTertiary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = currentTask.title.ifBlank { "Downloading stream..." },
                                 style = Typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
                                 color = TextCrisp,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        IconButton(onClick = onCancelCurrent, modifier = Modifier.size(30.dp)) {
-                            Icon(Icons.Default.Clear, contentDescription = "Cancel", tint = StatusError)
+
+                        IconButton(
+                            onClick = {
+                                HapticUtil.lightClick(context)
+                                onCancelCurrent()
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel", tint = StatusError, modifier = Modifier.size(20.dp))
                         }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    if (currentTask.progress >= 0) {
-                        LinearProgressIndicator(
-                            progress = { currentTask.progress / 100f },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = TextCrisp,
-                            trackColor = SurfaceHighlight
-                        )
-                    } else {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = TextCrisp,
-                            trackColor = SurfaceHighlight
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
+                    // Progress Stats Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Bottom
                     ) {
                         Text(
                             text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
-                            style = Typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.ExtraBold,
                             color = TextCrisp
                         )
-                        Text(
-                            text = buildString {
-                                if (currentTask.duration.isNotBlank()) {
-                                    append(currentTask.duration)
-                                    append(" • ")
-                                }
-                                if (currentTask.speed.isNotBlank()) {
-                                    append(currentTask.speed)
-                                    append(" • ")
-                                }
-                                append(formatByteSize(currentTask.bytesDownloaded))
-                                if (currentTask.totalBytes > 0) {
-                                    append(" / ")
-                                    append(formatByteSize(currentTask.totalBytes))
-                                }
-                                if (currentTask.eta.isNotBlank()) {
-                                    append(" • ")
-                                    append(currentTask.eta)
-                                }
-                            },
-                            style = Typography.bodySmall,
-                            color = TextSecondary
-                        )
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            if (currentTask.speed.isNotBlank()) {
+                                Text(
+                                    text = "⚡ ${currentTask.speed}",
+                                    style = Typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp
+                                )
+                            }
+                            Text(
+                                text = buildString {
+                                    append(formatByteSize(currentTask.bytesDownloaded))
+                                    if (currentTask.totalBytes > 0) {
+                                        append(" / ")
+                                        append(formatByteSize(currentTask.totalBytes))
+                                    }
+                                    if (currentTask.eta.isNotBlank()) {
+                                        append(" • ")
+                                        append(currentTask.eta)
+                                    }
+                                },
+                                style = Typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Studio Smooth Progress Indicator
+                    LinearProgressIndicator(
+                        progress = { animatedTaskProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = TextCrisp,
+                        trackColor = SurfaceHighlight
+                    )
                 }
             }
         }
 
-        // Queued Tasks Section
+        // ── QUEUED TASKS SECTION ──
         if (queuedTasks.isNotEmpty()) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Queued (${queuedTasks.size})",
+                    text = "Up Next in Queue (${queuedTasks.size})",
                     style = Typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
                     color = TextSecondary
                 )
 
@@ -2059,17 +2299,17 @@ private fun QueueTab(
                     Surface(
                         shape = RoundedCornerShape(14.dp),
                         color = SurfaceDark,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Surface(
                                 shape = CircleShape,
                                 color = SurfaceElevated,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
@@ -2080,18 +2320,52 @@ private fun QueueTab(
                                     )
                                 }
                             }
+
                             Spacer(modifier = Modifier.width(10.dp))
+
+                            // Thumbnail
+                            Box(
+                                modifier = Modifier
+                                    .size(50.dp, 32.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color.Black),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (task.thumbnail.isNotBlank()) {
+                                    AsyncImage(
+                                        model = task.thumbnail,
+                                        contentDescription = null,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Icon(
+                                        if (task.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
+                                        contentDescription = null,
+                                        tint = TextCrisp,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(10.dp))
+
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = task.title,
                                     style = Typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = TextCrisp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = buildString {
-                                        append(if (task.isAudio) "Audio (MP3)" else "Video (Best)")
+                                        append(if (task.isAudio) "MP3 320k" else "MP4 ${task.format.uppercase()}")
+                                        if (task.totalBytes > 0) {
+                                            append(" • ~")
+                                            append(formatByteSize(task.totalBytes))
+                                        }
                                         if (task.duration.isNotBlank()) {
                                             append(" • ")
                                             append(task.duration)
@@ -2101,11 +2375,15 @@ private fun QueueTab(
                                     color = TextTertiary
                                 )
                             }
+
                             IconButton(
-                                onClick = { onRemoveQueued(task.id) },
+                                onClick = {
+                                    HapticUtil.lightClick(context)
+                                    onRemoveQueued(task.id)
+                                },
                                 modifier = Modifier.size(28.dp)
                             ) {
-                                Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextTertiary)
+                                Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextTertiary, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -2113,35 +2391,56 @@ private fun QueueTab(
             }
         }
 
-        // Clean Empty State
+        // ── CLEAN POLISHED EMPTY STATE ──
         if (currentTask.status != DownloadStatus.DOWNLOADING && queuedTasks.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(300.dp),
+                    .padding(vertical = 48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.DownloadDone,
-                        contentDescription = null,
-                        tint = TextTertiary,
-                        modifier = Modifier.size(44.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(68.dp)
+                            .clip(CircleShape)
+                            .background(SurfaceElevated),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.DownloadDone,
+                            contentDescription = null,
+                            tint = TextCrisp,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "No active downloads",
-                        style = Typography.titleSmall,
-                        color = TextSecondary
+                        text = "Your Download Queue is Empty",
+                        style = Typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextCrisp
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Add any video or audio link to start fast background downloading.",
+                        style = Typography.bodySmall,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                    Spacer(modifier = Modifier.height(18.dp))
                     Button(
-                        onClick = onNavigateHome,
+                        onClick = {
+                            HapticUtil.mediumClick(context)
+                            onNavigateHome()
+                        },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TextCrisp,
                             contentColor = CanvasDark
-                        )
+                        ),
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -2150,6 +2449,7 @@ private fun QueueTab(
                 }
             }
         }
+
         Spacer(modifier = Modifier.height(76.dp))
     }
 }
@@ -2553,7 +2853,7 @@ private fun SettingsTab() {
                 ) {
                     Column {
                         Text("Downloadivo Mobile", style = Typography.titleSmall, color = TextCrisp)
-                        Text("v3.7.0 Studio Edition (YouTube-Grade Player & Multi-Audio)", style = Typography.bodySmall, color = TextSecondary)
+                        Text("v3.9.0 Studio Edition (Ultra-Fast Engine, Pro Floating Bar & Studio Queue)", style = Typography.bodySmall, color = TextSecondary)
                     }
                     Image(
                         painter = painterResource(id = R.drawable.app_icon_white),

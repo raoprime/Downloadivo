@@ -65,7 +65,11 @@ object DownloadRepository {
                 current.add(0, task)
             }
             _history.value = current
-            saveHistory()
+            // High-Performance Guard: Do NOT write JSON to flash disk on every 400ms progress tick!
+            // Only persist to disk when terminal state is reached (SUCCESS, ERROR, CANCELLED)
+            if (task.status != com.raoprime.downloadivo.model.DownloadStatus.DOWNLOADING) {
+                saveHistory()
+            }
         }
     }
 

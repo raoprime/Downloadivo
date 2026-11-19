@@ -28,6 +28,19 @@ class MainActivity : ComponentActivity() {
 
     // Set true by BuiltInPlayerSheet while a video is playing, so Home press triggers PiP
     var pipEnabled by mutableStateOf(false)
+    var inPipMode by mutableStateOf(false)
+
+    @Deprecated("Deprecated in Java")
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean) {
+        @Suppress("DEPRECATION")
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode)
+        inPipMode = isInPictureInPictureMode
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPipMode = isInPictureInPictureMode
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,7 +73,8 @@ class MainActivity : ComponentActivity() {
                         sharedUrl = sharedUrl,
                         clipboardUrl = clipboardUrl,
                         onClearClipboard = { clipboardUrl = null },
-                        onEnterPip = { enterPipMode() }
+                        onEnterPip = { enterPipMode() },
+                        inPipMode = inPipMode
                     )
                 }
             }
