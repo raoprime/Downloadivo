@@ -187,9 +187,9 @@ fun DownloadivoScreen(
                     icon = { Icon(Icons.Default.Download, contentDescription = "Downloader") },
                     label = { Text("Download", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Black,
-                        selectedTextColor = AccentEmerald,
-                        indicatorColor = AccentEmerald,
+                        selectedIconColor = CanvasDark,
+                        selectedTextColor = TextCrisp,
+                        indicatorColor = TextCrisp,
                         unselectedIconColor = TextTertiary,
                         unselectedTextColor = TextTertiary
                     )
@@ -201,8 +201,8 @@ fun DownloadivoScreen(
                         val activeCount = (if (currentTask.status == DownloadStatus.DOWNLOADING) 1 else 0) + queuedTasks.size
                         BadgedBox(badge = {
                             if (activeCount > 0) {
-                                Badge(containerColor = AccentEmerald) {
-                                    Text("$activeCount", color = Color.Black, fontWeight = FontWeight.Bold)
+                                Badge(containerColor = TextCrisp) {
+                                    Text("$activeCount", color = CanvasDark, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }) {
@@ -211,9 +211,9 @@ fun DownloadivoScreen(
                     },
                     label = { Text("Queue", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Black,
-                        selectedTextColor = AccentEmerald,
-                        indicatorColor = AccentEmerald,
+                        selectedIconColor = CanvasDark,
+                        selectedTextColor = TextCrisp,
+                        indicatorColor = TextCrisp,
                         unselectedIconColor = TextTertiary,
                         unselectedTextColor = TextTertiary
                     )
@@ -224,9 +224,9 @@ fun DownloadivoScreen(
                     icon = { Icon(Icons.Default.VideoLibrary, contentDescription = "Library") },
                     label = { Text("Library", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Black,
-                        selectedTextColor = AccentEmerald,
-                        indicatorColor = AccentEmerald,
+                        selectedIconColor = CanvasDark,
+                        selectedTextColor = TextCrisp,
+                        indicatorColor = TextCrisp,
                         unselectedIconColor = TextTertiary,
                         unselectedTextColor = TextTertiary
                     )
@@ -237,9 +237,9 @@ fun DownloadivoScreen(
                     icon = { Icon(Icons.Default.Tune, contentDescription = "Settings") },
                     label = { Text("Settings", fontSize = 11.sp) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Black,
-                        selectedTextColor = AccentEmerald,
-                        indicatorColor = AccentEmerald,
+                        selectedIconColor = CanvasDark,
+                        selectedTextColor = TextCrisp,
+                        indicatorColor = TextCrisp,
                         unselectedIconColor = TextTertiary,
                         unselectedTextColor = TextTertiary
                     )
@@ -1861,11 +1861,11 @@ private fun LibraryTab(
                                 ) {
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
-                                        color = if (task.isAudio) AccentEmeraldMuted else Color(0x263B82F6)
+                                        color = SurfaceHighlight
                                     ) {
                                         Text(
                                             text = if (task.isAudio) "MP3" else "MP4",
-                                            color = if (task.isAudio) AccentEmerald else Color(0xFF60A5FA),
+                                            color = TextCrisp,
                                             style = Typography.labelSmall,
                                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                         )
@@ -2057,10 +2057,10 @@ private fun SyncedChip(
     Surface(
         onClick = { onSelect(key) },
         shape = RoundedCornerShape(10.dp),
-        color = if (isSelected) AccentEmeraldMuted else SurfaceElevated,
+        color = if (isSelected) TextCrisp else SurfaceElevated,
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (isSelected) AccentEmerald else BorderHairline
+            if (isSelected) TextCrisp else BorderHairline
         ),
         modifier = modifier
     ) {
@@ -2068,7 +2068,7 @@ private fun SyncedChip(
             text = label,
             style = Typography.labelSmall,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) AccentEmerald else TextSecondary,
+            color = if (isSelected) CanvasDark else TextSecondary,
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,

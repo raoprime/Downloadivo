@@ -1,31 +1,29 @@
 package com.raoprime.downloadivo.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = PrimaryEmerald,
-    onPrimary = Color.Black,
-    primaryContainer = SurfaceCardDark,
-    onPrimaryContainer = TextPrimary,
-    secondary = PrimaryEmerald,
-    onSecondary = Color.Black,
-    secondaryContainer = BadgeBackground,
-    onSecondaryContainer = PrimaryEmerald,
-    background = BackgroundDark,
-    onBackground = TextPrimary,
-    surface = BackgroundDark,
-    onSurface = TextPrimary,
-    surfaceVariant = SurfaceCardDark,
-    onSurfaceVariant = TextMuted,
-    outline = CardBorderDark,
-    error = ErrorRed,
-    errorContainer = ErrorContainer,
-    onErrorContainer = TextPrimary
+    primary = TextCrisp,
+    onPrimary = CanvasDark,
+    primaryContainer = SurfaceElevated,
+    onPrimaryContainer = TextCrisp,
+    secondary = TextCrisp,
+    onSecondary = CanvasDark,
+    secondaryContainer = SurfaceElevated,
+    onSecondaryContainer = TextCrisp,
+    background = CanvasDark,
+    onBackground = TextCrisp,
+    surface = CanvasDark,
+    onSurface = TextCrisp,
+    surfaceVariant = SurfaceDark,
+    onSurfaceVariant = TextSecondary,
+    outline = BorderHairline,
+    outlineVariant = BorderSubtle,
+    error = StatusError,
+    errorContainer = StatusErrorBg,
+    onErrorContainer = TextCrisp
 )
 
 @Composable
