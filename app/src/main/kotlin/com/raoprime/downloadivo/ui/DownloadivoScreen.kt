@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,12 +27,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.raoprime.downloadivo.R
 import com.raoprime.downloadivo.data.DownloadRepository
 import com.raoprime.downloadivo.model.DownloadStatus
 import com.raoprime.downloadivo.model.DownloadTask
@@ -71,6 +74,7 @@ fun DownloadivoScreen(
     // Seal-style Quick Share BottomSheet
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showCustomOptionsInSheet by remember { mutableStateOf(false) }
 
     // Built-in In-App Player State
     var activePlaybackUri by remember { mutableStateOf<String?>(null) }
@@ -87,6 +91,7 @@ fun DownloadivoScreen(
             isResolving = true
             errorMessage = null
             showBottomSheet = true
+            showCustomOptionsInSheet = false
             coroutineScope.launch {
                 val res = DownloadEngine.fetchMediaInfo(sharedUrl)
                 isResolving = false
@@ -109,26 +114,11 @@ fun DownloadivoScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(PrimaryEmerald.copy(alpha = 0.2f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = PrimaryEmerald,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Downloadivo",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 19.sp,
-                            color = TextPrimary
+                        Image(
+                            painter = painterResource(id = R.drawable.app_logo_white),
+                            contentDescription = "Downloadivo",
+                            modifier = Modifier.height(26.dp),
+                            contentScale = ContentScale.Fit
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Surface(
@@ -323,7 +313,9 @@ fun DownloadivoScreen(
             }
         }
 
-        // ── SEAL-STYLE MODAL BOTTOM SHEET (Triggered on System Share) ──────────
+        // ═══════════════════════════════════════════════════════════════════════
+        // SEAL-STYLE QUICK SHARE BOTTOM SHEET (10X BETTER & OPTIMIZED)
+        // ═══════════════════════════════════════════════════════════════════════
         if (showBottomSheet && (resolvedInfo != null || isResolving)) {
             ModalBottomSheet(
                 onDismissRequest = { showBottomSheet = false },
@@ -334,7 +326,7 @@ fun DownloadivoScreen(
                     Box(
                         modifier = Modifier
                             .padding(vertical = 10.dp)
-                            .width(40.dp)
+                            .width(44.dp)
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp))
                             .background(TextSubtle)
@@ -357,20 +349,22 @@ fun DownloadivoScreen(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 CircularProgressIndicator(color = PrimaryEmerald)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text("Analyzing media stream...", fontSize = 14.sp, color = TextPrimary)
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Text("Resolving media metadata...", fontSize = 14.sp, color = TextPrimary)
+                                Text("Line-rate edge inspection", fontSize = 12.sp, color = TextMuted)
                             }
                         }
                     } else {
                         resolvedInfo?.let { info ->
-                            // Thumbnail Preview
+                            // Thumbnail Preview with Duration & Platform Badge
                             if (info.thumbnail.isNotBlank()) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(170.dp)
+                                        .height(180.dp)
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(BackgroundDark)
+                                        .border(1.dp, CardBorderDark, RoundedCornerShape(16.dp))
                                 ) {
                                     AsyncImage(
                                         model = info.thumbnail,
@@ -378,13 +372,30 @@ fun DownloadivoScreen(
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
                                     )
+                                    // Top-left platform indicator
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color.Black.copy(alpha = 0.85f),
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .padding(10.dp)
+                                    ) {
+                                        Text(
+                                            text = info.extractor,
+                                            color = PrimaryEmerald,
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                        )
+                                    }
+                                    // Bottom-right duration badge
                                     if (info.duration.isNotBlank()) {
                                         Surface(
                                             shape = RoundedCornerShape(6.dp),
                                             color = Color.Black.copy(alpha = 0.85f),
                                             modifier = Modifier
                                                 .align(Alignment.BottomEnd)
-                                                .padding(8.dp)
+                                                .padding(10.dp)
                                         ) {
                                             Text(
                                                 text = info.duration,
@@ -398,72 +409,152 @@ fun DownloadivoScreen(
                             }
 
                             // Title & Author
-                            Text(
-                                text = info.title.ifBlank { "Media Stream" },
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = TextPrimary,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (info.author.isNotBlank()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(
-                                    text = info.author,
-                                    fontSize = 12.sp,
-                                    color = TextMuted
-                                )
-                            }
-
-                            // Format Selector Chips
-                            Text(
-                                text = "SELECT QUALITY",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextSubtle,
-                                letterSpacing = 0.5.sp
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                SyncedChip("best", "Best (Max)", selectedFormat, Modifier.weight(1f)) { selectedFormat = it }
-                                SyncedChip("1080p", "1080p FHD", selectedFormat, Modifier.weight(1f)) { selectedFormat = it }
-                                SyncedChip("720p", "720p HD", selectedFormat, Modifier.weight(1f)) { selectedFormat = it }
-                                SyncedChip("mp3", "320k MP3", selectedFormat, Modifier.weight(1f)) { selectedFormat = it }
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            // One-Tap Download Button
-                            Button(
-                                onClick = {
-                                    DownloadService.startDownload(
-                                        context = context,
-                                        url = info.url,
-                                        title = info.title,
-                                        format = selectedFormat,
-                                        thumbnail = info.thumbnail
-                                    )
-                                    showBottomSheet = false
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(52.dp),
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = PrimaryEmerald,
-                                    contentColor = Color.Black
-                                )
-                            ) {
-                                Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Start Download",
+                                    text = info.title.ifBlank { "Media Stream" },
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
-                                    color = Color.Black
+                                    color = TextPrimary,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+                                if (info.author.isNotBlank()) {
+                                    Text(
+                                        text = "By ${info.author}",
+                                        fontSize = 12.sp,
+                                        color = TextMuted
+                                    )
+                                }
+                            }
+
+                            // 10X Better: 2 Instant Quick-Download Action Buttons (Zero Friction)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        DownloadService.startDownload(
+                                            context = context,
+                                            url = info.url,
+                                            title = info.title,
+                                            format = "best",
+                                            thumbnail = info.thumbnail
+                                        )
+                                        showBottomSheet = false
+                                        currentTab = AppTab.QUEUE
+                                        Toast.makeText(context, "⚡ Starting Video Download...", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = PrimaryEmerald,
+                                        contentColor = Color.Black
+                                    )
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Video (Best)", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        DownloadService.startDownload(
+                                            context = context,
+                                            url = info.url,
+                                            title = info.title,
+                                            format = "mp3",
+                                            thumbnail = info.thumbnail
+                                        )
+                                        showBottomSheet = false
+                                        currentTab = AppTab.QUEUE
+                                        Toast.makeText(context, "🎵 Starting MP3 Download...", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(50.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = BackgroundDark,
+                                        contentColor = PrimaryEmerald
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryEmerald)
+                                ) {
+                                    Icon(Icons.Default.MusicNote, contentDescription = null, tint = PrimaryEmerald, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Audio (320k)", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
+                                }
+                            }
+
+                            // Custom Quality / Trimmer Expander
+                            TextButton(
+                                onClick = { showCustomOptionsInSheet = !showCustomOptionsInSheet },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        if (showCustomOptionsInSheet) Icons.Default.ExpandLess else Icons.Default.Tune,
+                                        contentDescription = null,
+                                        tint = TextMuted,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (showCustomOptionsInSheet) "Hide Custom Settings" else "Customize Quality & Clip Trimmer",
+                                        fontSize = 12.sp,
+                                        color = TextMuted
+                                    )
+                                }
+                            }
+
+                            if (showCustomOptionsInSheet) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        text = "AVAILABLE RESOLUTIONS",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextSubtle,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        SyncedChip("best", "Best", selectedFormat, Modifier.weight(1f)) { selectedFormat = it }
+                                        SyncedChip("1080p", "1080p", selectedFormat, Modifier.weight(1f)) { selectedFormat = it }
+                                        SyncedChip("720p", "720p", selectedFormat, Modifier.weight(1f)) { selectedFormat = it }
+                                        SyncedChip("480p", "480p", selectedFormat, Modifier.weight(1f)) { selectedFormat = it }
+                                        SyncedChip("mp3", "MP3", selectedFormat, Modifier.weight(1f)) { selectedFormat = it }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Button(
+                                        onClick = {
+                                            DownloadService.startDownload(
+                                                context = context,
+                                                url = info.url,
+                                                title = info.title,
+                                                format = selectedFormat,
+                                                thumbnail = info.thumbnail
+                                            )
+                                            showBottomSheet = false
+                                            currentTab = AppTab.QUEUE
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(48.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = PrimaryEmerald,
+                                            contentColor = Color.Black
+                                        )
+                                    ) {
+                                        Text("Download with Selected Settings", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
+                                    }
+                                }
                             }
                         }
                     }
@@ -471,7 +562,9 @@ fun DownloadivoScreen(
             }
         }
 
-        // ── IN-APP BUILT-IN EXOPLAYER SHEET ────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════════════════
+        // IN-APP BUILT-IN EXOPLAYER SHEET
+        // ═══════════════════════════════════════════════════════════════════════
         activePlaybackUri?.let { uri ->
             Box(
                 modifier = Modifier
@@ -491,7 +584,7 @@ fun DownloadivoScreen(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 1: HOME DOWNLOADER
+// TAB 1: HOME DOWNLOADER (EXACT WEBSITE LAYOUT & BRANDING)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun HomeDownloaderTab(
@@ -517,16 +610,31 @@ private fun HomeDownloaderTab(
     var trimStart by remember { mutableStateOf("00:00") }
     var trimEnd by remember { mutableStateOf("01:00") }
 
+    // Auto-detect platform icon for current input
+    val detectedPlatform = remember(inputUrl) {
+        val lower = inputUrl.lowercase()
+        when {
+            lower.contains("youtube") || lower.contains("youtu.be") -> "YouTube"
+            lower.contains("instagram.com") -> "Instagram"
+            lower.contains("tiktok.com") -> "TikTok"
+            lower.contains("twitter.com") || lower.contains("x.com") -> "X / Twitter"
+            lower.contains("spotify.com") -> "Spotify"
+            lower.contains("reddit.com") -> "Reddit"
+            lower.contains("facebook.com") || lower.contains("fb.watch") -> "Facebook"
+            else -> null
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .padding(horizontal = 20.dp, vertical = 6.dp)
             .animateContentSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Smart Clipboard Auto-Detection Banner (Seal-style)
+        // Smart Clipboard Auto-Detection Banner (Seal-style, 10x optimized)
         if (!clipboardUrl.isNullOrBlank() && clipboardUrl != inputUrl) {
             Card(
                 shape = RoundedCornerShape(14.dp),
@@ -594,35 +702,61 @@ private fun HomeDownloaderTab(
             }
         }
 
-        // Hero Branding Header
+        // Hero Branding Header (Exact Website Match: hero-logo-badge + title + subtitle)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 8.dp)
+            modifier = Modifier.padding(vertical = 6.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .size(76.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(Color(0xFF121214))
+                    .border(1.dp, CardBorderDark, RoundedCornerShape(22.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.app_icon_white),
+                    contentDescription = "Downloadivo Icon",
+                    modifier = Modifier.size(46.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             Text(
-                text = "Universal Downloader",
-                fontSize = 22.sp,
+                text = "Downloadivo",
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "High-speed line-rate media extractor",
-                fontSize = 13.sp,
+                text = "Download high-fidelity 8K / 4K video, audio, and covers from any source",
+                fontSize = 12.5.sp,
                 color = TextMuted,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 12.dp)
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Platform Filter Pills
+            // Platform Filter Pills with Authentic Brand Colors
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val platforms = listOf("All", "YouTube", "Instagram", "X / Twitter", "TikTok", "Spotify")
-                platforms.forEach { name ->
+                val platforms = listOf(
+                    "All" to TextPrimary,
+                    "YouTube" to BrandYouTube,
+                    "Instagram" to BrandInstagram,
+                    "X / Twitter" to BrandTwitter,
+                    "TikTok" to BrandTikTok,
+                    "Spotify" to BrandSpotify
+                )
+                platforms.forEach { (name, color) ->
                     val isSelected = activePlatformFilter == name
                     Surface(
                         onClick = { activePlatformFilter = name },
@@ -633,19 +767,32 @@ private fun HomeDownloaderTab(
                             if (isSelected) PrimaryEmerald else CardBorderDark
                         )
                     ) {
-                        Text(
-                            text = name,
-                            fontSize = 11.sp,
-                            color = if (isSelected) PrimaryEmerald else TextSubtle,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
-                        )
+                        ) {
+                            if (name != "All") {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                            }
+                            Text(
+                                text = name,
+                                fontSize = 11.sp,
+                                color = if (isSelected) PrimaryEmerald else TextMuted,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Central Input Card
+        // Central Input Card (Exact Website Card Structure)
         Card(
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = SurfaceCardDark),
@@ -662,13 +809,26 @@ private fun HomeDownloaderTab(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PrimaryEmerald,
-                        unfocusedBorderColor = CardBorderDark,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        cursorColor = PrimaryEmerald
-                    ),
+                    leadingIcon = {
+                        if (detectedPlatform != null) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = PrimaryEmerald.copy(alpha = 0.15f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f)),
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                Text(
+                                    text = detectedPlatform,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryEmerald,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        } else {
+                            Icon(Icons.Default.Link, contentDescription = null, tint = TextSubtle, modifier = Modifier.size(18.dp))
+                        }
+                    },
                     trailingIcon = {
                         if (inputUrl.isNotBlank()) {
                             IconButton(onClick = onClear) {
@@ -688,7 +848,14 @@ private fun HomeDownloaderTab(
                                 Icon(Icons.Default.ContentPaste, contentDescription = "Paste", tint = PrimaryEmerald)
                             }
                         }
-                    }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PrimaryEmerald,
+                        unfocusedBorderColor = CardBorderDark,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = PrimaryEmerald
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -699,7 +866,7 @@ private fun HomeDownloaderTab(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "100+ sites supported",
+                        text = "100+ platforms supported • Line-rate edge",
                         fontSize = 11.sp,
                         color = TextSubtle
                     )
@@ -757,7 +924,7 @@ private fun HomeDownloaderTab(
             }
         }
 
-        // Resolved Media Card (Seal-style)
+        // Resolved Media Card (Seal-style, 10X Optimized)
         resolvedInfo?.let { info ->
             Card(
                 shape = RoundedCornerShape(20.dp),
@@ -773,6 +940,7 @@ private fun HomeDownloaderTab(
                                 .height(190.dp)
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(BackgroundDark)
+                                .border(1.dp, CardBorderDark, RoundedCornerShape(14.dp))
                         ) {
                             AsyncImage(
                                 model = info.thumbnail,
@@ -780,6 +948,23 @@ private fun HomeDownloaderTab(
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )
+                            // Platform Pill Tag
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color.Black.copy(alpha = 0.85f),
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(8.dp)
+                            ) {
+                                Text(
+                                    text = info.extractor,
+                                    color = PrimaryEmerald,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                )
+                            }
+                            // Duration badge
                             if (info.duration.isNotBlank()) {
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
@@ -811,7 +996,7 @@ private fun HomeDownloaderTab(
                     )
                     if (info.author.isNotBlank()) {
                         Text(
-                            text = info.author,
+                            text = "Channel: ${info.author}",
                             fontSize = 12.sp,
                             color = TextMuted
                         )
@@ -819,7 +1004,7 @@ private fun HomeDownloaderTab(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Seal Mode Switcher: Video vs Audio
+                    // Seal Mode Switcher: Video vs Audio (Segmented Control)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -848,7 +1033,7 @@ private fun HomeDownloaderTab(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Video (MP4)",
-                                    fontSize = 12.sp,
+                                    fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (mediaMode == "video") Color.Black else TextMuted
                                 )
@@ -874,7 +1059,7 @@ private fun HomeDownloaderTab(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = "Audio Only",
-                                    fontSize = 12.sp,
+                                    fontSize = 12.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (mediaMode == "audio") Color.Black else TextMuted
                                 )
@@ -887,7 +1072,7 @@ private fun HomeDownloaderTab(
                     // Quality Selection Matrix based on active mode
                     Text(
                         text = if (mediaMode == "video") "SELECT VIDEO RESOLUTION" else "SELECT AUDIO QUALITY",
-                        fontSize = 11.sp,
+                        fontSize = 10.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextSubtle,
                         letterSpacing = 0.5.sp
@@ -897,7 +1082,6 @@ private fun HomeDownloaderTab(
                     if (mediaMode == "video") {
                         val videoFormats = info.availableFormats.filter { !it.isAudio }
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // Chunk into rows of 3
                             videoFormats.chunked(3).forEach { rowList ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -913,7 +1097,6 @@ private fun HomeDownloaderTab(
                                             onFormatSelect(it)
                                         }
                                     }
-                                    // Fill empty slots if row has < 3
                                     for (i in 0 until (3 - rowList.size)) {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
@@ -941,7 +1124,7 @@ private fun HomeDownloaderTab(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // In-App Virtual Pre-Download Trimmer
+                    // In-App Virtual Pre-Download Clip Trimmer (Seal signature feature)
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = BackgroundDark,
@@ -1037,7 +1220,7 @@ private fun HomeDownloaderTab(
                         Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (isTrimming) "Download Trimmed Clip" else "Start Download",
+                            text = if (isTrimming) "Download Trimmed Clip" else "Start Line-Rate Download",
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = Color.Black
@@ -1050,7 +1233,7 @@ private fun HomeDownloaderTab(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 2: ACTIVE QUEUE
+// TAB 2: ACTIVE QUEUE (WITH LIVE SPEEDOMETER & REAL-TIME ETA)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun QueueTab(
@@ -1205,7 +1388,7 @@ private fun QueueTab(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 3: LIBRARY / HISTORY
+// TAB 3: LIBRARY / HISTORY (WITH SEARCH, FILTER, IN-APP PLAY & SHARE)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun LibraryTab(
@@ -1449,7 +1632,6 @@ private fun LibraryTab(
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun SettingsTab() {
-    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
@@ -1546,7 +1728,7 @@ private fun SettingsTab() {
                                         val testRes = DownloadEngine.fetchMediaInfo("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
                                         isTesting = false
                                         if (testRes.isSuccess) {
-                                            testStatus = "✓ Server Connected (200 OK)"
+                                            testStatus = "✓ Connected (200 OK)"
                                         } else {
                                             testStatus = "✗ Connection Failed"
                                         }
@@ -1582,8 +1764,15 @@ private fun SettingsTab() {
                 ) {
                     Column {
                         Text("Downloadivo Mobile Version", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
-                        Text("v2.5.0 PRO (Seal Powerhouse Edition)", fontSize = 12.sp, color = PrimaryEmerald)
+                        Text("v3.0.0 PRO (Seal 10X Edition)", fontSize = 12.sp, color = PrimaryEmerald)
                     }
+                    Image(
+                        painter = painterResource(id = R.drawable.app_icon),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                    )
                 }
             }
         }

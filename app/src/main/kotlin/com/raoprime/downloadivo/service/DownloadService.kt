@@ -297,11 +297,13 @@ class DownloadService : Service() {
         }
 
         return NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_ID)
-            .setContentTitle(title)
+            .setContentTitle("⚡ Downloading: $title")
             .setContentText(statusText)
+            .setSubText(if (speed.isNotBlank()) speed else "Downloadivo Turbo")
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, if (progress >= 0) progress else 0, progress < 0)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -311,35 +313,65 @@ class DownloadService : Service() {
     private fun showCompletionNotification(title: String, isSuccess: Boolean, mediaUri: Uri?, isAudio: Boolean) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
 
-        val contentIntent = if (isSuccess && mediaUri != null) {
-            val viewIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(mediaUri, if (isAudio) "audio/*" else "video/*")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            PendingIntent.getActivity(
-                this,
-                0,
-                viewIntent,
+        if (!isSuccess || mediaUri == null) {
+            val retryIntent = PendingIntent.getActivity(
+                this, 0, Intent(this, MainActivity::class.java),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-        } else {
-            PendingIntent.getActivity(
-                this,
-                0,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
+            val failedNotif = NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_COMPLETED_ID)
+                .setContentTitle("Download Failed")
+                .setContentText(title)
+                .setSmallIcon(android.R.drawable.stat_notify_error)
+                .setAutoCancel(true)
+                .setContentIntent(retryIntent)
+                .build()
+            manager.notify(System.currentTimeMillis().toInt(), failedNotif)
+            return
         }
 
-        val notification = NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(if (isSuccess) "⚡ Download complete! Tap to play." else "Download failed")
-            .setSmallIcon(if (isSuccess) android.R.drawable.stat_sys_download_done else android.R.drawable.stat_notify_error)
+        // Tap action: Open built-in media viewer
+        val playIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(mediaUri, if (isAudio) "audio/*" else "video/*")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val playPendingIntent = PendingIntent.getActivity(
+            this,
+            2,
+            playIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // 1-Tap Share from notification shade
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = if (isAudio) "audio/*" else "video/*"
+            putExtra(Intent.EXTRA_STREAM, mediaUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val shareChooser = Intent.createChooser(shareIntent, "Share Media")
+        val sharePendingIntent = PendingIntent.getActivity(
+            this,
+            3,
+            shareChooser,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val folderName = if (isAudio) "Music/Downloadivo" else "Movies/Downloadivo"
+
+        val notification = NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_COMPLETED_ID)
+            .setContentTitle("✓ Download Complete")
+            .setContentText(title)
+            .setSubText("Saved to $folderName")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$title\nSaved to $folderName. Tap to play or share."))
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setAutoCancel(true)
-            .setContentIntent(contentIntent)
+            .setContentIntent(playPendingIntent)
+            .addAction(android.R.drawable.ic_media_play, "Play", playPendingIntent)
+            .addAction(android.R.drawable.ic_menu_share, "Share", sharePendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .build()
 
-        manager.notify(1002, notification)
+        manager.notify(System.currentTimeMillis().toInt(), notification)
     }
 
     override fun onDestroy() {
