@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -242,7 +243,7 @@ fun DownloadivoScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = CanvasDark
                 )
             )
@@ -343,13 +344,14 @@ fun DownloadivoScreen(
                         activePlaybackQualities = qualities
                         activePlaybackCurrentQuality = initialQuality
                     },
-                    onInspect = {
-                        if (inputUrl.isNotBlank()) {
+                    onInspect = { targetUrl ->
+                        val urlToInspect = (targetUrl ?: inputUrl).trim()
+                        if (urlToInspect.isNotBlank()) {
                             isCustomizeExpanded = true
                             isResolving = true
                             errorMessage = null
                             coroutineScope.launch {
-                                val res = DownloadEngine.fetchMediaInfo(inputUrl)
+                                val res = DownloadEngine.fetchMediaInfo(urlToInspect)
                                 isResolving = false
                                 res.onSuccess {
                                     resolvedInfo = it
@@ -663,7 +665,7 @@ private fun HomeDownloaderTab(
     onFormatSelect: (String) -> Unit,
     isResolving: Boolean,
     errorMessage: String?,
-    onInspect: () -> Unit,
+    onInspect: (targetUrl: String?) -> Unit,
     onStreamPlay: (streamUrl: String, originalUrl: String, title: String, isAudio: Boolean, qualities: List<String>, initialQuality: String) -> Unit,
     onInstantDownload: (url: String, format: String) -> Unit,
     onDownloadCustom: (info: MediaInfo, format: String, startTime: String?, endTime: String?) -> Unit,
@@ -786,7 +788,7 @@ private fun HomeDownloaderTab(
                             focusManager.clearFocus()
                             onUrlChange(clipboardUrl)
                             onClearClipboard()
-                            onInspect()
+                            onInspect(clipboardUrl)
                         },
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -858,7 +860,7 @@ private fun HomeDownloaderTab(
                         onSearch = {
                             keyboardController?.hide()
                             focusManager.clearFocus()
-                            if (inputUrl.startsWith("http")) onInspect()
+                            if (inputUrl.startsWith("http")) onInspect(inputUrl)
                         }
                     ),
                     decorationBox = { innerTextField ->
@@ -889,7 +891,7 @@ private fun HomeDownloaderTab(
                         onClick = {
                             keyboardController?.hide()
                             focusManager.clearFocus()
-                            if (inputUrl.startsWith("http")) onInspect()
+                            if (inputUrl.startsWith("http")) onInspect(inputUrl)
                         },
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
@@ -899,7 +901,7 @@ private fun HomeDownloaderTab(
                         contentPadding = PaddingValues(0.dp),
                         modifier = Modifier.size(38.dp)
                     ) {
-                        Icon(Icons.Default.ArrowForward, contentDescription = "Inspect", tint = CanvasDark, modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Inspect", tint = CanvasDark, modifier = Modifier.size(18.dp))
                     }
                 } else {
                     Button(
@@ -911,7 +913,7 @@ private fun HomeDownloaderTab(
                                 keyboardController?.hide()
                                 focusManager.clearFocus()
                                 onUrlChange(clean)
-                                onInspect()
+                                onInspect(clean)
                             } else {
                                 Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
                             }
@@ -1059,7 +1061,7 @@ private fun HomeDownloaderTab(
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(
-                        onClick = onInspect,
+                        onClick = { onInspect(null) },
                         modifier = Modifier.size(28.dp)
                     ) {
                         Icon(Icons.Default.Refresh, contentDescription = "Retry", tint = TextCrisp)
@@ -1479,7 +1481,7 @@ private fun HomeDownloaderTab(
                         // Dual Action: Stream Ad-Free vs Download Offline
                         val selectedFmt = info.availableFormats.find { it.id == selectedFormat }
                         val selectedLabel = selectedFmt?.label?.replace(" Video", "")?.replace(" Audio", "") ?: selectedFormat.uppercase()
-                        val sizeText = if (!selectedFmt?.sizeStr.isNullOrBlank()) " • ${selectedFmt!!.sizeStr}" else ""
+                        val sizeText = if (!selectedFmt?.sizeStr.isNullOrBlank()) " • ${selectedFmt?.sizeStr}" else ""
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1579,7 +1581,7 @@ private fun HomeDownloaderTab(
                                     Surface(
                                         onClick = {
                                             onUrlChange(feedItem.url)
-                                            onInspect()
+                                            onInspect(feedItem.url)
                                         },
                                         shape = RoundedCornerShape(12.dp),
                                         color = SurfaceCardDark,

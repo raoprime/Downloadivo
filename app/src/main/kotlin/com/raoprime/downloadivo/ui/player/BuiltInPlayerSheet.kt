@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -84,6 +85,9 @@ fun BuiltInPlayerSheet(
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 isBuffering = (state == Player.STATE_BUFFERING)
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                isBuffering = false
             }
         }
         exoPlayer.addListener(listener)
@@ -247,6 +251,7 @@ fun BuiltInPlayerSheet(
                             PlayerView(ctx).apply {
                                 player = exoPlayer
                                 useController = true
+                                keepScreenOn = true
                                 layoutParams = FrameLayout.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
