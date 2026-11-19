@@ -159,33 +159,74 @@ fun DownloadivoScreen(
                             Image(
                                 painter = painterResource(id = R.drawable.app_logo_white),
                                 contentDescription = "Downloadivo",
-                                modifier = Modifier.height(24.dp),
+                                modifier = Modifier
+                                    .height(30.dp)
+                                    .padding(vertical = 2.dp),
                                 contentScale = ContentScale.Fit
                             )
                         }
                         AppTab.QUEUE -> {
-                            Text(
-                                text = "Queue",
-                                style = Typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextCrisp
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.app_icon_white),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .padding(end = 8.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Text(
+                                    text = "Queue",
+                                    style = Typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp
+                                )
+                            }
                         }
                         AppTab.LIBRARY -> {
-                            Text(
-                                text = "Library",
-                                style = Typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextCrisp
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.app_icon_white),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .padding(end = 8.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Text(
+                                    text = "Library",
+                                    style = Typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp
+                                )
+                            }
                         }
                         AppTab.SETTINGS -> {
-                            Text(
-                                text = "Settings",
-                                style = Typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextCrisp
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.app_icon_white),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .padding(end = 8.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                                Text(
+                                    text = "Settings",
+                                    style = Typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp
+                                )
+                            }
                         }
                     }
                 },
@@ -2014,10 +2055,10 @@ private fun SettingsTab() {
                         Text("v3.6.0 Studio Edition (4K & Pre-Size)", style = Typography.bodySmall, color = TextSecondary)
                     }
                     Image(
-                        painter = painterResource(id = R.drawable.app_icon),
+                        painter = painterResource(id = R.drawable.app_icon_white),
                         contentDescription = null,
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(36.dp)
                             .clip(RoundedCornerShape(8.dp))
                     )
                 }
