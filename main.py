@@ -1143,29 +1143,33 @@ def _make_format_opts(fmt: str) -> dict:
                 "preferredquality": "320",
             }],
         }
-    if fmt in ["8k", "4320p"]:
+    if fmt in ["8k", "4320p", "4320"]:
         return {
             "format": "bestvideo[height<=4320]+bestaudio/best[height<=4320]/best",
         }
-    if fmt in ["4k", "2160p"]:
+    if fmt in ["4k", "2160p", "2160"]:
         return {
             "format": "bestvideo[height<=2160]+bestaudio/best[height<=2160]/best",
         }
-    if fmt in ["2k", "1440p"]:
+    if fmt in ["2k", "1440p", "1440"]:
         return {
             "format": "bestvideo[height<=1440]+bestaudio/best[height<=1440]/best",
         }
-    if fmt == "1080p":
+    if fmt in ["1080p", "1080"]:
         return {
             "format": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
         }
-    if fmt == "720p":
+    if fmt in ["720p", "720"]:
         return {
             "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
         }
-    if fmt == "480p":
+    if fmt in ["480p", "480"]:
         return {
             "format": "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
+        }
+    if fmt in ["360p", "360"]:
+        return {
+            "format": "bestvideo[height<=360]+bestaudio/best[height<=360]/best",
         }
     # "best" - maximum quality available (8K 4320p / 4K 2160p / 2K 1440p / 1080p FHD)
     return {
@@ -1713,8 +1717,13 @@ async def get_info(request: Request, url: Optional[str] = None):
                     if f.get("acodec") == "none":
                         sz += best_a_size
                     if str(h) not in format_sizes or sz > format_sizes[str(h)]["bytes"]:
-                        mb = sz / (1024 * 1024)
-                        format_sizes[str(h)] = {"bytes": sz, "label": f"{mb:.1f} MB" if mb >= 1 else f"{sz/1024:.0f} KB"}
+                        if sz >= 1024 * 1024 * 1024:
+                            lbl = f"{sz / (1024 * 1024 * 1024):.2f} GB"
+                        elif sz >= 1024 * 1024:
+                            lbl = f"{sz / (1024 * 1024):.1f} MB"
+                        else:
+                            lbl = f"{sz / 1024:.0f} KB"
+                        format_sizes[str(h)] = {"bytes": sz, "label": lbl}
 
             sorted_resolutions = sorted(list(heights), reverse=True)
             extractor = (info.get("extractor_key") or "Web").capitalize()
@@ -1724,13 +1733,28 @@ async def get_info(request: Request, url: Optional[str] = None):
 
             # High fidelity MP3 size
             mp3_bytes = (320000 * duration / 8) if duration else (best_a_size or 8 * 1024 * 1024)
-            mp3_mb = mp3_bytes / (1024 * 1024)
-            format_sizes["mp3"] = {"bytes": mp3_bytes, "label": f"{mp3_mb:.1f} MB"}
+            mp3_lbl = f"{mp3_bytes / (1024 * 1024 * 1024):.2f} GB" if mp3_bytes >= 1024 * 1024 * 1024 else f"{mp3_bytes / (1024 * 1024):.1f} MB"
+            format_sizes["mp3"] = {"bytes": mp3_bytes, "label": mp3_lbl}
 
             # Lossless M4A size
             m4a_bytes = best_a_size if best_a_size else (128000 * duration / 8 if duration else 5 * 1024 * 1024)
-            m4a_mb = m4a_bytes / (1024 * 1024)
-            format_sizes["m4a"] = {"bytes": m4a_bytes, "label": f"{m4a_mb:.1f} MB"}
+            m4a_lbl = f"{m4a_bytes / (1024 * 1024 * 1024):.2f} GB" if m4a_bytes >= 1024 * 1024 * 1024 else f"{m4a_bytes / (1024 * 1024):.1f} MB"
+            format_sizes["m4a"] = {"bytes": m4a_bytes, "label": m4a_lbl}
+
+            if "2160" in format_sizes:
+                format_sizes["4k"] = format_sizes["2160"]
+                format_sizes["2160p"] = format_sizes["2160"]
+            if "1440" in format_sizes:
+                format_sizes["1440p"] = format_sizes["1440"]
+                format_sizes["2k"] = format_sizes["1440"]
+            if "1080" in format_sizes:
+                format_sizes["1080p"] = format_sizes["1080"]
+            if "720" in format_sizes:
+                format_sizes["720p"] = format_sizes["720"]
+            if "480" in format_sizes:
+                format_sizes["480p"] = format_sizes["480"]
+            if "360" in format_sizes:
+                format_sizes["360p"] = format_sizes["360"]
 
             if sorted_resolutions:
                 best_h = str(sorted_resolutions[0])
@@ -1952,21 +1976,26 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
             if best_video_h > best_prog_h:
                 use_ffmpeg_mux = True
                 chosen_v = video_fmts[-1]["url"]
-        elif fmt_lower in ["8k", "4320p"]:
+        elif fmt_lower in ["8k", "4320p", "4320"]:
             use_ffmpeg_mux = True
             chosen_v = video_fmts[-1]["url"]
-        elif fmt_lower in ["4k", "2160p"]:
+        elif fmt_lower in ["4k", "2160p", "2160"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 2160]
             if matches:
                 use_ffmpeg_mux = True
                 chosen_v = matches[-1]["url"]
-        elif fmt_lower in ["2k", "1440p"]:
+        elif fmt_lower in ["2k", "1440p", "1440"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 1440]
             if matches:
                 use_ffmpeg_mux = True
                 chosen_v = matches[-1]["url"]
-        elif fmt_lower == "1080p":
+        elif fmt_lower in ["1080p", "1080"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 1080]
+            if matches:
+                use_ffmpeg_mux = True
+                chosen_v = matches[-1]["url"]
+        elif fmt_lower in ["720p", "720"]:
+            matches = [f for f in video_fmts if (f.get("height") or 0) <= 720]
             if matches:
                 use_ffmpeg_mux = True
                 chosen_v = matches[-1]["url"]
