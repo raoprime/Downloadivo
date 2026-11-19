@@ -36,17 +36,29 @@ class DownloadService : Service() {
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_FORMAT = "extra_format"
         const val EXTRA_THUMBNAIL = "extra_thumbnail"
+        const val EXTRA_START_TIME = "extra_start_time"
+        const val EXTRA_END_TIME = "extra_end_time"
 
         private val _currentTask = MutableStateFlow(DownloadTask())
         val currentTask = _currentTask.asStateFlow()
 
-        fun startDownload(context: Context, url: String, title: String, format: String, thumbnail: String = "") {
+        fun startDownload(
+            context: Context,
+            url: String,
+            title: String,
+            format: String,
+            thumbnail: String = "",
+            startTime: String? = null,
+            endTime: String? = null
+        ) {
             val intent = Intent(context, DownloadService::class.java).apply {
                 action = ACTION_START_DOWNLOAD
                 putExtra(EXTRA_URL, url)
                 putExtra(EXTRA_TITLE, title)
                 putExtra(EXTRA_FORMAT, format)
                 putExtra(EXTRA_THUMBNAIL, thumbnail)
+                putExtra(EXTRA_START_TIME, startTime)
+                putExtra(EXTRA_END_TIME, endTime)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -76,8 +88,10 @@ class DownloadService : Service() {
                 val title = intent.getStringExtra(EXTRA_TITLE) ?: "Media"
                 val format = intent.getStringExtra(EXTRA_FORMAT) ?: "best"
                 val thumbnail = intent.getStringExtra(EXTRA_THUMBNAIL) ?: ""
+                val startTime = intent.getStringExtra(EXTRA_START_TIME)
+                val endTime = intent.getStringExtra(EXTRA_END_TIME)
                 if (url.isNotBlank()) {
-                    beginDownload(url, title, format, thumbnail)
+                    beginDownload(url, title, format, thumbnail, startTime, endTime)
                 }
             }
             ACTION_CANCEL_DOWNLOAD -> {
@@ -87,7 +101,14 @@ class DownloadService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun beginDownload(url: String, title: String, format: String, thumbnail: String = "") {
+    private fun beginDownload(
+        url: String,
+        title: String,
+        format: String,
+        thumbnail: String = "",
+        startTime: String? = null,
+        endTime: String? = null
+    ) {
         downloadJob?.cancel()
 
         wakeLock?.acquire(10 * 60 * 1000L /* 10 minutes */)
@@ -95,21 +116,28 @@ class DownloadService : Service() {
         val cleanTitle = title.replace(Regex("[^a-zA-Z0-9._ -]"), "").take(80).ifBlank { "download" }
         val isAudio = format.lowercase() == "mp3" || format.lowercase() == "m4a"
         val extension = if (isAudio) (if (format.lowercase() == "m4a") "m4a" else "mp3") else "mp4"
-        val fileName = "$cleanTitle.$extension"
+        val clipSuffix = if (!startTime.isNullOrBlank() && !endTime.isNullOrBlank()) {
+            "_Clip_${startTime.replace(':', '.')}_to_${endTime.replace(':', '.')}"
+        } else {
+            ""
+        }
+        val fileName = "$cleanTitle$clipSuffix.$extension"
 
         val initialTask = DownloadTask(
             id = System.currentTimeMillis().toString(),
-            title = cleanTitle,
+            title = "$cleanTitle$clipSuffix",
             url = url,
             format = format,
             thumbnail = thumbnail,
             status = DownloadStatus.DOWNLOADING,
-            isAudio = isAudio
+            isAudio = isAudio,
+            startTime = startTime,
+            endTime = endTime
         )
         _currentTask.value = initialTask
         com.raoprime.downloadivo.data.DownloadRepository.addTask(initialTask)
 
-        startForegroundNotification(cleanTitle, 0, "Starting download...")
+        startForegroundNotification(cleanTitle, 0, "Starting download...", "")
 
         downloadJob = scope.launch(Dispatchers.IO) {
             var mediaUri: Uri? = null
@@ -153,18 +181,21 @@ class DownloadService : Service() {
                 val result = DownloadEngine.downloadStream(
                     targetUrl = url,
                     format = format,
+                    startTime = startTime,
+                    endTime = endTime,
                     outputStream = outStream,
-                    onProgress = { percent, speed, current, total ->
+                    onProgress = { percent, speed, eta, current, total ->
                         val updated = _currentTask.value.copy(
                             progress = percent,
                             speed = speed,
+                            eta = eta,
                             bytesDownloaded = current,
                             totalBytes = total,
                             status = DownloadStatus.DOWNLOADING
                         )
                         _currentTask.value = updated
                         com.raoprime.downloadivo.data.DownloadRepository.updateTask(updated)
-                        updateForegroundNotification(cleanTitle, percent, speed)
+                        updateForegroundNotification(cleanTitle, percent, speed, eta)
                     }
                 )
 
@@ -222,8 +253,8 @@ class DownloadService : Service() {
         stopSelf()
     }
 
-    private fun startForegroundNotification(title: String, progress: Int, speed: String) {
-        val notification = buildProgressNotification(title, progress, speed)
+    private fun startForegroundNotification(title: String, progress: Int, speed: String, eta: String = "") {
+        val notification = buildProgressNotification(title, progress, speed, eta)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceCompat.startForeground(
                 this,
@@ -236,12 +267,12 @@ class DownloadService : Service() {
         }
     }
 
-    private fun updateForegroundNotification(title: String, progress: Int, speed: String) {
+    private fun updateForegroundNotification(title: String, progress: Int, speed: String, eta: String = "") {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-        manager.notify(1001, buildProgressNotification(title, progress, speed))
+        manager.notify(1001, buildProgressNotification(title, progress, speed, eta))
     }
 
-    private fun buildProgressNotification(title: String, progress: Int, speed: String): Notification {
+    private fun buildProgressNotification(title: String, progress: Int, speed: String, eta: String = ""): Notification {
         val contentIntent = PendingIntent.getActivity(
             this,
             0,
@@ -259,9 +290,15 @@ class DownloadService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val statusText = buildString {
+            if (progress >= 0) append("$progress%") else append("Streaming")
+            if (speed.isNotBlank()) append(" • $speed")
+            if (eta.isNotBlank()) append(" • $eta")
+        }
+
         return NotificationCompat.Builder(this, DownloadivoApp.CHANNEL_ID)
             .setContentTitle(title)
-            .setContentText(if (progress >= 0) "$progress% • $speed" else "Streaming • $speed")
+            .setContentText(statusText)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setProgress(100, if (progress >= 0) progress else 0, progress < 0)
             .setOngoing(true)

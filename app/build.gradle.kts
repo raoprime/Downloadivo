@@ -70,6 +70,8 @@ dependencies {
 
   // Media & Image Loading
   implementation(libs.coil.compose)
+  implementation(libs.media3.exoplayer)
+  implementation(libs.media3.ui)
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
   // Instrumented tests

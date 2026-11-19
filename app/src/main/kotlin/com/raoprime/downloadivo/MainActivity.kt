@@ -1,6 +1,7 @@
 package com.raoprime.downloadivo
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -21,6 +22,7 @@ import com.raoprime.downloadivo.ui.theme.DownloadivoTheme
 class MainActivity : ComponentActivity() {
 
     private var sharedUrl by mutableStateOf<String?>(null)
+    private var clipboardUrl by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +36,7 @@ class MainActivity : ComponentActivity() {
         }
 
         handleShareIntent(intent)
+        checkClipboardForUrl()
 
         setContent {
             DownloadivoTheme {
@@ -41,10 +44,19 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    DownloadivoScreen(sharedUrl = sharedUrl)
+                    DownloadivoScreen(
+                        sharedUrl = sharedUrl,
+                        clipboardUrl = clipboardUrl,
+                        onClearClipboard = { clipboardUrl = null }
+                    )
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        checkClipboardForUrl()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -74,6 +86,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun checkClipboardForUrl() {
+        try {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            if (clipboard != null && clipboard.hasPrimaryClip()) {
+                val item = clipboard.primaryClip?.getItemAt(0)
+                val text = item?.text?.toString() ?: ""
+                val extracted = extractUrl(text)
+                if (extracted.startsWith("http://") || extracted.startsWith("https://")) {
+                    clipboardUrl = extracted
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     private fun extractUrl(text: String): String {
