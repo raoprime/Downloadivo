@@ -1494,7 +1494,7 @@ def system_info(request: Request):
 
 
 @app.api_route("/info", methods=["GET", "POST"])
-async def get_info(request: Request, req: Optional[InfoRequest] = None, url: Optional[str] = None):
+async def get_info(request: Request, url: Optional[str] = None):
     client_ip = (
         request.headers.get("cf-connecting-ip")
         or (request.headers.get("x-forwarded-for", "").split(",")[0].strip())
@@ -1503,18 +1503,21 @@ async def get_info(request: Request, req: Optional[InfoRequest] = None, url: Opt
     if not _check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many preview requests. Please wait a moment.")
 
-    target_url = None
-    if req and getattr(req, "url", None):
-        target_url = req.url
-    elif url:
-        target_url = url
-    else:
+    target_url = url
+    if not target_url:
         if request.method == "POST":
             try:
                 body = await request.json()
-                target_url = body.get("url")
+                if isinstance(body, dict):
+                    target_url = body.get("url")
             except Exception:
                 pass
+            if not target_url:
+                try:
+                    form = await request.form()
+                    target_url = form.get("url")
+                except Exception:
+                    pass
         if not target_url:
             target_url = request.query_params.get("url")
 
@@ -1744,8 +1747,8 @@ async def start_download(req: DownloadRequest, request: Request):
 
 
 @app.api_route("/stream", methods=["GET", "HEAD"])
-def stream_media(url: str, format: str = "best", request: Request = None):
-    """Zero-disk high-speed chunked stream proxy directly into client Chrome browser."""
+def stream_media(url: str, format: str = "best", start_time: Optional[str] = None, end_time: Optional[str] = None, request: Request = None):
+    """Zero-disk high-speed chunked stream proxy directly into client Chrome browser or Android app."""
     if request:
         client_ip = (
             request.headers.get("cf-connecting-ip")
@@ -1771,6 +1774,53 @@ def stream_media(url: str, format: str = "best", request: Request = None):
 
     safe_name = _clean_filename(title)
     fmt_lower = (format or "best").lower()
+
+    # Pre-download trimmer fast path (if start_time and end_time provided)
+    if start_time and end_time and _FFMPEG_PATH:
+        is_audio = fmt_lower in ["mp3", "audio"]
+        s_clean = start_time.replace(":", ".")
+        e_clean = end_time.replace(":", ".")
+        if is_audio:
+            audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
+            audio_fmts.sort(key=lambda x: x.get("abr") or 0, reverse=True)
+            src_url = audio_fmts[0]["url"] if audio_fmts else formats[-1]["url"]
+            cmd = [_FFMPEG_PATH, "-y", "-loglevel", "error", "-ss", start_time, "-to", end_time, "-i", src_url, "-vn", "-c:a", "libmp3lame", "-b:a", "320k", "-f", "mp3", "pipe:1"]
+            media_type = "audio/mpeg"
+            clip_name = f"{safe_name}_Clip_{s_clean}_to_{e_clean}.mp3"
+        else:
+            prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
+            if prog:
+                src_url = prog[-1]["url"]
+                cmd = [_FFMPEG_PATH, "-y", "-loglevel", "error", "-ss", start_time, "-to", end_time, "-i", src_url, "-c", "copy", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1"]
+            else:
+                video_fmts = [f for f in formats if f.get("vcodec") != "none" and f.get("url")]
+                audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
+                chosen_v = video_fmts[-1]["url"] if video_fmts else formats[-1]["url"]
+                chosen_a = audio_fmts[-1]["url"] if audio_fmts else chosen_v
+                cmd = [_FFMPEG_PATH, "-y", "-loglevel", "error", "-ss", start_time, "-to", end_time, "-i", chosen_v, "-ss", start_time, "-to", end_time, "-i", chosen_a, "-c:v", "copy", "-c:a", "aac", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1"]
+            media_type = "video/mp4"
+            clip_name = f"{safe_name}_Clip_{s_clean}_to_{e_clean}.mp4"
+
+        def iter_trimmed_pipe():
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                while True:
+                    data = proc.stdout.read(64 * 1024)
+                    if not data:
+                        break
+                    yield data
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+
+        return StreamingResponse(
+            iter_trimmed_pipe(),
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{clip_name}"',
+                "Accept-Ranges": "bytes",
+            }
+        )
 
     # 1. Audio stream requested (MP3 / Audio)
     if fmt_lower in ["mp3", "audio"]:
