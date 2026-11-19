@@ -33,6 +33,13 @@ object DownloadEngine {
         return match.trimEnd('.', ',', '!', '?', ')', ']', '}', '>', ';', '"', '\'')
     }
 
+    fun extractAllUrls(rawText: String): List<String> {
+        val regex = Regex("""https?://[^\s<>"'{}|\\^`]+""")
+        return regex.findAll(rawText).map { match ->
+            match.value.trimEnd('.', ',', '!', '?', ')', ']', '}', '>', ';', '"', '\'')
+        }.filter { it.startsWith("http://") || it.startsWith("https://") }.distinct().toList()
+    }
+
     suspend fun fetchMediaInfo(targetUrl: String): Result<MediaInfo> = withContext(Dispatchers.IO) {
         val cleanUrl = sanitizeUrl(targetUrl)
         if (cleanUrl.isBlank()) {

@@ -622,16 +622,20 @@ private fun HomeDownloaderTab(
         // ═══════════════════════════════════════════════════════════════
         // HERO BRANDING (MATCHES OFFICIAL WEBSITE DESIGN)
         // ═══════════════════════════════════════════════════════════════
-        if (resolvedInfo == null && !isResolving) {
+        AnimatedVisibility(
+            visible = resolvedInfo == null && !isResolving,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 14.dp, bottom = 4.dp),
+                    .padding(top = 10.dp, bottom = 2.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
-                        .size(68.dp)
+                        .size(64.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(SurfaceDark)
                         .border(1.dp, BorderHairline, RoundedCornerShape(18.dp)),
@@ -640,16 +644,16 @@ private fun HomeDownloaderTab(
                     Image(
                         painter = painterResource(id = R.drawable.app_icon_white),
                         contentDescription = "Downloadivo",
-                        modifier = Modifier.size(44.dp)
+                        modifier = Modifier.size(42.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Downloadivo",
                     style = Typography.displayLarge,
                     color = TextCrisp
                 )
-                Spacer(modifier = Modifier.height(3.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "Universal Media Studio",
                     style = Typography.bodySmall,
@@ -741,7 +745,8 @@ private fun HomeDownloaderTab(
                         Text("Paste link to download...", color = TextQuaternary, fontSize = 14.sp)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
+                    singleLine = false,
+                    maxLines = 3,
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(
@@ -808,79 +813,181 @@ private fun HomeDownloaderTab(
                     )
                 )
 
-                // Master Dual Actions: Video / Audio (Available when no preview is yet loaded)
+                // Master Dual Actions: Batch Mode vs Single Mode
                 if (resolvedInfo == null && !isResolving) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                if (inputUrl.isNotBlank()) {
-                                    onInstantDownload(inputUrl, "best")
-                                } else {
-                                    Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = AccentEmerald,
-                                contentColor = Color.Black
-                            )
+                    val detectedUrls = remember(inputUrl) { DownloadEngine.extractAllUrls(inputUrl) }
+                    if (detectedUrls.size > 1) {
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = SurfaceElevated,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.35f)),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black, modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Download Video", style = Typography.labelLarge, color = Color.Black)
-                        }
-
-                        Button(
-                            onClick = {
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                if (inputUrl.isNotBlank()) {
-                                    onInstantDownload(inputUrl, "mp3")
-                                } else {
-                                    Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Layers,
+                                            contentDescription = null,
+                                            tint = AccentEmerald,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Batch Queue Mode",
+                                            style = Typography.titleSmall,
+                                            color = TextCrisp
+                                        )
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = AccentEmeraldMuted
+                                    ) {
+                                        Text(
+                                            text = "${detectedUrls.size} LINKS",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = AccentEmerald,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
                                 }
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = SurfaceElevated,
-                                contentColor = TextCrisp
-                            ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
-                        ) {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Download Audio", style = Typography.labelLarge, color = TextCrisp)
-                        }
-                    }
 
-                    // Inspect Details Trigger
-                    TextButton(
-                        onClick = {
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
-                            if (inputUrl.isNotBlank()) {
-                                onInspect()
-                            } else {
-                                Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
+                                Text(
+                                    text = "Queue all ${detectedUrls.size} items simultaneously into turbo background engine.",
+                                    style = Typography.bodySmall,
+                                    color = TextSecondary
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
+                                            detectedUrls.forEach { u ->
+                                                onInstantDownload(u, "best")
+                                            }
+                                            onClear()
+                                        },
+                                        modifier = Modifier.weight(1f).height(46.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = AccentEmerald,
+                                            contentColor = Color.Black
+                                        )
+                                    ) {
+                                        Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("All Videos (${detectedUrls.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            keyboardController?.hide()
+                                            focusManager.clearFocus()
+                                            detectedUrls.forEach { u ->
+                                                onInstantDownload(u, "mp3")
+                                            }
+                                            onClear()
+                                        },
+                                        modifier = Modifier.weight(1f).height(46.dp),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = SurfaceDark,
+                                            contentColor = TextCrisp
+                                        ),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                                    ) {
+                                        Icon(Icons.Default.MusicNote, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("All MP3s (${detectedUrls.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextCrisp)
+                                    }
+                                }
                             }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Tune, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Inspect Available Resolutions & 4K Options", style = Typography.bodySmall, color = AccentEmerald)
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    if (inputUrl.isNotBlank()) {
+                                        onInstantDownload(inputUrl, "best")
+                                    } else {
+                                        Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = AccentEmerald,
+                                    contentColor = Color.Black
+                                )
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Download Video", style = Typography.labelLarge, color = Color.Black)
+                            }
+
+                            Button(
+                                onClick = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    if (inputUrl.isNotBlank()) {
+                                        onInstantDownload(inputUrl, "mp3")
+                                    } else {
+                                        Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceElevated,
+                                    contentColor = TextCrisp
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                            ) {
+                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Download Audio", style = Typography.labelLarge, color = TextCrisp)
+                            }
+                        }
+
+                        // Inspect Details Trigger
+                        TextButton(
+                            onClick = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                if (inputUrl.isNotBlank()) {
+                                    onInspect()
+                                } else {
+                                    Toast.makeText(context, "Please paste a link first", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Tune, contentDescription = null, tint = AccentEmerald, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Inspect Available Resolutions & 4K Options", style = Typography.bodySmall, color = AccentEmerald)
+                            }
                         }
                     }
                 }
@@ -959,69 +1066,90 @@ private fun HomeDownloaderTab(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // Cinematic 16:9 Thumbnail
-                    if (info.thumbnail.isNotBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(190.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(CanvasDark)
-                        ) {
-                            AsyncImage(
-                                model = info.thumbnail,
-                                contentDescription = "Thumbnail",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color.Black.copy(alpha = 0.82f),
+                    // Compact Horizontal Preview (Seal-Style Precision Layout)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(CanvasDark)
+                            .border(1.dp, BorderHairline, RoundedCornerShape(14.dp))
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (info.thumbnail.isNotBlank()) {
+                            Box(
                                 modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(8.dp)
+                                    .size(80.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(SurfaceDark)
+                            ) {
+                                AsyncImage(
+                                    model = info.thumbnail,
+                                    contentDescription = "Thumbnail",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                                if (info.duration.isNotBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color.Black.copy(alpha = 0.85f),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(3.dp)
+                                    ) {
+                                        Text(
+                                            text = info.duration,
+                                            fontSize = 9.sp,
+                                            color = Color.White,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                        }
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = AccentEmeraldMuted,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.2f))
                             ) {
                                 Text(
                                     text = info.extractor.uppercase(),
-                                    color = AccentEmerald,
-                                    style = Typography.labelSmall,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    color = AccentEmerald,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                 )
                             }
-                            if (info.duration.isNotBlank()) {
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = Color.Black.copy(alpha = 0.82f),
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .padding(8.dp)
-                                ) {
-                                    Text(
-                                        text = info.duration,
-                                        color = Color.White,
-                                        style = Typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                                    )
-                                }
+                            Text(
+                                text = info.title.ifBlank { "Media Stream" },
+                                style = Typography.titleSmall,
+                                color = TextCrisp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (info.author.isNotBlank()) {
+                                Text(
+                                    text = info.author,
+                                    style = Typography.bodySmall,
+                                    color = TextTertiary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
 
-                    Text(
-                        text = info.title.ifBlank { "Media Stream" },
-                        style = Typography.titleMedium,
-                        color = TextCrisp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (info.author.isNotBlank()) {
-                        Text(
-                            text = info.author,
-                            style = Typography.bodySmall,
-                            color = TextSecondary
-                        )
+                        IconButton(
+                            onClick = onClear,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextTertiary)
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -1241,8 +1369,9 @@ private fun HomeDownloaderTab(
                     ) {
                         Icon(Icons.Default.Download, contentDescription = null, tint = Color.Black, modifier = Modifier.size(19.dp))
                         Spacer(modifier = Modifier.width(8.dp))
+                        val selectedLabel = info.availableFormats.find { it.id == selectedFormat }?.label ?: selectedFormat.uppercase()
                         Text(
-                            text = if (isTrimming) "Download Trimmed Clip" else "Download Selected Format",
+                            text = if (isTrimming) "Download Trimmed Clip" else "Download $selectedLabel",
                             style = Typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                             color = Color.Black
@@ -1853,7 +1982,7 @@ private fun SettingsTab() {
                 ) {
                     Column {
                         Text("Downloadivo Mobile", style = Typography.titleSmall, color = TextCrisp)
-                        Text("v3.3.0 Obsidian Edition", style = Typography.bodySmall, color = AccentEmerald)
+                        Text("v3.4.0 Obsidian Edition", style = Typography.bodySmall, color = AccentEmerald)
                     }
                     Image(
                         painter = painterResource(id = R.drawable.app_icon),
