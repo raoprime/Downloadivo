@@ -1133,8 +1133,8 @@ def _info_ydl_opts() -> dict:
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
         },
-        "socket_timeout": 8,
-        "retries": 2,
+        "socket_timeout": 20,
+        "retries": 4,
     }
 
 
@@ -1825,10 +1825,43 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
     # 1. Audio stream requested (MP3 / Audio)
     if fmt_lower in ["mp3", "audio"]:
         audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
-        audio_fmts.sort(key=lambda x: x.get("abr") or 0, reverse=True)
+        audio_fmts.sort(key=lambda x: (x.get("abr") or x.get("tbr") or 0), reverse=True)
         if not audio_fmts:
             raise HTTPException(status_code=400, detail="No audio stream available")
         direct_url = audio_fmts[0]["url"]
+
+        if _FFMPEG_PATH:
+            cmd = [
+                _FFMPEG_PATH,
+                "-y",
+                "-loglevel", "error",
+                "-i", direct_url,
+                "-vn",
+                "-c:a", "libmp3lame",
+                "-b:a", "320k",
+                "-f", "mp3",
+                "pipe:1"
+            ]
+            def iter_mp3_pipe():
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                try:
+                    while True:
+                        data = proc.stdout.read(64 * 1024)
+                        if not data:
+                            break
+                        yield data
+                finally:
+                    if proc.poll() is None:
+                        proc.kill()
+
+            return StreamingResponse(
+                iter_mp3_pipe(),
+                media_type="audio/mpeg",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{safe_name}.mp3"',
+                    "Accept-Ranges": "bytes",
+                }
+            )
 
         def iter_audio():
             import requests
@@ -1847,58 +1880,46 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         )
 
     # 2. Video stream requested
-    # Fast path: Progressive format (video + audio pre-combined) -> zero server CPU, instant start
-    prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
-    chosen_url = None
-
-    if prog:
-        if fmt_lower == "720p":
-            matches = [f for f in prog if (f.get("height") or 0) <= 720]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower == "480p":
-            matches = [f for f in prog if (f.get("height") or 0) <= 480]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower == "360p":
-            matches = [f for f in prog if (f.get("height") or 0) <= 360]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower in ["best", "original"]:
-            chosen_url = prog[-1]["url"]
-
-    if chosen_url:
-        def iter_stream():
-            import requests
-            with requests.get(chosen_url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as r:
-                for chunk in r.iter_content(chunk_size=1024 * 512):
-                    if chunk:
-                        yield chunk
-
-        return StreamingResponse(
-            iter_stream(),
-            media_type="video/mp4",
-            headers={
-                "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
-                "Accept-Ranges": "bytes",
-            }
-        )
-
-    # 3. Separate video + audio streams available -> Pipe mux via FFmpeg in real time
     video_fmts = [f for f in formats if f.get("vcodec") != "none" and f.get("url")]
+    video_fmts.sort(key=lambda x: (x.get("height") or 0, x.get("tbr") or 0))
     audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
+    audio_fmts.sort(key=lambda x: (x.get("abr") or x.get("tbr") or 0))
+    prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
+    prog.sort(key=lambda x: (x.get("height") or 0, x.get("tbr") or 0))
 
-    if video_fmts and audio_fmts and _FFMPEG_PATH:
-        if fmt_lower == "1080p":
-            matches = [f for f in video_fmts if (f.get("height") or 0) <= 1080]
-            chosen_v = matches[-1]["url"] if matches else video_fmts[-1]["url"]
-        elif fmt_lower == "4k":
+    # Determine if we should use separate video+audio pipe (for true Best / 1080p / 4K / 8K)
+    best_prog_h = prog[-1].get("height", 0) if prog else 0
+    best_video_h = video_fmts[-1].get("height", 0) if video_fmts else 0
+
+    use_ffmpeg_mux = False
+    chosen_v = None
+    chosen_a = audio_fmts[-1]["url"] if audio_fmts else None
+
+    if video_fmts and chosen_a and _FFMPEG_PATH:
+        if fmt_lower in ["best", "original"]:
+            if best_video_h > best_prog_h:
+                use_ffmpeg_mux = True
+                chosen_v = video_fmts[-1]["url"]
+        elif fmt_lower in ["8k", "4320p"]:
+            use_ffmpeg_mux = True
+            chosen_v = video_fmts[-1]["url"]
+        elif fmt_lower in ["4k", "2160p"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 2160]
-            chosen_v = matches[-1]["url"] if matches else video_fmts[-1]["url"]
-        elif fmt_lower == "8k":
-            chosen_v = video_fmts[-1]["url"]
-        else:
-            chosen_v = video_fmts[-1]["url"]
+            if matches:
+                use_ffmpeg_mux = True
+                chosen_v = matches[-1]["url"]
+        elif fmt_lower in ["2k", "1440p"]:
+            matches = [f for f in video_fmts if (f.get("height") or 0) <= 1440]
+            if matches:
+                use_ffmpeg_mux = True
+                chosen_v = matches[-1]["url"]
+        elif fmt_lower == "1080p":
+            matches = [f for f in video_fmts if (f.get("height") or 0) <= 1080]
+            if matches:
+                use_ffmpeg_mux = True
+                chosen_v = matches[-1]["url"]
 
-        chosen_a = audio_fmts[-1]["url"]
-
+    if use_ffmpeg_mux and chosen_v and chosen_a:
         def iter_ffmpeg_pipe():
             cmd = [
                 _FFMPEG_PATH,
@@ -1925,6 +1946,38 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
 
         return StreamingResponse(
             iter_ffmpeg_pipe(),
+            media_type="video/mp4",
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
+                "Accept-Ranges": "bytes",
+            }
+        )
+
+    # Fast progressive stream path
+    chosen_url = None
+    if prog:
+        if fmt_lower == "720p":
+            matches = [f for f in prog if (f.get("height") or 0) <= 720]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower == "480p":
+            matches = [f for f in prog if (f.get("height") or 0) <= 480]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower == "360p":
+            matches = [f for f in prog if (f.get("height") or 0) <= 360]
+            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+        elif fmt_lower in ["best", "original"]:
+            chosen_url = prog[-1]["url"]
+
+    if chosen_url:
+        def iter_stream():
+            import requests
+            with requests.get(chosen_url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as r:
+                for chunk in r.iter_content(chunk_size=1024 * 512):
+                    if chunk:
+                        yield chunk
+
+        return StreamingResponse(
+            iter_stream(),
             media_type="video/mp4",
             headers={
                 "Content-Disposition": f'attachment; filename="{safe_name}.mp4"',
