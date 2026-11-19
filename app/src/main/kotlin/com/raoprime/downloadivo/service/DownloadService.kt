@@ -418,8 +418,19 @@ class DownloadService : Service() {
         val queueCount = pendingQueue.size
         val queueSubtext = if (queueCount > 0) " +$queueCount in queue" else ""
 
+        val downloadedBytes = _currentTask.value.bytesDownloaded
+        val totalBytes = _currentTask.value.totalBytes
+
         val statusText = buildString {
-            if (progress >= 0) append("$progress%") else append("Streaming")
+            if (downloadedBytes > 0) {
+                append(formatByteSize(downloadedBytes))
+                if (totalBytes > 0) {
+                    append(" / ${formatByteSize(totalBytes)}")
+                }
+                if (progress >= 0) append(" ($progress%)")
+            } else {
+                if (progress >= 0) append("$progress%") else append("Connecting")
+            }
             if (speed.isNotBlank()) append(" • $speed")
             if (eta.isNotBlank()) append(" • $eta")
             append(queueSubtext)
@@ -513,6 +524,18 @@ class DownloadService : Service() {
         }
 
         manager.notify(System.currentTimeMillis().toInt(), builder.build())
+    }
+
+    private fun formatByteSize(bytes: Long): String {
+        val mb = bytes / (1024.0 * 1024.0)
+        return if (mb >= 1024.0) {
+            String.format("%.2f GB", mb / 1024.0)
+        } else if (mb >= 1.0) {
+            String.format("%.1f MB", mb)
+        } else {
+            val kb = bytes / 1024.0
+            String.format("%.0f KB", kb)
+        }
     }
 
     override fun onDestroy() {

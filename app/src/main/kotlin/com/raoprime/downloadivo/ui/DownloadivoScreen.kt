@@ -411,15 +411,21 @@ fun DownloadivoScreen(
                                     .background(AccentEmeraldMuted),
                                 contentAlignment = Alignment.Center
                             ) {
-                                CircularProgressIndicator(
-                                    progress = {
-                                        if (currentTask.progress >= 0) currentTask.progress / 100f else 0f
-                                    },
-                                    modifier = Modifier.size(26.dp),
-                                    color = AccentEmerald,
-                                    strokeWidth = 2.5.dp,
-                                    trackColor = BorderHairline
-                                )
+                                if (currentTask.progress >= 0) {
+                                    CircularProgressIndicator(
+                                        progress = { currentTask.progress / 100f },
+                                        modifier = Modifier.size(26.dp),
+                                        color = AccentEmerald,
+                                        strokeWidth = 2.5.dp,
+                                        trackColor = BorderHairline
+                                    )
+                                } else {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(26.dp),
+                                        color = AccentEmerald,
+                                        strokeWidth = 2.5.dp
+                                    )
+                                }
                                 Icon(
                                     if (currentTask.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
                                     contentDescription = null,
@@ -438,13 +444,20 @@ fun DownloadivoScreen(
                                 )
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = if (currentTask.progress >= 0) "${currentTask.progress}%" else "Streaming",
+                                        text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
                                         style = Typography.labelMedium,
                                         color = AccentEmerald
                                     )
                                     if (currentTask.speed.isNotBlank()) {
                                         Text(
                                             text = " • ${currentTask.speed}",
+                                            style = Typography.bodySmall,
+                                            color = TextCrisp
+                                        )
+                                    }
+                                    if (currentTask.bytesDownloaded > 0) {
+                                        Text(
+                                            text = " (${formatByteSize(currentTask.bytesDownloaded)}${if (currentTask.totalBytes > 0) " / " + formatByteSize(currentTask.totalBytes) else ""})",
                                             style = Typography.bodySmall,
                                             color = TextSecondary
                                         )
@@ -1475,39 +1488,57 @@ private fun QueueTab(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    LinearProgressIndicator(
-                        progress = { if (currentTask.progress >= 0) currentTask.progress / 100f else 0f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = AccentEmerald,
-                        trackColor = BorderHairline
-                    )
+                    if (currentTask.progress >= 0) {
+                        LinearProgressIndicator(
+                            progress = { currentTask.progress / 100f },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = AccentEmerald,
+                            trackColor = BorderHairline
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = AccentEmerald,
+                            trackColor = BorderHairline
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = if (currentTask.progress >= 0) "${currentTask.progress}%" else "Streaming...",
-                            style = Typography.bodySmall,
-                            color = TextSecondary
+                            text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
+                            style = Typography.titleSmall,
+                            color = AccentEmerald
                         )
                         Text(
                             text = buildString {
+                                if (currentTask.speed.isNotBlank()) {
+                                    append(currentTask.speed)
+                                    append(" • ")
+                                }
                                 append(formatByteSize(currentTask.bytesDownloaded))
-                                append(" / ")
-                                append(if (currentTask.totalBytes > 0) formatByteSize(currentTask.totalBytes) else "Stream")
+                                if (currentTask.totalBytes > 0) {
+                                    append(" / ")
+                                    append(formatByteSize(currentTask.totalBytes))
+                                }
                                 if (currentTask.eta.isNotBlank()) {
                                     append(" • ")
                                     append(currentTask.eta)
                                 }
                             },
                             style = Typography.bodySmall,
-                            color = TextTertiary
+                            color = TextCrisp
                         )
                     }
                 }
@@ -1982,7 +2013,7 @@ private fun SettingsTab() {
                 ) {
                     Column {
                         Text("Downloadivo Mobile", style = Typography.titleSmall, color = TextCrisp)
-                        Text("v3.4.0 Obsidian Edition", style = Typography.bodySmall, color = AccentEmerald)
+                        Text("v3.5.0 Monochrome Edition", style = Typography.bodySmall, color = TextCrisp)
                     }
                     Image(
                         painter = painterResource(id = R.drawable.app_icon),

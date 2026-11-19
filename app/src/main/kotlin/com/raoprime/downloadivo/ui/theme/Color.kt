@@ -2,26 +2,26 @@ package com.raoprime.downloadivo.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Obsidian & Emerald Master Design Tokens (Apple / Linear Caliber)
-val CanvasDark = Color(0xFF09090B)          // Deep Obsidian Background
-val SurfaceDark = Color(0xFF121215)         // Primary Container Surface
-val SurfaceElevated = Color(0xFF18181C)     // Secondary Glass / Elevated Surface
-val SurfaceHighlight = Color(0xFF222228)    // Hover / Active Surface
+// Pure Monochrome Luxury Tokens (Black, White & Refined Gray)
+val CanvasDark = Color(0xFF000000)          // Pure True Black Canvas
+val SurfaceDark = Color(0xFF0C0C0F)         // Deep Obsidian Gray Card
+val SurfaceElevated = Color(0xFF141418)     // Secondary Charcoal Gray
+val SurfaceHighlight = Color(0xFF202025)    // Active Slate Gray
 
 // Borders & Dividers
-val BorderHairline = Color(0xFF1E1E24)      // Hairline boundary (subtle, 0.5dp/1dp)
-val BorderSubtle = Color(0xFF2E2E36)        // Focused / Hover boundary
+val BorderHairline = Color(0xFF222228)      // Hairline Gray Divider
+val BorderSubtle = Color(0xFF383840)        // Focused Gray Border
 
-// Core Brand Accents
-val AccentEmerald = Color(0xFF10B981)       // Vibrant Electric Emerald (Pure Action)
-val AccentEmeraldGlow = Color(0x3310B981)   // Emerald Glow (20% alpha)
-val AccentEmeraldMuted = Color(0x1A10B981)  // Emerald Tint (10% alpha)
+// Core Contrast Accents
+val AccentEmerald = Color(0xFF10B981)       // Targeted Vibrant Accent for Status / Action
+val AccentEmeraldGlow = Color(0x3310B981)   // Accent Glow
+val AccentEmeraldMuted = Color(0x1A10B981)  // Accent Tint
 
-// Text Tokens
-val TextCrisp = Color(0xFFFAFAFA)           // Primary Heading White
-val TextSecondary = Color(0xFFA1A1AA)       // High-readability Body Silver
-val TextTertiary = Color(0xFF71717A)        // Muted Captions & Details
-val TextQuaternary = Color(0xFF52525B)      // Sub-labels & Placeholders
+// Pure Typography Tokens
+val TextCrisp = Color(0xFFFFFFFF)           // Pure High-Contrast White
+val TextSecondary = Color(0xFFA1A1AA)       // Neutral Zinc Gray
+val TextTertiary = Color(0xFF71717A)        // Muted Charcoal Gray
+val TextQuaternary = Color(0xFF52525B)      // Dark Gray Placeholders
 
 // Status Tokens
 val StatusSuccess = Color(0xFF10B981)
