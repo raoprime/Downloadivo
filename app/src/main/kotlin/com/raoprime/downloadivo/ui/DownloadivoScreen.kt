@@ -748,6 +748,7 @@ private fun HomeDownloaderTab(
                     }
                 }
             }
+            Spacer(modifier = Modifier.width(8.dp))
         }
 
         // 3. Smart Clipboard Auto-Detection Card
@@ -2032,11 +2033,13 @@ private fun SyncedChip(
     ) {
         Text(
             text = label,
-            fontSize = 12.sp,
+            fontSize = 11.5.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
             color = if (isSelected) PrimaryEmerald else TextMuted,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
         )
     }
 }
