@@ -1613,6 +1613,11 @@ async def get_info(request: Request, url: Optional[str] = None):
     url = target_url.strip()
     url_lower = url.lower()
 
+    # Fast Cache Hit (Near 0ms instant response)
+    cached_resp = _get_cached_info(f"RESP:{url}") or _get_cached_info(f"RESP:{target_url}")
+    if cached_resp:
+        return cached_resp
+
     # 0. YouTube Community Post
     yt_post_id = _extract_youtube_post_id(url)
     if yt_post_id:
@@ -1879,7 +1884,21 @@ async def get_info(request: Request, url: Optional[str] = None):
                 except Exception:
                     pass
 
-            return {
+            # Multi-language audio tracks
+            audio_tracks = []
+            seen_audio_langs = set()
+            for f in formats:
+                if f.get("acodec") != "none" and f.get("vcodec") == "none":
+                    a_lang = f.get("language") or ""
+                    a_id = f.get("format_id") or ""
+                    a_label = f.get("format_note") or a_lang or "Original Audio"
+                    if a_label and a_label not in seen_audio_langs:
+                        seen_audio_langs.add(a_label)
+                        audio_tracks.append({"id": a_id, "language": a_lang, "label": a_label})
+            if not audio_tracks:
+                audio_tracks = [{"id": "default", "language": "default", "label": "Default Audio"}]
+
+            res_dict = {
                 "title": info.get("title", "Untitled Media"),
                 "thumbnail": info.get("thumbnail", ""),
                 "duration": _format_video_duration(info.get("duration")) or _format_video_duration(info.get("duration_string")),
@@ -1891,8 +1910,13 @@ async def get_info(request: Request, url: Optional[str] = None):
                 "resolutions": sorted_resolutions,
                 "format_sizes": clean_sizes,
                 "format_sizes_bytes": format_bytes_map,
+                "audio_tracks": audio_tracks,
                 "related_feed": related_feed,
             }
+            _set_cached_info(f"RESP:{url}", res_dict)
+            if target_url and target_url != url:
+                _set_cached_info(f"RESP:{target_url}", res_dict)
+            return res_dict
     except Exception as e:
         err = str(e).replace("ERROR: ", "").replace("[youtube] ", "")
         raise HTTPException(status_code=400, detail=err[:250])
@@ -1920,7 +1944,7 @@ async def start_download(req: DownloadRequest, request: Request):
 @app.api_route("/stream", methods=["GET", "HEAD"])
 @app.api_route("/stream.mp4", methods=["GET", "HEAD"])
 @app.api_route("/stream.mp3", methods=["GET", "HEAD"])
-def stream_media(url: str, format: str = "best", start_time: Optional[str] = None, end_time: Optional[str] = None, request: Request = None):
+def stream_media(url: str, format: str = "best", start_time: Optional[str] = None, end_time: Optional[str] = None, audio_lang: Optional[str] = None, request: Request = None):
     """Zero-disk high-speed chunked stream proxy directly into client Chrome browser or Android app."""
     if request:
         client_ip = (
@@ -2121,9 +2145,24 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
 
     use_ffmpeg_mux = False
     chosen_v = None
-    # Prefer AAC / M4A audio stream to allow instant bitstream copy without CPU re-encoding delay
-    m4a_audio = [f for f in audio_fmts if "mp4a" in (f.get("acodec") or "") or f.get("ext") == "m4a"]
-    chosen_a_fmt = m4a_audio[0] if m4a_audio else (audio_fmts[-1] if audio_fmts else None)
+    # Select audio track matching requested audio_lang, or default to Hindi / best audio
+    chosen_a_fmt = None
+    if audio_lang:
+        al_clean = audio_lang.lower().strip()
+        for f in audio_fmts:
+            flang = (f.get("language") or "").lower()
+            fnote = (f.get("format_note") or "").lower()
+            if al_clean == flang or al_clean in fnote:
+                chosen_a_fmt = f
+                break
+    if not chosen_a_fmt:
+        # Default priority: Hindi if available, else m4a/aac, else highest bitrate audio
+        hindi_audio = [f for f in audio_fmts if (f.get("language") or "").lower() in ("hi", "hin", "hindi") or "hindi" in (f.get("format_note") or "").lower()]
+        if hindi_audio:
+            chosen_a_fmt = hindi_audio[0]
+        else:
+            m4a_audio = [f for f in audio_fmts if "mp4a" in (f.get("acodec") or "") or f.get("ext") == "m4a"]
+            chosen_a_fmt = m4a_audio[0] if m4a_audio else (audio_fmts[-1] if audio_fmts else None)
     chosen_a = chosen_a_fmt["url"] if chosen_a_fmt else None
     can_copy_audio = bool(chosen_a_fmt and ("mp4a" in (chosen_a_fmt.get("acodec") or "") or chosen_a_fmt.get("ext") == "m4a"))
 
@@ -2131,7 +2170,8 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
     if video_fmts and chosen_a and _FFMPEG_PATH and not chosen_url:
         if fmt_lower in ["best", "original"]:
             use_ffmpeg_mux = True
-            chosen_v = video_fmts[-1]["url"]
+            matches_1080 = [f for f in video_fmts if (f.get("height") or 0) <= 1080]
+            chosen_v = matches_1080[-1]["url"] if matches_1080 else video_fmts[-1]["url"]
         elif fmt_lower in ["8k", "4320p", "4320"]:
             use_ffmpeg_mux = True
             chosen_v = video_fmts[-1]["url"]
