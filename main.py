@@ -261,6 +261,37 @@ def _clean_filename(text: str) -> str:
     return "".join(c for c in text if c.isalnum() or c in (" ", "-", "_", ".", "(", ")")).strip()[:90]
 
 
+# Video metadata cache with 30-minute TTL to accelerate streaming and eliminate duplicate extraction latency
+_INFO_CACHE: Dict[str, Tuple[float, dict]] = {}
+_INFO_CACHE_LOCK = threading.Lock()
+_INFO_CACHE_TTL = 1800.0  # 30 minutes
+
+
+def _get_cached_info(url_str: str) -> Optional[dict]:
+    if not url_str:
+        return None
+    now = time.time()
+    clean_k = url_str.strip()
+    with _INFO_CACHE_LOCK:
+        if clean_k in _INFO_CACHE:
+            ts, val = _INFO_CACHE[clean_k]
+            if now - ts < _INFO_CACHE_TTL:
+                return val
+            del _INFO_CACHE[clean_k]
+    return None
+
+
+def _set_cached_info(url_str: str, info_dict: dict):
+    if not url_str or not info_dict:
+        return
+    clean_k = url_str.strip()
+    with _INFO_CACHE_LOCK:
+        if len(_INFO_CACHE) > 200:
+            oldest_k = min(_INFO_CACHE.keys(), key=lambda k: _INFO_CACHE[k][0])
+            del _INFO_CACHE[oldest_k]
+        _INFO_CACHE[clean_k] = (time.time(), info_dict)
+
+
 def _safe_content_disposition(filename: str, ext: str) -> str:
     import urllib.parse
     clean_base = "".join(c for c in filename if c.isalnum() or c in (" ", "-", "_", ".", "(", ")")).strip()
@@ -1753,6 +1784,10 @@ async def get_info(request: Request, url: Optional[str] = None):
             if "entries" in info:
                 info = info["entries"][0]
             
+            _set_cached_info(url, info)
+            if target_url and target_url != url:
+                _set_cached_info(target_url, info)
+            
             formats = info.get("formats") or []
             duration = info.get("duration") or 0
 
@@ -1899,16 +1934,21 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
     extracted = _extract_urls(url)
     target_url = extracted[0] if extracted else url.strip()
 
-    try:
-        with yt_dlp.YoutubeDL(_info_ydl_opts()) as ydl:
-            info = ydl.extract_info(target_url, download=False)
-            if "entries" in info:
-                info = info["entries"][0]
-            title = info.get("title") or "download"
-            formats = info.get("formats") or []
-    except Exception as e:
-        err = str(e).replace("ERROR: ", "").replace("[youtube] ", "")
-        raise HTTPException(status_code=400, detail=f"Cannot resolve media stream: {err[:200]}")
+    info = _get_cached_info(target_url) or _get_cached_info(url)
+    if not info:
+        try:
+            with yt_dlp.YoutubeDL(_info_ydl_opts()) as ydl:
+                info = ydl.extract_info(target_url, download=False)
+                if "entries" in info:
+                    info = info["entries"][0]
+                _set_cached_info(target_url, info)
+                _set_cached_info(url, info)
+        except Exception as e:
+            err = str(e).replace("ERROR: ", "").replace("[youtube] ", "")
+            raise HTTPException(status_code=400, detail=f"Cannot resolve media stream: {err[:200]}")
+
+    title = info.get("title") or "download"
+    formats = info.get("formats") or []
 
     safe_name = _clean_filename(title)
     fmt_lower = (format or "best").lower()
@@ -2000,6 +2040,14 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 _FFMPEG_PATH,
                 "-y",
                 "-loglevel", "error",
+                "-probesize", "65536",
+                "-analyzeduration", "500000",
+                "-fflags", "+nobuffer+fastseek",
+                "-flags", "low_delay",
+                "-reconnect", "1",
+                "-reconnect_at_eof", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5",
                 "-i", direct_url,
                 "-vn",
                 "-c:a", "libmp3lame",
@@ -2073,7 +2121,11 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
 
     use_ffmpeg_mux = False
     chosen_v = None
-    chosen_a = audio_fmts[-1]["url"] if audio_fmts else None
+    # Prefer AAC / M4A audio stream to allow instant bitstream copy without CPU re-encoding delay
+    m4a_audio = [f for f in audio_fmts if "mp4a" in (f.get("acodec") or "") or f.get("ext") == "m4a"]
+    chosen_a_fmt = m4a_audio[0] if m4a_audio else (audio_fmts[-1] if audio_fmts else None)
+    chosen_a = chosen_a_fmt["url"] if chosen_a_fmt else None
+    can_copy_audio = bool(chosen_a_fmt and ("mp4a" in (chosen_a_fmt.get("acodec") or "") or chosen_a_fmt.get("ext") == "m4a"))
 
     # Use FFmpeg muxer for high quality streams (1080p, 1440p, 4K, 8K) or when no matching progressive stream exists
     if video_fmts and chosen_a and _FFMPEG_PATH and not chosen_url:
@@ -2146,26 +2198,34 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 _FFMPEG_PATH,
                 "-y",
                 "-loglevel", "error",
+                "-probesize", "32768",
+                "-analyzeduration", "0",
+                "-fflags", "nobuffer+fastseek",
+                "-flags", "low_delay",
                 "-reconnect", "1",
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
                 "-i", chosen_v,
+                "-probesize", "32768",
+                "-analyzeduration", "0",
+                "-fflags", "nobuffer+fastseek",
+                "-flags", "low_delay",
                 "-reconnect", "1",
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
                 "-i", chosen_a,
                 "-c:v", "copy",
-                "-c:a", "aac",
+                "-c:a", "copy" if can_copy_audio else "aac",
                 "-movflags", "frag_keyframe+empty_moov+default_base_moof",
                 "-f", "mp4",
                 "pipe:1"
             ]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=1024 * 1024)
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=512 * 1024)
             try:
                 while True:
-                    data = proc.stdout.read(128 * 1024)
+                    data = proc.stdout.read(64 * 1024)
                     if not data:
                         break
                     yield data
@@ -2186,15 +2246,20 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
+            if request and "range" in request.headers:
+                headers["Range"] = request.headers["range"]
             with requests.get(chosen_url, stream=True, timeout=30, headers=headers) as r:
                 for chunk in r.iter_content(chunk_size=1024 * 256):
                     if chunk:
                         yield chunk
 
+        resp_headers = dict(video_headers)
+        if request and "range" in request.headers:
+            resp_headers["Accept-Ranges"] = "bytes"
         return StreamingResponse(
             iter_stream(),
             media_type="video/mp4",
-            headers=video_headers
+            headers=resp_headers
         )
 
     # 4. Fallback direct stream
