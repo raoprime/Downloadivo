@@ -1445,7 +1445,7 @@ def master_download_worker(task_id: str, url: str, fmt: str, start_time: Optiona
 # ──────────────────────────────────────────────────────────────
 # REST Endpoints
 # ──────────────────────────────────────────────────────────────
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {
         "status": "healthy",
@@ -1455,7 +1455,7 @@ def health_check():
     }
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index():
     html_file = Path(__file__).parent / "index.html"
     with open(html_file, encoding="utf-8") as f:
