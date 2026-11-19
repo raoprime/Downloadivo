@@ -7,7 +7,9 @@ import androidx.annotation.OptIn
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +45,9 @@ fun BuiltInPlayerSheet(
     mediaUri: String,
     title: String,
     isAudio: Boolean,
+    availableQualities: List<String> = emptyList(),
+    currentQuality: String = "",
+    onQualitySelected: ((String) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -61,12 +66,18 @@ fun BuiltInPlayerSheet(
 
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
-            .build().apply {
-                val item = MediaItem.fromUri(Uri.parse(mediaUri))
-                setMediaItem(item)
-                prepare()
-                playWhenReady = true
-            }
+            .build()
+    }
+
+    LaunchedEffect(mediaUri) {
+        val currentPos = exoPlayer.currentPosition
+        val item = MediaItem.fromUri(Uri.parse(mediaUri))
+        exoPlayer.setMediaItem(item)
+        if (currentPos > 0) {
+            exoPlayer.seekTo(currentPos)
+        }
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
     }
 
     DisposableEffect(exoPlayer) {
@@ -258,6 +269,59 @@ fun BuiltInPlayerSheet(
                             color = TextCrisp,
                             strokeWidth = 3.dp
                         )
+                    }
+                }
+            }
+
+            // Live Quality Selector (Full Quality 4K / 1080p down to 360p Data Saver)
+            if (!isAudio && availableQualities.isNotEmpty() && onQualitySelected != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "QUALITY",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextSubtle,
+                        letterSpacing = 0.5.sp
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                    ) {
+                        availableQualities.forEach { q ->
+                            val isSelected = currentQuality.equals(q, ignoreCase = true) ||
+                                (currentQuality.isBlank() && q.contains("1080", ignoreCase = true))
+                            val displayLabel = when {
+                                q.contains("4k", ignoreCase = true) || q.contains("2160") -> "4K UHD"
+                                q.contains("1440") -> "2K QHD"
+                                q.contains("1080") -> "1080p FHD"
+                                q.contains("720") -> "720p HD"
+                                q.contains("480") -> "480p SD"
+                                q.contains("360") -> "360p"
+                                else -> q.uppercase()
+                            }
+                            Surface(
+                                onClick = { onQualitySelected(q) },
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isSelected) TextCrisp else SurfaceElevated,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isSelected) TextCrisp else CardBorderDark
+                                )
+                            ) {
+                                Text(
+                                    text = displayLabel,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) CanvasDark else TextMuted,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

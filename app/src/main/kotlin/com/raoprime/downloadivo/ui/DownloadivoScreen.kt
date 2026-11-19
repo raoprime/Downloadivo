@@ -85,6 +85,9 @@ fun DownloadivoScreen(
     var activePlaybackUri by remember { mutableStateOf<String?>(null) }
     var activePlaybackTitle by remember { mutableStateOf("") }
     var activePlaybackIsAudio by remember { mutableStateOf(false) }
+    var activePlaybackOriginalUrl by remember { mutableStateOf("") }
+    var activePlaybackCurrentQuality by remember { mutableStateOf("best") }
+    var activePlaybackQualities by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val currentTask by DownloadService.currentTask.collectAsState()
     val queuedTasks by DownloadService.queuedTasks.collectAsState()
@@ -332,10 +335,13 @@ fun DownloadivoScreen(
                     onFormatSelect = { selectedFormat = it },
                     isResolving = isResolving,
                     errorMessage = errorMessage,
-                    onStreamPlay = { streamUrl, title, isAudio ->
+                    onStreamPlay = { streamUrl, originalUrl, title, isAudio, qualities, initialQuality ->
                         activePlaybackUri = streamUrl
+                        activePlaybackOriginalUrl = originalUrl
                         activePlaybackTitle = title
                         activePlaybackIsAudio = isAudio
+                        activePlaybackQualities = qualities
+                        activePlaybackCurrentQuality = initialQuality
                     },
                     onInspect = {
                         if (inputUrl.isNotBlank()) {
@@ -628,6 +634,14 @@ fun DownloadivoScreen(
                     mediaUri = uri,
                     title = activePlaybackTitle,
                     isAudio = activePlaybackIsAudio,
+                    availableQualities = activePlaybackQualities,
+                    currentQuality = activePlaybackCurrentQuality,
+                    onQualitySelected = { newQuality ->
+                        activePlaybackCurrentQuality = newQuality
+                        if (activePlaybackOriginalUrl.isNotBlank()) {
+                            activePlaybackUri = DownloadEngine.getStreamUrl(activePlaybackOriginalUrl, newQuality)
+                        }
+                    },
                     onDismiss = { activePlaybackUri = null }
                 )
             }
@@ -650,7 +664,7 @@ private fun HomeDownloaderTab(
     isResolving: Boolean,
     errorMessage: String?,
     onInspect: () -> Unit,
-    onStreamPlay: (streamUrl: String, title: String, isAudio: Boolean) -> Unit,
+    onStreamPlay: (streamUrl: String, originalUrl: String, title: String, isAudio: Boolean, qualities: List<String>, initialQuality: String) -> Unit,
     onInstantDownload: (url: String, format: String) -> Unit,
     onDownloadCustom: (info: MediaInfo, format: String, startTime: String?, endTime: String?) -> Unit,
     onClear: () -> Unit
@@ -1171,7 +1185,8 @@ private fun HomeDownloaderTab(
                                 .border(1.dp, BorderSubtle, CircleShape)
                                 .clickable {
                                     val streamUrl = DownloadEngine.getStreamUrl(info.url, selectedFormat)
-                                    onStreamPlay(streamUrl, info.title, mediaMode == "audio")
+                                    val qualities = info.availableFormats.filter { !it.isAudio }.map { it.id }
+                                    onStreamPlay(streamUrl, info.url, info.title, mediaMode == "audio", qualities, selectedFormat)
                                 },
                             contentAlignment = Alignment.Center
                         ) {
@@ -1476,7 +1491,8 @@ private fun HomeDownloaderTab(
                                     keyboardController?.hide()
                                     focusManager.clearFocus()
                                     val streamUrl = DownloadEngine.getStreamUrl(info.url, selectedFormat)
-                                    onStreamPlay(streamUrl, info.title, mediaMode == "audio")
+                                    val qualities = info.availableFormats.filter { !it.isAudio }.map { it.id }
+                                    onStreamPlay(streamUrl, info.url, info.title, mediaMode == "audio", qualities, selectedFormat)
                                 },
                                 modifier = Modifier
                                     .weight(1f)
