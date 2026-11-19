@@ -1897,7 +1897,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
             clip_name = f"{safe_name}_Clip_{s_clean}_to_{e_clean}.mp4"
 
         def iter_trimmed_pipe():
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
             try:
                 while True:
                     data = proc.stdout.read(64 * 1024)
@@ -1943,7 +1943,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 "pipe:1"
             ]
             def iter_mp3_pipe():
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
                 try:
                     while True:
                         data = proc.stdout.read(64 * 1024)
@@ -2046,7 +2046,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 "-f", "mp4",
                 "pipe:1"
             ]
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1024 * 1024)
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=1024 * 1024)
             try:
                 while True:
                     data = proc.stdout.read(256 * 1024)
