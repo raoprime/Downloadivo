@@ -176,25 +176,25 @@ fun QuickShareOverlay(
                         contentDescription = "Downloadivo Icon",
                         modifier = Modifier.size(24.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "Quick Downloader",
+                        text = "Downloadivo",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = TextCrisp
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = PrimaryEmerald.copy(alpha = 0.15f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryEmerald.copy(alpha = 0.3f))
+                        shape = RoundedCornerShape(6.dp),
+                        color = AccentEmeraldMuted,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AccentEmerald.copy(alpha = 0.25f))
                     ) {
                         Text(
-                            text = "SEAL 10X",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = PrimaryEmerald,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            text = "Quick Share",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = AccentEmerald,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
@@ -203,7 +203,7 @@ fun QuickShareOverlay(
                     onClick = onDismiss,
                     modifier = Modifier.size(28.dp)
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary)
                 }
             }
 
@@ -371,25 +371,25 @@ fun QuickShareOverlay(
                     onClick = { onDownloadVideo(resolvedInfo, selectedFormat) },
                     modifier = Modifier
                         .weight(1f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = PrimaryEmerald,
+                        containerColor = AccentEmerald,
                         contentColor = Color.Black
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                    )
                 ) {
                     Icon(
                         Icons.Default.Download,
                         contentDescription = null,
                         tint = Color.Black,
-                        modifier = Modifier.size(19.dp)
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Instant Video",
+                        text = "Download Video",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 13.5.sp,
+                        color = Color.Black
                     )
                 }
 
@@ -398,25 +398,26 @@ fun QuickShareOverlay(
                     onClick = { onDownloadAudio(resolvedInfo) },
                     modifier = Modifier
                         .weight(1f)
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = BackgroundDark,
-                        contentColor = PrimaryEmerald
+                        containerColor = SurfaceElevated,
+                        contentColor = TextCrisp
                     ),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, PrimaryEmerald)
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
                 ) {
                     Icon(
                         Icons.Default.MusicNote,
                         contentDescription = null,
-                        tint = PrimaryEmerald,
-                        modifier = Modifier.size(19.dp)
+                        tint = AccentEmerald,
+                        modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Instant Audio",
+                        text = "Download Audio",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
+                        fontSize = 13.5.sp,
+                        color = TextCrisp
                     )
                 }
             }
