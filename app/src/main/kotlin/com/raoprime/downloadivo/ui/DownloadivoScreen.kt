@@ -122,7 +122,7 @@ fun DownloadivoScreen(
     // Persistent Single ExoPlayer Instance across Miniplayer, Full Player & PiP
     val exoPlayer = remember(context) {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Downloadivo-Stream/3.9")
+            .setUserAgent("Downloadivo-Stream/4.0")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(20000)
             .setReadTimeoutMs(35000)
@@ -2888,7 +2888,7 @@ private fun SettingsTab(onShowIntro: (() -> Unit)? = null) {
                 ) {
                     Column {
                         Text("Downloadivo Mobile", style = Typography.titleSmall, color = TextCrisp)
-                        Text("v3.9.7 Studio Pro Edition (Minimalist Clean Home, Exact Sizes & Intro Tour)", style = Typography.bodySmall, color = TextSecondary)
+                        Text("v4.0.0 Enterprise Edition (Minimalist Clean Home, Exact Sizes & Intro Tour)", style = Typography.bodySmall, color = TextSecondary)
                     }
                     Image(
                         painter = painterResource(id = R.drawable.app_icon_white),

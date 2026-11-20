@@ -334,7 +334,7 @@ object DownloadEngine {
             try {
                 val reqBuilder = Request.Builder()
                     .url(streamUrl)
-                    .header("User-Agent", "Downloadivo-Android/3.9")
+                    .header("User-Agent", "Downloadivo-Android/4.0")
                     .header("Accept-Encoding", "identity")
 
                 if (totalBytesRead > 0L) {
