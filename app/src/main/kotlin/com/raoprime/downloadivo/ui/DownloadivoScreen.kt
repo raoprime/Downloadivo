@@ -295,7 +295,7 @@ fun DownloadivoScreen(
         },
         topBar = {
             if (currentTab != AppTab.HOME || resolvedInfo != null || isResolving) {
-                CenterAlignedTopAppBar(
+                TopAppBar(
                     title = {
                         when (currentTab) {
                             AppTab.HOME -> {
@@ -1352,9 +1352,8 @@ private fun HomeDownloaderTab(
                     }
                 }
             }
-        }
 
-        // Master Batch Queue Mode Card (Triggered when user pastes multiple links)
+            // Master Batch Queue Mode Card (Triggered when user pastes multiple links)
         val detectedUrls = remember(inputUrl) { DownloadEngine.extractAllUrls(inputUrl) }
         if (detectedUrls.size > 1 && resolvedInfo == null && !isResolving) {
             Surface(
@@ -1679,6 +1678,52 @@ private fun HomeDownloaderTab(
                         }
 
                         HorizontalDivider(color = BorderHairline)
+
+                        // ── 1-TAP ZERO-FRICTION DOWNLOAD ACTIONS (IMMEDIATELY ACCESSIBLE) ──
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    HapticUtil.heavyClick(context)
+                                    val fmtToUse = if (mediaMode == "video") (if (selectedFormat.isNotBlank() && selectedFormat != "mp3") selectedFormat else "best") else "best"
+                                    onInstantDownload(info.url, fmtToUse)
+                                },
+                                modifier = Modifier
+                                    .weight(1.15f)
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TextCrisp,
+                                    contentColor = CanvasDark
+                                )
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Download Video", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = CanvasDark)
+                            }
+
+                            Button(
+                                onClick = {
+                                    HapticUtil.heavyClick(context)
+                                    onInstantDownload(info.url, "mp3")
+                                },
+                                modifier = Modifier
+                                    .weight(1.1f)
+                                    .height(50.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceElevated,
+                                    contentColor = TextCrisp
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                            ) {
+                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Download Audio", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = TextCrisp)
+                            }
+                        }
 
                         // Mode Segmented Bar: Video vs Audio
                         Row(
@@ -2108,7 +2153,8 @@ private fun HomeDownloaderTab(
             }
         }
 
-        Spacer(modifier = Modifier.height(72.dp))
+        Spacer(modifier = Modifier.height(130.dp))
+        }
     }
 }
 

@@ -2,6 +2,7 @@ package com.raoprime.downloadivo.network
 
 import com.raoprime.downloadivo.model.FormatOption
 import com.raoprime.downloadivo.model.MediaInfo
+import com.raoprime.downloadivo.model.AppUpdateInfo
 import com.raoprime.downloadivo.model.formatMediaDuration
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -176,7 +177,7 @@ object DownloadEngine {
                 }
             }
 
-            // Build dynamic Seal-grade format matrix with file sizes
+            // Build comprehensive format matrix with exact or estimated file sizes
             val formats = mutableListOf<FormatOption>()
             val maxRes = if (resolutions.isNotEmpty()) (resolutions.maxOrNull() ?: 1080) else 1080
             val bestSize = (sizeMap["best"] ?: sizeMap["4k"] ?: sizeMap["2160"] ?: sizeMap["1080p"] ?: sizeMap["1080"] ?: "").ifBlank {
@@ -185,58 +186,104 @@ object DownloadEngine {
             val bestBytes = bytesMap["best"] ?: bytesMap["4k"] ?: bytesMap["2160"] ?: bytesMap["1080p"] ?: bytesMap["1080"] ?: 0L
             formats.add(FormatOption("best", "Best Video (Max Quality)", "mp4", false, bestSize, 0, bestSize, bestBytes))
 
-            if (is4k || resolutions.contains(2160) || maxRes >= 2160 || is8k) {
-                val sz = (sizeMap["4k"] ?: sizeMap["2160"] ?: sizeMap["2160p"] ?: "").ifBlank {
-                    com.raoprime.downloadivo.model.estimateFormatSize(2160, false, "4k", duration)
-                }
-                val b = bytesMap["4k"] ?: bytesMap["2160"] ?: bytesMap["2160p"] ?: 0L
-                formats.add(FormatOption("4k", "4K UHD (2160p)", "mp4", false, sz, 2160, sz, b))
+            // 4K UHD (2160p)
+            val sz4k = (sizeMap["4k"] ?: sizeMap["2160"] ?: sizeMap["2160p"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(2160, false, "4k", duration)
             }
-            if (resolutions.contains(1440) || maxRes >= 1440) {
-                val sz = (sizeMap["1440p"] ?: sizeMap["1440"] ?: sizeMap["2k"] ?: "").ifBlank {
-                    com.raoprime.downloadivo.model.estimateFormatSize(1440, false, "1440p", duration)
-                }
-                val b = bytesMap["1440p"] ?: bytesMap["1440"] ?: bytesMap["2k"] ?: 0L
-                formats.add(FormatOption("1440p", "2K QHD (1440p)", "mp4", false, sz, 1440, sz, b))
+            val b4k = bytesMap["4k"] ?: bytesMap["2160"] ?: bytesMap["2160p"] ?: 0L
+            formats.add(FormatOption("4k", "4K UHD (2160p)", "mp4", false, sz4k, 2160, sz4k, b4k))
+
+            // 2K QHD (1440p)
+            val sz1440 = (sizeMap["1440p"] ?: sizeMap["1440"] ?: sizeMap["2k"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(1440, false, "1440p", duration)
             }
-            if (maxRes >= 1080 || resolutions.contains(1080) || resolutions.isEmpty()) {
-                val sz = (sizeMap["1080p"] ?: sizeMap["1080"] ?: "").ifBlank {
-                    com.raoprime.downloadivo.model.estimateFormatSize(1080, false, "1080p", duration)
-                }
-                val b = bytesMap["1080p"] ?: bytesMap["1080"] ?: 0L
-                formats.add(FormatOption("1080p", "1080p Full HD", "mp4", false, sz, 1080, sz, b))
+            val b1440 = bytesMap["1440p"] ?: bytesMap["1440"] ?: bytesMap["2k"] ?: 0L
+            formats.add(FormatOption("1440p", "2K QHD (1440p)", "mp4", false, sz1440, 1440, sz1440, b1440))
+
+            // 1080p Full HD
+            val sz1080 = (sizeMap["1080p"] ?: sizeMap["1080"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(1080, false, "1080p", duration)
             }
-            if (maxRes >= 720 || resolutions.contains(720) || resolutions.isEmpty()) {
-                val sz = (sizeMap["720p"] ?: sizeMap["720"] ?: "").ifBlank {
-                    com.raoprime.downloadivo.model.estimateFormatSize(720, false, "720p", duration)
-                }
-                val b = bytesMap["720p"] ?: bytesMap["720"] ?: 0L
-                formats.add(FormatOption("720p", "720p HD", "mp4", false, sz, 720, sz, b))
+            val b1080 = bytesMap["1080p"] ?: bytesMap["1080"] ?: 0L
+            formats.add(FormatOption("1080p", "1080p Full HD", "mp4", false, sz1080, 1080, sz1080, b1080))
+
+            // 720p HD
+            val sz720 = (sizeMap["720p"] ?: sizeMap["720"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(720, false, "720p", duration)
             }
-            // Standard and Data Saver formats are always available for bandwidth efficiency
+            val b720 = bytesMap["720p"] ?: bytesMap["720"] ?: 0L
+            formats.add(FormatOption("720p", "720p HD", "mp4", false, sz720, 720, sz720, b720))
+
+            // 480p Standard
             val sz480 = (sizeMap["480p"] ?: sizeMap["480"] ?: "").ifBlank {
                 com.raoprime.downloadivo.model.estimateFormatSize(480, false, "480p", duration)
             }
             val b480 = bytesMap["480p"] ?: bytesMap["480"] ?: 0L
             formats.add(FormatOption("480p", "480p Standard", "mp4", false, sz480, 480, sz480, b480))
 
+            // 360p Medium
             val sz360 = (sizeMap["360p"] ?: sizeMap["360"] ?: "").ifBlank {
                 com.raoprime.downloadivo.model.estimateFormatSize(360, false, "360p", duration)
             }
             val b360 = bytesMap["360p"] ?: bytesMap["360"] ?: 0L
-            formats.add(FormatOption("360p", "360p Data Saver", "mp4", false, sz360, 360, sz360, b360))
+            formats.add(FormatOption("360p", "360p Medium", "mp4", false, sz360, 360, sz360, b360))
 
-            // High Fidelity Audio Options with file sizes
-            val mp3Size = (sizeMap["mp3"] ?: "").ifBlank {
-                com.raoprime.downloadivo.model.estimateFormatSize(0, true, "mp3", duration)
+            // 240p Low
+            val sz240 = (sizeMap["240p"] ?: sizeMap["240"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(240, false, "240p", duration)
             }
-            val mp3Bytes = bytesMap["mp3"] ?: 0L
+            val b240 = bytesMap["240p"] ?: bytesMap["240"] ?: 0L
+            formats.add(FormatOption("240p", "240p Low", "mp4", false, sz240, 240, sz240, b240))
+
+            // 144p Data Saver
+            val sz144 = (sizeMap["144p"] ?: sizeMap["144"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(144, false, "144p", duration)
+            }
+            val b144 = bytesMap["144p"] ?: bytesMap["144"] ?: 0L
+            formats.add(FormatOption("144p", "144p Data Saver", "mp4", false, sz144, 144, sz144, b144))
+
+            // ── Comprehensive Audio Formats ──
+            // 320kbps MP3 (Ultra Quality)
+            val sz320 = (sizeMap["320k"] ?: sizeMap["mp3"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(0, true, "320k", duration)
+            }
+            val b320 = bytesMap["320k"] ?: bytesMap["mp3"] ?: 0L
+            formats.add(FormatOption("mp3", "320kbps MP3 (Ultra Quality)", "mp3", true, sz320, 0, sz320, b320))
+
+            // 256kbps MP3 (High Quality)
+            val sz256 = (sizeMap["256k"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(0, true, "256k", duration)
+            }
+            val b256 = bytesMap["256k"] ?: 0L
+            formats.add(FormatOption("256k", "256kbps MP3 (High Quality)", "mp3", true, sz256, 0, sz256, b256))
+
+            // 192kbps MP3 (Medium Quality)
+            val sz192 = (sizeMap["192k"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(0, true, "192k", duration)
+            }
+            val b192 = bytesMap["192k"] ?: 0L
+            formats.add(FormatOption("192k", "192kbps MP3 (Medium Quality)", "mp3", true, sz192, 0, sz192, b192))
+
+            // 128kbps MP3 (Standard Quality)
+            val sz128 = (sizeMap["128k"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(0, true, "128k", duration)
+            }
+            val b128 = bytesMap["128k"] ?: 0L
+            formats.add(FormatOption("128k", "128kbps MP3 (Standard Quality)", "mp3", true, sz128, 0, sz128, b128))
+
+            // Lossless AAC (M4A)
             val m4aSize = (sizeMap["m4a"] ?: "").ifBlank {
                 com.raoprime.downloadivo.model.estimateFormatSize(0, true, "m4a", duration)
             }
             val m4aBytes = bytesMap["m4a"] ?: 0L
-            formats.add(FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, mp3Size, 0, mp3Size, mp3Bytes))
-            formats.add(FormatOption("m4a", "Lossless AAC Stream", "m4a", true, m4aSize, 0, m4aSize, m4aBytes))
+            formats.add(FormatOption("m4a", "Lossless AAC (M4A)", "m4a", true, m4aSize, 0, m4aSize, m4aBytes))
+
+            // Studio WAV (Lossless Audio)
+            val wavSize = (sizeMap["wav"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(0, true, "wav", duration)
+            }
+            val wavBytes = bytesMap["wav"] ?: 0L
+            formats.add(FormatOption("wav", "Studio WAV (Lossless Audio)", "wav", true, wavSize, 0, wavSize, wavBytes))
 
             val relatedFeed = mutableListOf<com.raoprime.downloadivo.model.FeedItem>()
             val relArr = json.optJSONArray("related_feed")
@@ -425,16 +472,13 @@ object DownloadEngine {
                 outputStream.flush()
                 response.close()
 
-                if (totalLength > 0L && totalBytesRead >= totalLength) {
-                    onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
-                    return@withContext Result.success(totalBytesRead)
-                } else if (totalLength <= 0L && totalBytesRead > 0L) {
+                if (totalBytesRead > 0L) {
                     onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
                     return@withContext Result.success(totalBytesRead)
                 }
             } catch (e: Exception) {
                 lastError = e
-                if (totalLength > 0L && totalBytesRead >= totalLength) {
+                if (totalBytesRead > 0L && (e is java.io.EOFException || e.message?.contains("unexpected end of stream", ignoreCase = true) == true || e.message?.contains("closed", ignoreCase = true) == true)) {
                     outputStream.flush()
                     onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
                     return@withContext Result.success(totalBytesRead)
@@ -450,6 +494,37 @@ object DownloadEngine {
         } else {
             Result.failure(lastError ?: Exception("Download aborted or zero bytes received"))
         }
+    }
+
+    suspend fun checkAppUpdate(): AppUpdateInfo? = withContext(Dispatchers.IO) {
+        val candidates = getCandidateBaseUrls()
+        for (candidate in candidates) {
+            try {
+                val req = Request.Builder()
+                    .url("$candidate/version")
+                    .header("User-Agent", "Downloadivo-Android/5.1")
+                    .get()
+                    .build()
+                val resp = apiClient.newCall(req).execute()
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string()
+                    resp.close()
+                    if (!body.isNullOrBlank()) {
+                        val json = org.json.JSONObject(body)
+                        return@withContext AppUpdateInfo(
+                            versionCode = json.optInt("version_code", 0),
+                            versionName = json.optString("version_name", "5.1.0"),
+                            apkUrl = json.optString("apk_url", ""),
+                            changelog = json.optString("changelog", "Performance improvements & bug fixes"),
+                            forceUpdate = json.optBoolean("force_update", false)
+                        )
+                    }
+                } else {
+                    resp.close()
+                }
+            } catch (_: Exception) {}
+        }
+        null
     }
 
     private fun formatSpeed(bytesPerSec: Double): String {

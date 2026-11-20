@@ -34,6 +34,15 @@ data class FeedItem(
 )
 
 @Serializable
+data class AppUpdateInfo(
+    val versionCode: Int = 0,
+    val versionName: String = "",
+    val apkUrl: String = "",
+    val changelog: String = "",
+    val forceUpdate: Boolean = false
+)
+
+@Serializable
 data class MediaInfo(
     val title: String = "",
     val author: String = "",
@@ -150,27 +159,47 @@ fun formatByteSize(bytes: Long): String {
 fun estimateFormatSize(resolution: Int, isAudio: Boolean, id: String, durationStr: String): String {
     val sec = parseDurationToSeconds(durationStr)
     val kbps = when {
-        isAudio -> if (id.contains("mp3")) 320 else 160
-        resolution >= 2160 || id.contains("4k") -> 18000
-        resolution >= 1440 || id.contains("1440") -> 9000
-        resolution >= 1080 || id.contains("1080") -> 4200
-        resolution >= 720 || id.contains("720") -> 2200
-        resolution >= 480 || id.contains("480") -> 1000
-        resolution >= 360 || id.contains("360") -> 500
-        else -> 4000
+        isAudio -> when {
+            id.contains("320") || id == "mp3" -> 320
+            id.contains("256") -> 256
+            id.contains("192") -> 192
+            id.contains("128") -> 128
+            id == "wav" -> 1411
+            id == "m4a" -> 160
+            else -> 192
+        }
+        id == "4k" || resolution >= 2160 -> 18000
+        id == "1440p" || id == "2k" || resolution >= 1440 -> 9000
+        id == "1080p" || resolution >= 1080 || id == "best" -> 4200
+        id == "720p" || resolution >= 720 -> 2200
+        id == "480p" || resolution >= 480 -> 1000
+        id == "360p" || resolution >= 360 -> 500
+        id == "240p" || resolution >= 240 -> 300
+        id == "144p" || resolution >= 144 -> 150
+        else -> 3500
     }
     if (sec > 0) {
         val bytes = (kbps.toLong() * 1000L * sec) / 8L
         return formatByteSize(bytes)
     }
     return when {
-        isAudio -> if (id.contains("mp3")) "~8.2 MB" else "~3.5 MB"
-        resolution >= 2160 || id.contains("4k") -> "~350 MB"
-        resolution >= 1440 || id.contains("1440") -> "~180 MB"
-        resolution >= 1080 || id.contains("1080") || id == "best" -> "~75 MB"
-        resolution >= 720 || id.contains("720") -> "~38 MB"
-        resolution >= 480 || id.contains("480") -> "~18 MB"
-        resolution >= 360 || id.contains("360") -> "~9.5 MB"
+        isAudio -> when {
+            id.contains("320") || id == "mp3" -> "~8.5 MB"
+            id.contains("256") -> "~6.8 MB"
+            id.contains("192") -> "~5.2 MB"
+            id.contains("128") -> "~3.4 MB"
+            id == "wav" -> "~38 MB"
+            id == "m4a" -> "~4.2 MB"
+            else -> "~5.0 MB"
+        }
+        id == "4k" || resolution >= 2160 -> "~350 MB"
+        id == "1440p" || id == "2k" || resolution >= 1440 -> "~180 MB"
+        id == "1080p" || resolution >= 1080 || id == "best" -> "~75 MB"
+        id == "720p" || resolution >= 720 -> "~38 MB"
+        id == "480p" || resolution >= 480 -> "~18 MB"
+        id == "360p" || resolution >= 360 -> "~9.5 MB"
+        id == "240p" || resolution >= 240 -> "~5.5 MB"
+        id == "144p" || resolution >= 144 -> "~2.8 MB"
         else -> "~45 MB"
     }
 }
