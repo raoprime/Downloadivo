@@ -12,7 +12,17 @@ data class FormatOption(
     val resolution: Int = 0,
     val sizeStr: String = "",
     val sizeBytes: Long = 0L
-)
+) {
+    fun getEffectiveSize(duration: String = ""): String {
+        if (sizeStr.isNotBlank() && sizeStr != "0 KB" && sizeStr != "0 B" && sizeStr != "0.0 MB") {
+            return sizeStr
+        }
+        if (note.isNotBlank() && (note.contains("MB", ignoreCase = true) || note.contains("GB", ignoreCase = true) || note.contains("KB", ignoreCase = true))) {
+            return note
+        }
+        return estimateFormatSize(resolution, isAudio, id, duration)
+    }
+}
 
 @Serializable
 data class FeedItem(
@@ -36,13 +46,13 @@ data class MediaInfo(
     val is8k: Boolean = false,
     val resolutions: List<Int> = emptyList(),
     val availableFormats: List<FormatOption> = listOf(
-        FormatOption("best", "Best Video (Max Quality)", "mp4", false, "Original Stream"),
-        FormatOption("1080p", "1080p Full HD", "mp4", false, "1920x1080", 1080),
-        FormatOption("720p", "720p HD", "mp4", false, "1280x720", 720),
-        FormatOption("480p", "480p Standard", "mp4", false, "854x480", 480),
-        FormatOption("360p", "360p Data Saver", "mp4", false, "640x360", 360),
-        FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, "Studio Quality Audio"),
-        FormatOption("m4a", "Lossless AAC Stream", "m4a", true, "Original Audio")
+        FormatOption("best", "Best Video (Max Quality)", "mp4", false, "~85 MB", 0, "~85 MB"),
+        FormatOption("1080p", "1080p Full HD", "mp4", false, "~75 MB", 1080, "~75 MB"),
+        FormatOption("720p", "720p HD", "mp4", false, "~38 MB", 720, "~38 MB"),
+        FormatOption("480p", "480p Standard", "mp4", false, "~18 MB", 480, "~18 MB"),
+        FormatOption("360p", "360p Data Saver", "mp4", false, "~9.5 MB", 360, "~9.5 MB"),
+        FormatOption("mp3", "320kbps MP3 Audio", "mp3", true, "~8.2 MB", 0, "~8.2 MB"),
+        FormatOption("m4a", "Lossless AAC Stream", "m4a", true, "~3.5 MB", 0, "~3.5 MB")
     ),
     val audioTracks: List<String> = emptyList(),
     val relatedFeed: List<FeedItem> = emptyList()
@@ -109,4 +119,58 @@ fun formatMediaDuration(raw: String?): String {
         }
     }
     return trimmed
+}
+
+fun parseDurationToSeconds(raw: String?): Long {
+    if (raw.isNullOrBlank()) return 0L
+    val trimmed = raw.trim()
+    val parts = trimmed.split(":")
+    if (parts.size == 2) {
+        val m = parts[0].toLongOrNull() ?: 0L
+        val s = parts[1].toLongOrNull() ?: 0L
+        return m * 60 + s
+    } else if (parts.size == 3) {
+        val h = parts[0].toLongOrNull() ?: 0L
+        val m = parts[1].toLongOrNull() ?: 0L
+        val s = parts[2].toLongOrNull() ?: 0L
+        return h * 3600 + m * 60 + s
+    }
+    return trimmed.toDoubleOrNull()?.toLong() ?: 0L
+}
+
+fun formatByteSize(bytes: Long): String {
+    return when {
+        bytes >= 1024L * 1024L * 1024L -> String.format(java.util.Locale.US, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+        bytes >= 1024L * 1024L -> String.format(java.util.Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+        bytes >= 1024L -> String.format(java.util.Locale.US, "%.0f KB", bytes / 1024.0)
+        else -> "$bytes B"
+    }
+}
+
+fun estimateFormatSize(resolution: Int, isAudio: Boolean, id: String, durationStr: String): String {
+    val sec = parseDurationToSeconds(durationStr)
+    val kbps = when {
+        isAudio -> if (id.contains("mp3")) 320 else 160
+        resolution >= 2160 || id.contains("4k") -> 18000
+        resolution >= 1440 || id.contains("1440") -> 9000
+        resolution >= 1080 || id.contains("1080") -> 4200
+        resolution >= 720 || id.contains("720") -> 2200
+        resolution >= 480 || id.contains("480") -> 1000
+        resolution >= 360 || id.contains("360") -> 500
+        else -> 4000
+    }
+    if (sec > 0) {
+        val bytes = (kbps.toLong() * 1000L * sec) / 8L
+        return formatByteSize(bytes)
+    }
+    return when {
+        isAudio -> if (id.contains("mp3")) "~8.2 MB" else "~3.5 MB"
+        resolution >= 2160 || id.contains("4k") -> "~350 MB"
+        resolution >= 1440 || id.contains("1440") -> "~180 MB"
+        resolution >= 1080 || id.contains("1080") || id == "best" -> "~75 MB"
+        resolution >= 720 || id.contains("720") -> "~38 MB"
+        resolution >= 480 || id.contains("480") -> "~18 MB"
+        resolution >= 360 || id.contains("360") -> "~9.5 MB"
+        else -> "~45 MB"
+    }
 }

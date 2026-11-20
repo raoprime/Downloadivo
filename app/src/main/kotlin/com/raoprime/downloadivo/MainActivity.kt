@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.raoprime.downloadivo.ui.DownloadivoScreen
+import com.raoprime.downloadivo.ui.onboarding.OnboardingScreen
 import com.raoprime.downloadivo.ui.theme.DownloadivoTheme
 
 class MainActivity : ComponentActivity() {
@@ -69,19 +70,34 @@ class MainActivity : ComponentActivity() {
         handleShareIntent(intent)
         checkClipboardForUrl()
 
+        val prefs = getSharedPreferences("downloadivo_prefs", Context.MODE_PRIVATE)
+        var hasSeenOnboarding by mutableStateOf(prefs.getBoolean("has_seen_onboarding", false))
+
         setContent {
             DownloadivoTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    DownloadivoScreen(
-                        sharedUrl = sharedUrl,
-                        clipboardUrl = clipboardUrl,
-                        onClearClipboard = { clipboardUrl = null },
-                        onEnterPip = { enterPipMode() },
-                        inPipMode = inPipMode
-                    )
+                    if (!hasSeenOnboarding) {
+                        OnboardingScreen(
+                            onFinish = {
+                                prefs.edit().putBoolean("has_seen_onboarding", true).apply()
+                                hasSeenOnboarding = true
+                            }
+                        )
+                    } else {
+                        DownloadivoScreen(
+                            sharedUrl = sharedUrl,
+                            clipboardUrl = clipboardUrl,
+                            onClearClipboard = { clipboardUrl = null },
+                            onEnterPip = { enterPipMode() },
+                            inPipMode = inPipMode,
+                            onShowIntro = {
+                                hasSeenOnboarding = false
+                            }
+                        )
+                    }
                 }
             }
         }
