@@ -848,6 +848,102 @@
       transform: translateX(-50%) translateY(0);
     }
 
+    /* ════════════════════════════════════════════════════════════
+       SUPPORTED SOURCES STRIP & SPECS BAR (FLAGSHIP LAYOUT)
+    ════════════════════════════════════════════════════════════ */
+    .supported-sources-container {
+      width: 100%;
+      max-width: 580px;
+      margin-top: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      animation: fadeIn 0.3s ease-out;
+    }
+    .sources-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 4px;
+    }
+    .sources-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .sources-count {
+      font-size: 11px;
+      color: #52525b;
+    }
+    .sources-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+    }
+    .sources-row::-webkit-scrollbar {
+      display: none;
+    }
+    .source-chip {
+      background: rgba(18, 18, 22, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 7px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-subtle);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .source-chip:hover {
+      border-color: rgba(255, 255, 255, 0.16);
+      color: #fff;
+    }
+    .chip-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .specs-bar {
+      text-align: center;
+      font-size: 11.5px;
+      color: #52525b;
+      padding-top: 10px;
+      letter-spacing: 0.02em;
+    }
+    .specs-bar span {
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 600px) {
+      .top-header {
+        padding: 10px 16px;
+      }
+      .brand-logo-img {
+        height: 32px;
+      }
+      .tunnel-label {
+        display: none;
+      }
+      .tunnel-host {
+        max-width: 120px !important;
+      }
+      .header-btn span {
+        display: none;
+      }
+      .header-btn {
+        padding: 7px;
+      }
+    }
+
     .btn-reset {
       background: transparent;
       border: none;
@@ -911,11 +1007,8 @@
   <!-- Main Hero & Center Container -->
   <main class="main-container">
     <div class="hero-text">
-      <div class="hero-logo-badge">
-        <img src="/assets/icon_white.png" alt="Downloadivo" class="hero-icon-img" />
-      </div>
-      <h1 class="hero-title">Downloadivo</h1>
-      <p class="hero-subtitle">Download high-fidelity 8K / 4K video, audio, and covers from any source</p>
+      <h1 class="hero-title" style="letter-spacing: -0.03em;">Universal Media Studio</h1>
+      <p class="hero-subtitle">High-fidelity 4K video, 320kbps MP3 audio, and media streams from 1,000+ sources</p>
     </div>
 
     <!-- Central Command Card -->
@@ -1092,6 +1185,26 @@
           </button>
         </div>
         <button class="btn-reset" onclick="resetForNewDownload()">Download another file</button>
+      </div>
+    </div>
+
+    <!-- Supported Sources Strip (Flagship Balance) -->
+    <div class="supported-sources-container">
+      <div class="sources-header">
+        <span class="sources-title">SUPPORTED SOURCES</span>
+        <span class="sources-count">1,000+ Platforms</span>
+      </div>
+      <div class="sources-row">
+        <span class="source-chip" onclick="document.getElementById('url-input').focus()"><span class="chip-dot" style="background:#ff0000;"></span>YouTube</span>
+        <span class="source-chip" onclick="document.getElementById('url-input').focus()"><span class="chip-dot" style="background:#e1306c;"></span>Instagram</span>
+        <span class="source-chip" onclick="document.getElementById('url-input').focus()"><span class="chip-dot" style="background:#00f2fe;"></span>TikTok</span>
+        <span class="source-chip" onclick="document.getElementById('url-input').focus()"><span class="chip-dot" style="background:#ffffff;"></span>X / Twitter</span>
+        <span class="source-chip" onclick="document.getElementById('url-input').focus()"><span class="chip-dot" style="background:#1db954;"></span>Spotify</span>
+        <span class="source-chip" onclick="document.getElementById('url-input').focus()"><span class="chip-dot" style="background:#ff4500;"></span>Reddit</span>
+        <span class="source-chip" onclick="document.getElementById('url-input').focus()"><span class="chip-dot" style="background:#1877f2;"></span>Facebook</span>
+      </div>
+      <div class="specs-bar">
+        <span>4K Ultra HD</span> • <span>320kbps MP3</span> • <span>Zero Watermarks</span> • <span>Direct Stream</span>
       </div>
     </div>
   </main>
