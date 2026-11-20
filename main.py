@@ -42,6 +42,140 @@ ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
 _NODE_PATH = shutil.which("node") or shutil.which("node.exe") or ""
 _FFMPEG_PATH = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe") or ""
+_ARIA2C_PATH = (
+    shutil.which("aria2c")
+    or shutil.which("aria2c.exe")
+    or (str((Path(__file__).parent / "bin" / "aria2c.exe").resolve()) if (Path(__file__).parent / "bin" / "aria2c.exe").exists() else "")
+    or ("C:\\Users\\DELL\\AppData\\Local\\Microsoft\\WinGet\\Links\\aria2c.exe" if Path("C:\\Users\\DELL\\AppData\\Local\\Microsoft\\WinGet\\Links\\aria2c.exe").exists() else "")
+)
+
+# ──────────────────────────────────────────────────────────────
+# Anti-Block, Proxy, Cookies & User-Agent Rotation Pool
+# ──────────────────────────────────────────────────────────────
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36",
+]
+_ua_counter = 0
+_ua_lock = threading.Lock()
+
+def _get_random_user_agent() -> str:
+    global _ua_counter
+    with _ua_lock:
+        _ua_counter = (_ua_counter + 1) % len(USER_AGENTS)
+        return USER_AGENTS[_ua_counter]
+
+def _get_cookie_file() -> Optional[str]:
+    """Auto-detects browser cookies.txt in environment or common paths."""
+    env_cookie = os.environ.get("COOKIES_PATH") or os.environ.get("COOKIES_FILE") or os.environ.get("YOUTUBE_COOKIES")
+    if env_cookie and Path(env_cookie).is_file() and Path(env_cookie).stat().st_size > 0:
+        return str(Path(env_cookie).resolve())
+    
+    candidates = [
+        Path(__file__).parent / "cookies.txt",
+        Path(__file__).parent / "youtube_cookies.txt",
+        DOWNLOAD_DIR / "cookies.txt",
+        Path.home() / "cookies.txt",
+    ]
+    for c in candidates:
+        if c.is_file() and c.stat().st_size > 0:
+            return str(c.resolve())
+    return None
+
+def _get_proxy_url() -> Optional[str]:
+    """Retrieves residential or datacenter proxy URL if configured via environment."""
+    return (
+        os.environ.get("PROXY_URL")
+        or os.environ.get("HTTP_PROXY")
+        or os.environ.get("HTTPS_PROXY")
+        or os.environ.get("ALL_PROXY")
+    )
+
+def _clean_error_message(err_raw: str, url: str = "") -> str:
+    """Transforms raw stack traces into clear, actionable, structured messages."""
+    err_str = str(err_raw)
+    err_lower = err_str.lower()
+    
+    if "sign in to confirm you’re not a bot" in err_lower or "sign in to confirm you're not a bot" in err_lower:
+        return "YouTube bot check triggered. Please supply a cookies.txt file or configure a PROXY_URL."
+    elif "private video" in err_lower or "this video is private" in err_lower:
+        return "This video is private, members-only, or requires creator authentication."
+    elif "video unavailable" in err_lower or "has been removed" in err_lower:
+        return "This video is unavailable or has been removed by the uploader."
+    elif "age" in err_lower and ("restricted" in err_lower or "confirm your age" in err_lower):
+        return "This video is age-restricted and requires account authentication (cookies.txt)."
+    elif "not available in your country" in err_lower or "geo-restricted" in err_lower or "blocked in your country" in err_lower:
+        return "This media is geo-restricted in your server region. Configure PROXY_URL to bypass."
+    elif "rate limit" in err_lower or "429" in err_lower or "too many requests" in err_lower:
+        return "Platform rate limit reached (HTTP 429). Please wait a few moments or route via PROXY_URL."
+    elif "unsupported url" in err_lower:
+        return "The provided URL is not supported or not recognized as valid media."
+    
+    clean = re.sub(r"ERROR:\s*(\[[^\]]+\]\s*)?", "", err_str).strip()
+    if "; please report this issue" in clean:
+        clean = clean.split("; please report this issue")[0].strip()
+    clean = clean.split("\n")[0].strip()
+    return clean[:250] if clean else "Unable to process media stream. Please verify the URL."
+
+def _cleanup_temp_files(stem_prefix: str):
+    """Automatically removes intermediate unmerged stream fragments or part files."""
+    try:
+        clean_stem = re.sub(r"[^\w\s-]", "", stem_prefix[:20]).strip().lower()
+        if not clean_stem:
+            return
+        for item in DOWNLOAD_DIR.iterdir():
+            if item.is_file():
+                name_lower = item.name.lower()
+                if clean_stem in name_lower:
+                    if (
+                        re.search(r"\.f\d+\.(mp4|m4a|webm|mkv)$", name_lower)
+                        or name_lower.endswith(".part")
+                        or name_lower.endswith(".ytdl")
+                    ):
+                        try:
+                            item.unlink()
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+
+def _update_ytdlp():
+    """Execute yt-dlp update and return (success, message)."""
+    try:
+        cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        out = ((res.stdout or "") + " " + (res.stderr or "")).strip()
+        return True, out
+    except Exception as e:
+        return False, str(e)
+
+def _start_ytdlp_auto_updater():
+    """Background daemon thread ensuring yt-dlp core extractor never becomes outdated."""
+    def worker():
+        time.sleep(10)
+        while True:
+            try:
+                ok, msg = _update_ytdlp()
+                if ok and "Successfully installed" in msg:
+                    print(f"[YTDLP-UPDATER] Successfully updated yt-dlp: {msg}")
+                elif ok:
+                    print(f"[YTDLP-UPDATER] yt-dlp is up to date ({yt_dlp.version.__version__}).")
+                else:
+                    print(f"[YTDLP-UPDATER] Check warning: {msg}")
+            except Exception as e:
+                print(f"[YTDLP-UPDATER] Check warning: {e}")
+            time.sleep(12 * 3600)
+
+    t = threading.Thread(target=worker, daemon=True, name="YtDlpAutoUpdater")
+    t.start()
+
+# Launch auto-updater on startup
+_start_ytdlp_auto_updater()
 
 # Storage Configuration
 # Ephemeral pruning enabled on cloud/headless or if explicitly set via EPHEMERAL_STORAGE=1
@@ -1189,22 +1323,33 @@ def _download_twitter_dp(task_id: str, username: str, fmt: str):
 # ──────────────────────────────────────────────────────────────
 def _base_ydl_opts(outtmpl: str, hooks: list) -> dict:
     js_runtimes = {"node": {"path": _NODE_PATH}} if _NODE_PATH else {}
-    return {
+    cookie_file = _get_cookie_file()
+    proxy_url = _get_proxy_url()
+    ua = _get_random_user_agent()
+
+    yt_extractor_args = {
+        "player_client": ["android", "ios", "mweb", "web"],
+    }
+    po_token = os.environ.get("YOUTUBE_PO_TOKEN") or os.environ.get("PO_TOKEN")
+    visitor_data = os.environ.get("VISITOR_DATA")
+    if po_token:
+        yt_extractor_args["po_token"] = [f"web+{po_token}"] if not visitor_data else [f"web+{po_token}+{visitor_data}"]
+
+    opts = {
         "outtmpl": outtmpl,
         "progress_hooks": hooks,
         "quiet": True,
         "no_warnings": True,
         "ignoreerrors": False,
         "merge_output_format": "mp4",
+        "keepvideo": False,
         "js_runtimes": js_runtimes,
         "remote_components": {"ejs:github"},
         "extractor_args": {
-            "youtube": {
-                "player_client": ["ios", "android", "mweb", "web"]
-            }
+            "youtube": yt_extractor_args
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+            "User-Agent": ua,
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
             "Sec-Fetch-Mode": "navigate",
@@ -1219,10 +1364,49 @@ def _base_ydl_opts(outtmpl: str, hooks: list) -> dict:
         "socket_timeout": 20,
     }
 
+    if _FFMPEG_PATH:
+        opts["ffmpeg_location"] = _FFMPEG_PATH
+
+    if cookie_file:
+        opts["cookiefile"] = cookie_file
+
+    if proxy_url:
+        opts["proxy"] = proxy_url
+
+    if _ARIA2C_PATH:
+        aria_args = [
+            "-x", "16",                    # 16 connections per server
+            "-s", "16",                    # split file into 16 parts
+            "-k", "1M",                    # 1MB minimum segment size
+            "--file-allocation=none",      # instant allocation
+            "--retry-wait=2",              # 2s retry wait
+            "--max-tries=5",               # up to 5 attempts
+            "--console-log-level=warn",
+            "--summary-interval=0",
+        ]
+        if proxy_url:
+            aria_args.append(f"--all-proxy={proxy_url}")
+        opts["external_downloader"] = {"http": _ARIA2C_PATH, "https": _ARIA2C_PATH}
+        opts["external_downloader_args"] = {"aria2c": aria_args}
+
+    return opts
+
 
 def _info_ydl_opts() -> dict:
     js_runtimes = {"node": {"path": _NODE_PATH}} if _NODE_PATH else {}
-    return {
+    cookie_file = _get_cookie_file()
+    proxy_url = _get_proxy_url()
+    ua = _get_random_user_agent()
+
+    yt_extractor_args = {
+        "player_client": ["android", "ios", "mweb", "web"],
+    }
+    po_token = os.environ.get("YOUTUBE_PO_TOKEN") or os.environ.get("PO_TOKEN")
+    visitor_data = os.environ.get("VISITOR_DATA")
+    if po_token:
+        yt_extractor_args["po_token"] = [f"web+{po_token}"] if not visitor_data else [f"web+{po_token}+{visitor_data}"]
+
+    opts = {
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
@@ -1232,18 +1416,27 @@ def _info_ydl_opts() -> dict:
         "js_runtimes": js_runtimes,
         "remote_components": {"ejs:github"},
         "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "ios", "mweb", "web"]
-            }
+            "youtube": yt_extractor_args
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+            "User-Agent": ua,
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
         },
-        "socket_timeout": 12,
-        "retries": 2,
+        "socket_timeout": 15,
+        "retries": 3,
     }
+
+    if _FFMPEG_PATH:
+        opts["ffmpeg_location"] = _FFMPEG_PATH
+
+    if cookie_file:
+        opts["cookiefile"] = cookie_file
+
+    if proxy_url:
+        opts["proxy"] = proxy_url
+
+    return opts
 
 
 def _make_format_opts(fmt: str) -> dict:
@@ -1411,11 +1604,57 @@ def _download_ytdlp(task_id: str, url: str, fmt: str):
                 "title": info.get("title", file_path.name),
                 "thumbnail": info.get("thumbnail", ""),
             })
+            _cleanup_temp_files(info.get("title", file_path.name))
     except Exception as e:
         if "No video formats found" in str(e) and "instagram.com" in url.lower():
             # Automatically redirect to Instagram specialist engine
             _download_instagram(task_id, url, fmt)
             return
+
+        # If aria2c fails on a specific stream, retry with yt-dlp native multi-fragment downloader
+        if "aria2c" in str(e).lower() and "external_downloader" in opts:
+            try:
+                print(f"[RETRY-FALLBACK] Retrying task {task_id} with native engine...")
+                fallback_opts = dict(opts)
+                fallback_opts.pop("external_downloader", None)
+                fallback_opts.pop("external_downloader_args", None)
+                with yt_dlp.YoutubeDL(fallback_opts) as ydl_fb:
+                    info_fb = ydl_fb.extract_info(url, download=True)
+                    if "entries" in info_fb:
+                        info_fb = info_fb["entries"][0]
+                    fn_fb = ydl_fb.prepare_filename(info_fb)
+                    if fmt == "mp3":
+                        fn_fb = str(Path(fn_fb).with_suffix(".mp3"))
+                    elif fmt != "thumbnail":
+                        cand_mp4 = Path(fn_fb).with_suffix(".mp4")
+                        if cand_mp4.exists():
+                            fn_fb = str(cand_mp4)
+                    fp_fb = Path(fn_fb)
+                    sz_fb = fp_fb.stat().st_size if fp_fb.exists() else 0
+                    _finish_task(task_id, {
+                        "filename": fp_fb.name,
+                        "file_path": str(fp_fb.resolve()),
+                        "size_str": _format_size(sz_fb),
+                        "is_audio": fmt == "mp3",
+                        "title": info_fb.get("title", fp_fb.name),
+                        "thumbnail": info_fb.get("thumbnail", ""),
+                    })
+                    _cleanup_temp_files(info_fb.get("title", fp_fb.name))
+                    return
+            except Exception as e_fb:
+                e = e_fb
+
+        clean_err = _clean_error_message(str(e), url)
+        with _lock:
+            if task_id in downloads and downloads[task_id].get("status") != "cancelled":
+                downloads[task_id].update({
+                    "status": "error",
+                    "error": clean_err,
+                    "progress": 0,
+                    "speed": "",
+                    "eta": "",
+                })
+        print(f"[DOWNLOAD-ERROR] Task {task_id}: {clean_err}")
         raise e
 
 
@@ -1544,12 +1783,7 @@ def master_download_worker(task_id: str, url: str, fmt: str, start_time: Optiona
         with _lock:
             if task_id in downloads and downloads[task_id].get("status") == "cancelled":
                 return
-            err = str(e)
-            for prefix in ["ERROR: ", "[youtube] ", "[generic] ", "[Instagram] "]:
-                err = err.replace(prefix, "")
-            # Remove noisy GitHub issue template instructions
-            if "; please report this issue" in err:
-                err = err.split("; please report this issue")[0].strip()
+            err = _clean_error_message(str(e), url)
             if task_id in downloads:
                 downloads[task_id].update({"status": "error", "error": err[:350]})
 
@@ -1596,12 +1830,26 @@ def system_info(request: Request):
         "downloads_size": _format_size(consumed),
         "node_available": bool(_NODE_PATH),
         "ffmpeg_available": bool(_FFMPEG_PATH),
+        "aria2c_available": bool(_ARIA2C_PATH),
+        "cookies_configured": bool(_get_cookie_file()),
+        "proxy_configured": bool(_get_proxy_url()),
+        "bgutil_pot_available": True,
         "ytdlp_version": yt_dlp.version.__version__,
         "is_localhost": is_localhost,
         "is_remote": is_remote,
         "is_cloud": not hasattr(os, "startfile"),
         "client_ip": client_ip,
         "public_url": public_url,
+    }
+
+
+@app.post("/system/update-ytdlp")
+def manual_update_ytdlp():
+    ok, msg = _update_ytdlp()
+    return {
+        "success": ok,
+        "message": msg,
+        "current_version": yt_dlp.version.__version__
     }
 
 
@@ -1990,8 +2238,8 @@ async def get_info(request: Request, url: Optional[str] = None):
                 _set_cached_info(f"RESP:{target_url}", res_dict)
             return res_dict
     except Exception as e:
-        err = str(e).replace("ERROR: ", "").replace("[youtube] ", "")
-        raise HTTPException(status_code=400, detail=err[:250])
+        err = _clean_error_message(str(e), target_url or url or "")
+        raise HTTPException(status_code=400, detail=err)
 
 
 @app.post("/download")

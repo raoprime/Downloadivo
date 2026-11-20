@@ -9,3 +9,6 @@ downloads/*
 *.ytdl
 cloudflared.log
 tunnel_url.txt
+bin/*.exe
+bin/
+*.exe
