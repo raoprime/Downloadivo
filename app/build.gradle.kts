@@ -11,8 +11,8 @@ android {
     applicationId = "com.raoprime.downloadivo"
     minSdk = 26
     targetSdk = 36
-    versionCode = 10
-    versionName = "3.9.5"
+    versionCode = 11
+    versionName = "3.9.6"
   }
 
   buildTypes {

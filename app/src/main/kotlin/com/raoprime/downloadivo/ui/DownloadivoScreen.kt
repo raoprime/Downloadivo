@@ -366,7 +366,7 @@ fun DownloadivoScreen(
                     }
                 },
                 actions = {
-                    if (currentTab == AppTab.LIBRARY && historyList.isNotEmpty()) {
+                    if (currentTab == AppTab.LIBRARY && historyList.any { it.status == DownloadStatus.SUCCESS }) {
                         TextButton(
                             onClick = { DownloadRepository.clearHistory() }
                         ) {
@@ -560,7 +560,23 @@ fun DownloadivoScreen(
                             resolvedInfo = null
                             errorMessage = null
                             isCustomizeExpanded = false
-                        }
+                        },
+                        recentDownloads = historyList.filter { it.status == DownloadStatus.SUCCESS && !it.filePath.isNullOrBlank() },
+                        onPlayRecent = { task ->
+                            HapticUtil.mediumClick(context)
+                            task.filePath?.let { uriStr ->
+                                activePlaybackUri = uriStr
+                                activePlaybackTitle = task.title
+                                activePlaybackIsAudio = task.isAudio
+                                activePlaybackDuration = task.duration
+                                activePlaybackThumbnail = task.thumbnail
+                                activePlaybackAuthor = ""
+                                activePlaybackQualities = emptyList()
+                                activePlaybackCurrentQuality = ""
+                                isPlayerMinimized = false
+                            }
+                        },
+                        onNavigateLibrary = { currentTab = AppTab.LIBRARY }
                     )
 
                     AppTab.QUEUE -> QueueTab(
@@ -987,7 +1003,10 @@ private fun HomeDownloaderTab(
     onStreamPlay: (streamUrl: String, originalUrl: String, title: String, isAudio: Boolean, qualities: List<String>, initialQuality: String, duration: String) -> Unit,
     onInstantDownload: (url: String, format: String) -> Unit,
     onDownloadCustom: (info: MediaInfo, format: String, startTime: String?, endTime: String?) -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    recentDownloads: List<DownloadTask> = emptyList(),
+    onPlayRecent: ((DownloadTask) -> Unit)? = null,
+    onNavigateLibrary: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
@@ -1024,40 +1043,126 @@ private fun HomeDownloaderTab(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // ═══════════════════════════════════════════════════════════════
-        // SUPPORTED PLATFORMS MARQUEE STRIP (WHEN NO LINK ACTIVE)
+        // STUDIO HERO HEADER & QUICK ACTION DASHBOARD (WHEN NO ACTIVE LINK)
         // ═══════════════════════════════════════════════════════════════
         if (resolvedInfo == null && !isResolving) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = SurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                listOf(
-                    "YouTube", "Instagram", "TikTok", "X / Twitter", "Spotify", "Facebook", "Reddit"
-                ).forEach { platform ->
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = SurfaceDark,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline)
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(TextSecondary)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Downloadivo Studio",
+                                    style = Typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF132D1B),
+                                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF10B981).copy(alpha = 0.6f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF10B981))
+                                        )
+                                        Spacer(modifier = Modifier.width(5.dp))
+                                        Text(
+                                            text = "TURBO ENGINE ACTIVE",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF10B981)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                text = platform,
-                                style = Typography.labelSmall,
+                                text = "8K • 4K • 60fps • 320k MP3 • Zero-Buffer Stream",
+                                style = Typography.bodySmall,
                                 color = TextSecondary,
-                                fontWeight = FontWeight.Medium
+                                fontSize = 11.5.sp
                             )
+                        }
+                    }
+
+                    // 2 Top Action Chips
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                val clean = DownloadEngine.sanitizeUrl(clip)
+                                if (clean.startsWith("http")) {
+                                    HapticUtil.mediumClick(context)
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    onUrlChange(clean)
+                                    onInspect(clean)
+                                } else {
+                                    Toast.makeText(context, "Copy any media link first to auto-paste", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = SurfaceDark,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.ContentPaste, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text("Auto Paste", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextCrisp)
+                                    Text("From Clipboard", fontSize = 9.5.sp, color = TextTertiary)
+                                }
+                            }
+                        }
+
+                        Surface(
+                            onClick = {
+                                Toast.makeText(context, "Paste any YouTube link to stream ad-free in HD", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = SurfaceDark,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text("Ad-Free Stream", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextCrisp)
+                                    Text("Zero Storage Use", fontSize = 9.5.sp, color = TextTertiary)
+                                }
+                            }
                         }
                     }
                 }
@@ -2006,6 +2111,306 @@ private fun HomeDownloaderTab(
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // POWERHOUSE HUB 1: RECENT DOWNLOADS SHELF (OFFLINE READY)
+        // ═══════════════════════════════════════════════════════════════
+        if (resolvedInfo == null && !isResolving && recentDownloads.isNotEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Recent Downloads",
+                        style = Typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = TextCrisp
+                    )
+                    TextButton(
+                        onClick = { onNavigateLibrary?.invoke() },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Text(
+                            text = "View Library (${recentDownloads.size})",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextSecondary
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    recentDownloads.take(6).forEach { task ->
+                        Surface(
+                            onClick = { onPlayRecent?.invoke(task) },
+                            shape = RoundedCornerShape(14.dp),
+                            color = SurfaceDark,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                            modifier = Modifier.width(160.dp)
+                        ) {
+                            Column {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(90.dp)
+                                        .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+                                        .background(Color(0xFF141418)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (!task.thumbnail.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = task.thumbnail,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else {
+                                        Icon(
+                                            if (task.isAudio) Icons.Default.MusicNote else Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = TextCrisp,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+
+                                    // Mini play button overlay
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = Color.Black.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                Icons.Default.PlayArrow,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+
+                                    // Duration tag
+                                    if (task.duration.isNotBlank()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(3.dp),
+                                            color = Color.Black.copy(alpha = 0.85f),
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .padding(4.dp)
+                                        ) {
+                                            Text(
+                                                text = task.duration,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = task.title,
+                                        style = Typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextCrisp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = if (task.isAudio) "MP3 Audio" else "MP4 Video",
+                                        style = Typography.bodySmall,
+                                        color = TextTertiary,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // POWERHOUSE HUB 2: SUPPORTED PLATFORMS INTERACTIVE GRID
+        // ═══════════════════════════════════════════════════════════════
+        if (resolvedInfo == null && !isResolving) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Supported Platforms",
+                        style = Typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = TextCrisp
+                    )
+                    Text(
+                        text = "1000+ SITES",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextTertiary
+                    )
+                }
+
+                val platforms = listOf(
+                    Triple("YouTube", "4K • 60fps • Shorts • Audio", Color(0xFFFF3333)),
+                    Triple("Instagram", "Reels • Stories • High-Res", Color(0xFFE1306C)),
+                    Triple("TikTok", "1080p No Watermark", Color(0xFF00F2FE)),
+                    Triple("X / Twitter", "Original Bitrate MP4", Color(0xFF1DA1F2)),
+                    Triple("Spotify", "Lossless 320k Audio", Color(0xFF1DB954)),
+                    Triple("Facebook", "1080p Reels & Clips", Color(0xFF1877F2)),
+                    Triple("Reddit", "Merged Audio Video", Color(0xFFFF5722)),
+                    Triple("SoundCloud", "Direct MP3 Stream", Color(0xFFFF7700))
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (i in platforms.indices step 2) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            for (j in 0..1) {
+                                if (i + j < platforms.size) {
+                                    val (name, desc, color) = platforms[i + j]
+                                    Surface(
+                                        onClick = {
+                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                            val clean = DownloadEngine.sanitizeUrl(clip)
+                                            val key = name.split(" ")[0].lowercase()
+                                            if (clean.lowercase().contains(key)) {
+                                                HapticUtil.mediumClick(context)
+                                                onUrlChange(clean)
+                                                onInspect(clean)
+                                            } else {
+                                                Toast.makeText(context, "Copy any $name link and paste above", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = SurfaceDark,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .clip(CircleShape)
+                                                    .background(color)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Column {
+                                                Text(
+                                                    text = name,
+                                                    style = Typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TextCrisp
+                                                )
+                                                Text(
+                                                    text = desc,
+                                                    style = Typography.bodySmall,
+                                                    color = TextTertiary,
+                                                    fontSize = 10.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // POWERHOUSE HUB 3: STUDIO PRO HIGHLIGHTS
+        // ═══════════════════════════════════════════════════════════════
+        if (resolvedInfo == null && !isResolving) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Downloadivo Pro Highlights",
+                        style = Typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = TextCrisp
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = SurfaceDark,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Ad-Free Stream", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = TextCrisp)
+                                Text("Zero Storage", fontSize = 9.5.sp, color = TextTertiary)
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = SurfaceDark,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Auto Resume", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = TextCrisp)
+                                Text("HTTP Range", fontSize = 9.5.sp, color = TextTertiary)
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = SurfaceDark,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("320k Studio", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = TextCrisp)
+                                Text("Lossless AAC", fontSize = 9.5.sp, color = TextTertiary)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(72.dp))
     }
 }
@@ -2475,8 +2880,14 @@ private fun LibraryTab(
     var searchQuery by remember { mutableStateOf("") }
     var filterType by remember { mutableStateOf("All") }
 
-    val filteredHistory = remember(history, searchQuery, filterType) {
-        history.filter { task ->
+    // Strict Library Invariant: ONLY fully completed, on-disk media appears in Library
+    // In-progress, queued, or initializing downloads stay exclusively in the Queue tab
+    val completedHistory = remember(history) {
+        history.filter { it.status == DownloadStatus.SUCCESS && !it.filePath.isNullOrBlank() }
+    }
+
+    val filteredHistory = remember(completedHistory, searchQuery, filterType) {
+        completedHistory.filter { task ->
             val matchesSearch = searchQuery.isBlank() || task.title.contains(searchQuery, ignoreCase = true)
             val matchesFilter = when (filterType) {
                 "Videos" -> !task.isAudio
@@ -2492,7 +2903,7 @@ private fun LibraryTab(
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
-        if (history.isNotEmpty()) {
+        if (completedHistory.isNotEmpty()) {
             // Search Capsule
             OutlinedTextField(
                 value = searchQuery,
@@ -2567,10 +2978,18 @@ private fun LibraryTab(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = if (history.isEmpty()) "Your library is empty" else "No matching downloads",
+                        text = if (completedHistory.isEmpty()) "No Downloaded Media Yet" else "No matching downloads",
                         style = Typography.titleSmall,
                         color = TextSecondary
                     )
+                    if (completedHistory.isEmpty()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Completed downloads will appear here ready for offline playback.",
+                            style = Typography.bodySmall,
+                            color = TextTertiary
+                        )
+                    }
                 }
             }
         } else {

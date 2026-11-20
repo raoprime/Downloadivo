@@ -43,6 +43,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.raoprime.downloadivo.MainActivity
 import com.raoprime.downloadivo.network.DownloadEngine
@@ -80,6 +81,8 @@ fun BuiltInPlayerSheet(
     var playerError by remember { mutableStateOf<String?>(null) }
     var showFullscreenControls by remember { mutableStateOf(true) }
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
+    var isZoomToFill by remember { mutableStateOf(false) }
+    var autoRetryCount by remember { mutableIntStateOf(0) }
 
     // Double tap feedback
     var showDoubleTapRewind by remember { mutableStateOf(false) }
@@ -198,6 +201,7 @@ fun BuiltInPlayerSheet(
                 isBuffering = (state == Player.STATE_BUFFERING)
                 if (state == Player.STATE_READY) {
                     playerError = null
+                    autoRetryCount = 0
                     if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) {
                         durationMs = exoPlayer.duration
                     }
@@ -208,7 +212,14 @@ fun BuiltInPlayerSheet(
             }
             override fun onPlayerError(error: PlaybackException) {
                 isBuffering = false
-                playerError = error.localizedMessage ?: "Stream connection error (${error.errorCodeName})"
+                if (autoRetryCount < 3) {
+                    autoRetryCount++
+                    isBuffering = true
+                    exoPlayer.prepare()
+                    exoPlayer.play()
+                } else {
+                    playerError = error.localizedMessage ?: "Stream connection error (${error.errorCodeName})"
+                }
             }
         }
         exoPlayer.addListener(listener)
@@ -304,6 +315,20 @@ fun BuiltInPlayerSheet(
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Aspect Ratio Toggle (Fit vs Zoom/Crop)
+                        if (!isAudio) {
+                            IconButton(
+                                onClick = { isZoomToFill = !isZoomToFill },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isZoomToFill) Icons.Default.FitScreen else Icons.Default.CropFree,
+                                    contentDescription = if (isZoomToFill) "Fit to Screen" else "Zoom to Fill",
+                                    tint = if (isZoomToFill) TextCrisp else TextTertiary,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                        }
                         // Minimize Button (dock to bottom floating miniplayer)
                         IconButton(onClick = onMinimize, modifier = Modifier.size(34.dp)) {
                             Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize", tint = TextCrisp, modifier = Modifier.size(24.dp))
@@ -367,11 +392,18 @@ fun BuiltInPlayerSheet(
                                 player = exoPlayer
                                 useController = false
                                 keepScreenOn = true
+                                resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
                                 layoutParams = FrameLayout.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
                             }
+                        },
+                        update = { pv ->
+                            if (pv.player != exoPlayer) {
+                                pv.player = exoPlayer
+                            }
+                            pv.resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
                         },
                         modifier = Modifier.fillMaxSize()
                     )
