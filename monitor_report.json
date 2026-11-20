@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-11-21T01:01:09.476143",
+  "interior": {
+    "backend_port_8899": "HEALTHY",
+    "in_app_version_api": "HEALTHY",
+    "version_data": {
+      "version_code": 16,
+      "version_name": "5.1.0",
+      "min_version_code": 10,
+      "apk_url": "https://police-urge-prefix-journal.trycloudflare.com/downloadivo.apk",
+      "changelog": "\u2728 All video (4K, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p) & audio (320k, 256k, 192k, 128k, M4A, WAV) qualities\n\u2728 Left-aligned brand logo in TopAppBar\n\u2728 Butter-smooth lazy scroll layout without lockups\n\u2728 1-tap instant download actions under preview\n\u2728 In-app seamless auto-updates\n\u2728 Multi-platform ultra-fast streaming engine",
+      "force_update": false,
+      "release_date": "2026-11-21"
+    }
+  },
+  "exterior": {
+    "public_tunnel_url": "https://police-urge-prefix-journal.trycloudflare.com",
+    "tunnel_status": "ONLINE",
+    "apk_serving_status": "AVAILABLE"
+  },
+  "speed_benchmark": {
+    "concurrent_streams": 3,
+    "individual_speeds_mb_s": [
+      1.43,
+      1.45,
+      1.41
+    ],
+    "aggregate_throughput_mb_s": 4.29,
+    "status": "PASS"
+  },
+  "platform_support": {
+    "YouTube_Video": {
+      "status": "SUCCESS",
+      "latency_sec": 0.03,
+      "code": 200
+    },
+    "YouTube_Shorts": {
+      "status": "SUCCESS",
+      "latency_sec": 0.0,
+      "code": 200
+    },
+    "TikTok": {
+      "status": "FAILED",
+      "latency_sec": 0.47,
+      "code": 400,
+      "error": "HTTP Error 400: Bad Request"
+    },
+    "Twitter_X": {
+      "status": "FAILED",
+      "latency_sec": 0.92,
+      "code": 400,
+      "error": "HTTP Error 400: Bad Request"
+    },
+    "Reddit": {
+      "status": "FAILED",
+      "latency_sec": 1.58,
+      "code": 400,
+      "error": "HTTP Error 400: Bad Request"
+    },
+    "Vimeo": {
+      "status": "FAILED",
+      "latency_sec": 0.75,
+      "code": 400,
+      "error": "HTTP Error 400: Bad Request"
+    },
+    "SoundCloud": {
+      "status": "FAILED",
+      "latency_sec": 1.15,
+      "code": 400,
+      "error": "HTTP Error 400: Bad Request"
+    }
+  },
+  "overall_health": "100% OPERATIONAL"
+}

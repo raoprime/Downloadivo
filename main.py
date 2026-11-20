@@ -452,17 +452,20 @@ def _canonical_key(url_str: str) -> str:
     return url_str.strip()
 
 
-def _get_cached_info(url_str: str) -> Optional[dict]:
+def _get_cached_info(url_str: str, require_formats: bool = False) -> Optional[dict]:
     if not url_str:
         return None
     now = time.time()
     clean_k = url_str.strip()
     canon_k = _canonical_key(clean_k)
+    keys = (canon_k, clean_k) if require_formats else (canon_k, clean_k, f"RESP:{canon_k}", f"RESP:{clean_k}")
     with _INFO_CACHE_LOCK:
-        for k in (canon_k, clean_k, f"RESP:{canon_k}", f"RESP:{clean_k}"):
+        for k in keys:
             if k in _INFO_CACHE:
                 ts, val = _INFO_CACHE[k]
                 if now - ts < _INFO_CACHE_TTL:
+                    if require_formats and (not isinstance(val, dict) or not val.get("formats")):
+                        continue
                     return val
                 del _INFO_CACHE[k]
     return None
@@ -1840,6 +1843,43 @@ def health_check():
     }
 
 
+@app.api_route("/version", methods=["GET", "HEAD"])
+@app.api_route("/api/version", methods=["GET", "HEAD"])
+def get_app_version():
+    tunnel_url = _get_public_tunnel_url()
+    apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
+    return {
+        "version_code": 16,
+        "version_name": "5.1.0",
+        "min_version_code": 10,
+        "apk_url": apk_url,
+        "changelog": "✨ All video (4K, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p) & audio (320k, 256k, 192k, 128k, M4A, WAV) qualities\n✨ Left-aligned brand logo in TopAppBar\n✨ Butter-smooth lazy scroll layout without lockups\n✨ 1-tap instant download actions under preview\n✨ In-app seamless auto-updates\n✨ Multi-platform ultra-fast streaming engine",
+        "force_update": False,
+        "release_date": datetime.now().strftime("%Y-%m-%d"),
+    }
+
+
+@app.api_route("/downloadivo.apk", methods=["GET", "HEAD"])
+@app.api_route("/api/downloadivo.apk", methods=["GET", "HEAD"])
+@app.api_route("/downloadivo-v5.0.0.apk", methods=["GET", "HEAD"])
+def download_app_apk():
+    apk_paths = [
+        ASSETS_DIR / "downloadivo.apk",
+        ASSETS_DIR / "downloadivo-v5.0.0.apk",
+        Path(__file__).parent / "assets" / "downloadivo.apk",
+        Path(__file__).parent / "downloadivo.apk",
+        Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\downloadivo.apk"),
+    ]
+    for p in apk_paths:
+        if p.exists() and p.stat().st_size > 1000000:
+            return FileResponse(
+                path=str(p),
+                filename="Downloadivo-v5.1.0.apk",
+                media_type="application/vnd.android.package-archive"
+            )
+    raise HTTPException(status_code=404, detail="APK build in progress")
+
+
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index():
     html_file = Path(__file__).parent / "index.html"
@@ -2327,7 +2367,7 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
     extracted = _extract_urls(url)
     target_url = extracted[0] if extracted else url.strip()
 
-    info = _get_cached_info(target_url) or _get_cached_info(url)
+    info = _get_cached_info(target_url, require_formats=True) or _get_cached_info(url, require_formats=True)
     if not info:
         try:
             with yt_dlp.YoutubeDL(_info_ydl_opts()) as ydl:
@@ -2434,8 +2474,8 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
             }
         )
 
-    # 1. Audio stream requested (MP3 / Audio)
-    if fmt_lower in ["mp3", "audio", "m4a"]:
+    # 1. Audio stream requested (MP3 / M4A / WAV / Bitrates)
+    if fmt_lower in ["mp3", "audio", "m4a", "wav", "320k", "256k", "192k", "128k"]:
         audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
         audio_fmts.sort(key=lambda x: (x.get("abr") or x.get("tbr") or 0), reverse=True)
         if not audio_fmts:
@@ -2445,9 +2485,17 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
         a_ua = chosen_a_fmt.get("http_headers", {}).get("User-Agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
         dur_sec = info.get("duration") or 0
-        audio_expected_bytes = int(320000 * dur_sec / 8) if dur_sec else (int(chosen_a_fmt.get("filesize") or chosen_a_fmt.get("filesize_approx") or 0))
+        bitrate_kbps = 320
+        if fmt_lower == "256k": bitrate_kbps = 256
+        elif fmt_lower == "192k": bitrate_kbps = 192
+        elif fmt_lower == "128k": bitrate_kbps = 128
+
+        audio_ext = "m4a" if fmt_lower == "m4a" else ("wav" if fmt_lower == "wav" else "mp3")
+        media_type = "audio/mp4" if audio_ext == "m4a" else ("audio/wav" if audio_ext == "wav" else "audio/mpeg")
+
+        audio_expected_bytes = int(bitrate_kbps * 1000 * dur_sec / 8) if dur_sec else (int(chosen_a_fmt.get("filesize") or chosen_a_fmt.get("filesize_approx") or 0))
         audio_headers = {
-            "Content-Disposition": _safe_content_disposition(safe_name, "mp3"),
+            "Content-Disposition": _safe_content_disposition(safe_name, audio_ext),
             "Accept-Ranges": "bytes",
             "X-Expected-Total-Bytes": str(audio_expected_bytes),
             "X-Total-Content-Length": str(audio_expected_bytes),
@@ -2470,15 +2518,22 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
                 "-headers", f"User-Agent: {a_ua}\r\n",
                 "-i", direct_url,
                 "-vn",
-                "-c:a", "libmp3lame",
-                "-b:a", "320k",
-                "-metadata", f"title={title}",
-                "-metadata", f"artist={author}",
-                "-id3v2_version", "3",
-                "-write_id3v1", "1",
-                "-f", "mp3",
-                "pipe:1"
             ]
+            if audio_ext == "wav":
+                cmd += ["-c:a", "pcm_s16le", "-f", "wav", "pipe:1"]
+            elif audio_ext == "m4a":
+                cmd += ["-c:a", "aac", "-b:a", f"{bitrate_kbps}k", "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "pipe:1"]
+            else:
+                cmd += [
+                    "-c:a", "libmp3lame",
+                    "-b:a", f"{bitrate_kbps}k",
+                    "-metadata", f"title={title}",
+                    "-metadata", f"artist={author}",
+                    "-id3v2_version", "3",
+                    "-write_id3v1", "1",
+                    "-f", "mp3",
+                    "pipe:1"
+                ]
             def iter_mp3_pipe():
                 proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=512 * 1024)
                 try:
@@ -2524,23 +2579,26 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
     prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
     prog.sort(key=lambda x: (x.get("height") or 0, x.get("tbr") or 0))
 
-    # Fast progressive stream candidate (preferred for instant seek and mobile hardware compatibility)
+    # 1. Fast progressive stream candidate (matching requested resolution if available)
     chosen_prog_fmt = None
     if prog:
         if fmt_lower in ["720p", "720"]:
-            matches = [f for f in prog if (f.get("height") or 0) <= 720]
-            chosen_prog_fmt = matches[-1] if matches else prog[-1]
+            matches_720 = [f for f in prog if (f.get("height") or 0) == 720]
+            if matches_720: chosen_prog_fmt = matches_720[-1]
         elif fmt_lower in ["480p", "480"]:
-            matches = [f for f in prog if (f.get("height") or 0) <= 480]
-            chosen_prog_fmt = matches[-1] if matches else prog[-1]
+            matches_480 = [f for f in prog if (f.get("height") or 0) == 480]
+            if matches_480: chosen_prog_fmt = matches_480[-1]
         elif fmt_lower in ["360p", "360"]:
-            matches = [f for f in prog if (f.get("height") or 0) <= 360]
-            chosen_prog_fmt = matches[-1] if matches else prog[-1]
-        elif fmt_lower in ["best", "original", "stream"]:
-            # Pick highest available progressive stream for zero-transcode instant start & native seeking
-            chosen_prog_fmt = prog[-1]
-        elif not chosen_prog_fmt and prog:
-            # Fallback to best progressive stream for instant mobile playback
+            matches_360 = [f for f in prog if (f.get("height") or 0) == 360]
+            if matches_360: chosen_prog_fmt = matches_360[-1]
+        elif fmt_lower in ["240p", "240"]:
+            matches_240 = [f for f in prog if (f.get("height") or 0) <= 240]
+            if matches_240: chosen_prog_fmt = matches_240[-1]
+        elif fmt_lower in ["144p", "144"]:
+            matches_144 = [f for f in prog if (f.get("height") or 0) <= 144]
+            if matches_144: chosen_prog_fmt = matches_144[-1]
+        elif fmt_lower in ["stream"]:
+            # Rapid inline mobile stream preview
             chosen_prog_fmt = prog[-1]
 
     use_ffmpeg_mux = False
@@ -2567,8 +2625,7 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
     if video_fmts and chosen_a_fmt and _FFMPEG_PATH and not chosen_prog_fmt:
         use_ffmpeg_mux = True
         if fmt_lower in ["best", "original"]:
-            matches_1080 = [f for f in video_fmts if (f.get("height") or 0) <= 1080]
-            chosen_v_fmt = matches_1080[-1] if matches_1080 else video_fmts[-1]
+            chosen_v_fmt = video_fmts[-1]
         elif fmt_lower in ["8k", "4320p", "4320"]:
             chosen_v_fmt = video_fmts[-1]
         elif fmt_lower in ["4k", "2160p", "2160"]:
@@ -2588,6 +2645,12 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
             chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
         elif fmt_lower in ["360p", "360"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 360]
+            chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
+        elif fmt_lower in ["240p", "240"]:
+            matches = [f for f in video_fmts if (f.get("height") or 0) <= 240]
+            chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
+        elif fmt_lower in ["144p", "144"]:
+            matches = [f for f in video_fmts if (f.get("height") or 0) <= 144]
             chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
         else:
             chosen_v_fmt = video_fmts[-1]
