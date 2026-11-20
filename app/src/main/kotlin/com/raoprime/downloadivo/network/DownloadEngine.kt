@@ -18,10 +18,10 @@ import java.util.concurrent.TimeUnit
 object DownloadEngine {
 
     // Default Edge Cloud Endpoint (Can be overridden in Settings)
-    var activeBaseUrl: String = "https://downloadivo.vercel.app"
+    var activeBaseUrl: String = "https://police-urge-prefix-journal.trycloudflare.com"
 
-    // High-Speed Direct Tunnel Endpoint (Bypasses Vercel 60s Serverless timeouts for unlimited streams)
-    var directStreamBaseUrl: String = "https://always-letters-utility-connectivity.trycloudflare.com"
+    // High-Speed Direct Tunnel Endpoint
+    var directStreamBaseUrl: String = "https://police-urge-prefix-journal.trycloudflare.com"
 
     private val apiClient = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
@@ -51,70 +51,84 @@ object DownloadEngine {
         }.filter { it.startsWith("http://") || it.startsWith("https://") }.distinct().toList()
     }
 
+    fun getCandidateBaseUrls(): List<String> {
+        val list = mutableListOf<String>()
+        if (directStreamBaseUrl.isNotBlank()) list.add(directStreamBaseUrl.trim().trimEnd('/'))
+        if (activeBaseUrl.isNotBlank()) list.add(activeBaseUrl.trim().trimEnd('/'))
+        list.add("https://police-urge-prefix-journal.trycloudflare.com")
+        list.add("https://downloadivo.vercel.app")
+        return list.filter { it.startsWith("http") }.distinct()
+    }
+
     suspend fun fetchMediaInfo(targetUrl: String): Result<MediaInfo> = withContext(Dispatchers.IO) {
         val cleanUrl = sanitizeUrl(targetUrl)
         if (cleanUrl.isBlank()) {
             return@withContext Result.failure(Exception("Please provide a valid URL"))
         }
 
-        try {
-            val encoded = URLEncoder.encode(cleanUrl, "UTF-8")
-            val getReq = Request.Builder()
-                .url("$activeBaseUrl/info?url=$encoded")
-                .header("User-Agent", "Downloadivo-Android/2.0")
-                .header("Accept", "application/json")
-                .get()
-                .build()
+        val candidates = getCandidateBaseUrls()
+        var lastErrorMsg = "Unable to connect to download servers"
 
-            var responseBody: String? = null
-            var responseCode = 0
-
+        for (candidate in candidates) {
             try {
-                apiClient.newCall(getReq).execute().use { resp ->
-                    responseCode = resp.code
-                    if (resp.isSuccessful) {
-                        responseBody = resp.body?.string()
-                    }
-                }
-            } catch (_: Exception) {
-                // Ignore and proceed to POST fallback
-            }
-
-            // Fallback to POST if GET returned error or empty
-            if (responseBody == null) {
-                val jsonBody = JSONObject().put("url", cleanUrl).toString()
-                val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
-                val requestBody = jsonBody.toRequestBody(mediaType)
-                val postReq = Request.Builder()
-                    .url("$activeBaseUrl/info")
-                    .header("User-Agent", "Downloadivo-Android/2.0")
-                    .header("Content-Type", "application/json")
+                val encoded = URLEncoder.encode(cleanUrl, "UTF-8")
+                val getReq = Request.Builder()
+                    .url("$candidate/info?url=$encoded")
+                    .header("User-Agent", "Downloadivo-Android/5.0")
                     .header("Accept", "application/json")
-                    .post(requestBody)
+                    .get()
                     .build()
 
-                apiClient.newCall(postReq).execute().use { resp ->
-                    responseCode = resp.code
-                    if (!resp.isSuccessful) {
-                        return@withContext Result.failure(
-                            Exception("HTTP $responseCode: Could not analyze media. Check URL and connectivity.")
-                        )
+                var responseBody: String? = null
+                var responseCode = 0
+
+                try {
+                    apiClient.newCall(getReq).execute().use { resp ->
+                        responseCode = resp.code
+                        if (resp.isSuccessful) {
+                            responseBody = resp.body?.string()
+                        }
                     }
-                    responseBody = resp.body?.string()
+                } catch (_: Exception) {
+                    // Ignore and proceed to POST fallback
                 }
-            }
 
-            if (responseBody.isNullOrBlank()) {
-                return@withContext Result.failure(Exception("Empty response from media server"))
-            }
+                // Fallback to POST if GET returned error or empty
+                if (responseBody == null) {
+                    val jsonBody = JSONObject().put("url", cleanUrl).toString()
+                    val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+                    val requestBody = jsonBody.toRequestBody(mediaType)
+                    val postReq = Request.Builder()
+                        .url("$candidate/info")
+                        .header("User-Agent", "Downloadivo-Android/5.0")
+                        .header("Content-Type", "application/json")
+                        .header("Accept", "application/json")
+                        .post(requestBody)
+                        .build()
 
-            val json = JSONObject(responseBody!!)
+                    try {
+                        apiClient.newCall(postReq).execute().use { resp ->
+                            responseCode = resp.code
+                            if (resp.isSuccessful) {
+                                responseBody = resp.body?.string()
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // Candidate failed
+                    }
+                }
 
-            // Auto-discover active high-speed streaming tunnel
-            val tunnelUrl = json.optString("tunnel_url").ifBlank { json.optString("public_url") }
-            if (tunnelUrl.isNotBlank() && (tunnelUrl.startsWith("http://") || tunnelUrl.startsWith("https://"))) {
-                directStreamBaseUrl = tunnelUrl.trim().trimEnd('/')
-            }
+                if (!responseBody.isNullOrBlank()) {
+                    val json = JSONObject(responseBody!!)
+
+                    // Auto-discover active high-speed streaming tunnel
+                    val tunnelUrl = json.optString("tunnel_url").ifBlank { json.optString("public_url") }
+                    if (tunnelUrl.isNotBlank() && (tunnelUrl.startsWith("http://") || tunnelUrl.startsWith("https://"))) {
+                        directStreamBaseUrl = tunnelUrl.trim().trimEnd('/')
+                    } else {
+                        directStreamBaseUrl = candidate
+                    }
+                    activeBaseUrl = candidate
 
             val title = json.optString("title", "Media Stream")
             val author = json.optString("uploader", json.optString("author", "Web Creator"))
@@ -269,10 +283,16 @@ object DownloadEngine {
                 relatedFeed = relatedFeed
             )
 
-            Result.success(info)
-        } catch (e: Exception) {
-            Result.failure(e)
+                    return@withContext Result.success(info)
+                } else {
+                    lastErrorMsg = "Server $candidate returned HTTP $responseCode"
+                }
+            } catch (e: Exception) {
+                lastErrorMsg = e.message ?: "Connection failure with $candidate"
+            }
         }
+
+        return@withContext Result.failure(Exception(lastErrorMsg))
     }
 
     fun getStreamUrl(targetUrl: String, format: String = "best", audioLang: String? = null): String {
@@ -305,10 +325,10 @@ object DownloadEngine {
         outputStream: OutputStream,
         onProgress: (percent: Int, speedStr: String, etaStr: String, currentBytes: Long, totalBytes: Long) -> Unit
     ): Result<Long> = withContext(Dispatchers.IO) {
-        val bases = listOfNotNull(
+        val bases = (listOfNotNull(
             directStreamBaseUrl.takeIf { it.isNotBlank() },
             activeBaseUrl
-        ).distinct()
+        ) + getCandidateBaseUrls()).filter { it.startsWith("http") }.distinct()
 
         var totalBytesRead = 0L
         var totalLength = if (expectedTotalBytes > 0L) expectedTotalBytes else -1L

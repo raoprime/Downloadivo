@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
         checkClipboardForUrl()
 
         val prefs = getSharedPreferences("downloadivo_prefs", Context.MODE_PRIVATE)
-        var hasSeenOnboarding by mutableStateOf(prefs.getBoolean("has_seen_onboarding", false))
+        prefs.edit().putBoolean("has_seen_onboarding", true).apply()
 
         setContent {
             DownloadivoTheme {
@@ -79,25 +79,14 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    if (!hasSeenOnboarding) {
-                        OnboardingScreen(
-                            onFinish = {
-                                prefs.edit().putBoolean("has_seen_onboarding", true).apply()
-                                hasSeenOnboarding = true
-                            }
-                        )
-                    } else {
-                        DownloadivoScreen(
-                            sharedUrl = sharedUrl,
-                            clipboardUrl = clipboardUrl,
-                            onClearClipboard = { clipboardUrl = null },
-                            onEnterPip = { enterPipMode() },
-                            inPipMode = inPipMode,
-                            onShowIntro = {
-                                hasSeenOnboarding = false
-                            }
-                        )
-                    }
+                    DownloadivoScreen(
+                        sharedUrl = sharedUrl,
+                        clipboardUrl = clipboardUrl,
+                        onClearClipboard = { clipboardUrl = null },
+                        onEnterPip = { enterPipMode() },
+                        inPipMode = inPipMode,
+                        onShowIntro = { }
+                    )
                 }
             }
         }
