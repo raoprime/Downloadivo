@@ -13,8 +13,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -167,9 +169,10 @@ fun QuickShareOverlay(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 6.dp)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 8.dp)
                 .navigationBarsPadding()
-                .padding(bottom = 16.dp),
+                .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             // Header Bar: App Logo + Title + Close Button
@@ -209,13 +212,13 @@ fun QuickShareOverlay(
 
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.size(28.dp)
+                    modifier = Modifier.size(32.dp)
                 ) {
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary)
                 }
             }
 
-            // Media Preview or Resolving State
+            // Media Preview or Compact Resolving State
             if (isResolving) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
@@ -223,32 +226,35 @@ fun QuickShareOverlay(
                     border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(130.dp)
+                        .height(72.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         CircularProgressIndicator(
-                            modifier = Modifier.size(28.dp),
+                            modifier = Modifier.size(22.dp),
                             color = TextCrisp,
-                            strokeWidth = 2.5.dp
+                            strokeWidth = 2.dp
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(
-                            text = "Analyzing link at line-rate...",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = url.take(45) + if (url.length > 45) "..." else "",
-                            fontSize = 11.sp,
-                            color = TextSubtle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Inspecting stream...",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = url,
+                                fontSize = 11.sp,
+                                color = TextSubtle,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
             } else if (resolvedInfo != null) {
@@ -266,7 +272,7 @@ fun QuickShareOverlay(
                     if (info.thumbnail.isNotBlank()) {
                         Box(
                             modifier = Modifier
-                                .size(76.dp)
+                                .size(72.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(SurfaceCardDark)
                         ) {
@@ -314,7 +320,7 @@ fun QuickShareOverlay(
                         }
                         Text(
                             text = info.title.ifBlank { "Media Stream" },
-                            fontSize = 13.5.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary,
                             maxLines = 2,
@@ -323,7 +329,7 @@ fun QuickShareOverlay(
                         if (info.author.isNotBlank()) {
                             Text(
                                 text = info.author,
-                                fontSize = 11.5.sp,
+                                fontSize = 11.sp,
                                 color = TextMuted,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -369,7 +375,7 @@ fun QuickShareOverlay(
                 }
             }
 
-            // PRIMARY 1-TAP ZERO-FRICTION BUTTONS
+            // PRIMARY 1-TAP ZERO-FRICTION BUTTONS (ALWAYS VISIBLE & PROMINENT)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -379,8 +385,8 @@ fun QuickShareOverlay(
                     onClick = { onDownloadVideo(resolvedInfo, selectedFormat) },
                     modifier = Modifier
                         .weight(1f)
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = TextCrisp,
                         contentColor = CanvasDark
@@ -390,13 +396,13 @@ fun QuickShareOverlay(
                         Icons.Default.Download,
                         contentDescription = null,
                         tint = CanvasDark,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Download Video",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         color = CanvasDark
                     )
                 }
@@ -406,8 +412,8 @@ fun QuickShareOverlay(
                     onClick = { onDownloadAudio(resolvedInfo) },
                     modifier = Modifier
                         .weight(1f)
-                        .height(50.dp),
-                    shape = RoundedCornerShape(12.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = SurfaceElevated,
                         contentColor = TextCrisp
@@ -418,13 +424,13 @@ fun QuickShareOverlay(
                         Icons.Default.MusicNote,
                         contentDescription = null,
                         tint = TextCrisp,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Download Audio",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         color = TextCrisp
                     )
                 }

@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -378,71 +379,112 @@ fun DownloadivoScreen(
             }
         },
         bottomBar = {
-            NavigationBar(
-                containerColor = SurfaceDark,
-                contentColor = TextCrisp,
-                tonalElevation = 4.dp,
-                modifier = Modifier.height(64.dp)
+            Surface(
+                color = SurfaceDark,
+                tonalElevation = 8.dp,
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                val navColors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = TextCrisp,
-                    selectedTextColor = TextCrisp,
-                    indicatorColor = SurfaceElevated,
-                    unselectedIconColor = TextTertiary,
-                    unselectedTextColor = TextTertiary
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppTab.values().forEach { tab ->
+                        val isSelected = currentTab == tab
+                        val activeScale by animateFloatAsState(
+                            targetValue = if (isSelected) 1.05f else 1.0f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            label = "tab_scale_${tab.name}"
+                        )
+                        val iconColor by animateColorAsState(
+                            targetValue = if (isSelected) TextCrisp else TextTertiary,
+                            animationSpec = tween(180),
+                            label = "tab_color_${tab.name}"
+                        )
+                        val pillBgColor by animateColorAsState(
+                            targetValue = if (isSelected) SurfaceElevated else Color.Transparent,
+                            animationSpec = tween(180),
+                            label = "tab_bg_${tab.name}"
+                        )
 
-                NavigationBarItem(
-                    selected = currentTab == AppTab.HOME,
-                    onClick = {
-                        HapticUtil.lightClick(context)
-                        currentTab = AppTab.HOME
-                    },
-                    icon = { Icon(Icons.Default.Download, contentDescription = "Download", modifier = Modifier.size(22.dp)) },
-                    label = { Text("Download", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
-                    colors = navColors
-                )
-                NavigationBarItem(
-                    selected = currentTab == AppTab.QUEUE,
-                    onClick = {
-                        HapticUtil.lightClick(context)
-                        currentTab = AppTab.QUEUE
-                    },
-                    icon = {
-                        val activeCount = (if (currentTask.status == DownloadStatus.DOWNLOADING) 1 else 0) + queuedTasks.size
-                        BadgedBox(badge = {
-                            if (activeCount > 0) {
-                                Badge(containerColor = TextCrisp) {
-                                    Text("$activeCount", color = CanvasDark, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable(
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    HapticUtil.lightClick(context)
+                                    currentTab = tab
+                                }
+                                .padding(vertical = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .graphicsLayer {
+                                        scaleX = activeScale
+                                        scaleY = activeScale
+                                    }
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(pillBgColor)
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Box(contentAlignment = Alignment.TopEnd) {
+                                    Icon(
+                                        imageVector = when (tab) {
+                                            AppTab.HOME -> Icons.Default.Download
+                                            AppTab.QUEUE -> Icons.Default.Sync
+                                            AppTab.LIBRARY -> Icons.Default.VideoLibrary
+                                            AppTab.SETTINGS -> Icons.Default.Tune
+                                        },
+                                        contentDescription = tab.name,
+                                        tint = iconColor,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    if (tab == AppTab.QUEUE) {
+                                        val activeCount = (if (currentTask.status == DownloadStatus.DOWNLOADING) 1 else 0) + queuedTasks.size
+                                        if (activeCount > 0) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .offset(x = 6.dp, y = (-4).dp)
+                                                    .size(15.dp)
+                                                    .background(TextCrisp, CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "$activeCount",
+                                                    color = CanvasDark,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.ExtraBold
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }) {
-                            Icon(Icons.Default.Sync, contentDescription = "Queue", modifier = Modifier.size(22.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = when (tab) {
+                                    AppTab.HOME -> "Download"
+                                    AppTab.QUEUE -> "Queue"
+                                    AppTab.LIBRARY -> "Library"
+                                    AppTab.SETTINGS -> "Settings"
+                                },
+                                fontSize = 10.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = iconColor
+                            )
                         }
-                    },
-                    label = { Text("Queue", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
-                    colors = navColors
-                )
-                NavigationBarItem(
-                    selected = currentTab == AppTab.LIBRARY,
-                    onClick = {
-                        HapticUtil.lightClick(context)
-                        currentTab = AppTab.LIBRARY
-                    },
-                    icon = { Icon(Icons.Default.VideoLibrary, contentDescription = "Library", modifier = Modifier.size(22.dp)) },
-                    label = { Text("Library", fontSize = 11.sp, fontWeight = FontWeight.Medium) },
-                    colors = navColors
-                )
-                NavigationBarItem(
-                    selected = currentTab == AppTab.SETTINGS,
-                    onClick = {
-                        HapticUtil.lightClick(context)
-                        currentTab = AppTab.SETTINGS
-                    },
-                    icon = { Icon(Icons.Default.Tune, contentDescription = "Settings", modifier = Modifier.size(22.dp)) },
-                    label = { Text("Settings", fontSize = 11.sp) },
-                    colors = navColors
-                )
+                    }
+                }
             }
         }
     ) { innerPadding ->
@@ -988,227 +1030,242 @@ private fun HomeDownloaderTab(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .imePadding()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        if (resolvedInfo == null && !isResolving) {
-            // ═══════════════════════════════════════════════════════════════
-            // 1. CENTER-TOP HERO BRAND EMBLEM (ENLARGED & PROMINENT)
-            // ═══════════════════════════════════════════════════════════════
-            Spacer(modifier = Modifier.height(68.dp))
-
-            Image(
-                painter = painterResource(id = R.drawable.app_logo_white),
-                contentDescription = "Downloadivo",
-                modifier = Modifier
-                    .height(58.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
-                contentScale = ContentScale.Fit
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // ═══════════════════════════════════════════════════════════════
-            // 2. CONTEXTUAL CLIPBOARD PILL (FLOATS ABOVE INPUT IF DETECTED)
-            // ═══════════════════════════════════════════════════════════════
-            if (!clipboardUrl.isNullOrBlank() && clipboardUrl != inputUrl) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = SurfaceElevated,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.ContentPaste,
-                            contentDescription = null,
-                            tint = TextCrisp,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Copied link detected",
-                                style = Typography.titleSmall,
-                                color = TextCrisp
-                            )
-                            Text(
-                                text = clipboardUrl,
-                                style = Typography.bodySmall,
-                                color = TextTertiary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                HapticUtil.mediumClick(context)
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                onUrlChange(clipboardUrl)
-                                onClearClipboard()
-                                onInspect(clipboardUrl)
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TextCrisp,
-                                contentColor = CanvasDark
-                            ),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text("Paste & Inspect", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
-                        }
-                        IconButton(
-                            onClick = onClearClipboard,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = TextTertiary)
-                        }
-                    }
-                }
-            }
-
-            // ═══════════════════════════════════════════════════════════════
-            // 3. SCULPTED LUXURY INPUT CAPSULE (60dp, SLIGHTLY BELOW CENTER)
-            // ═══════════════════════════════════════════════════════════════
-            Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = SurfaceDark,
-                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+    if (resolvedInfo == null && !isResolving) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .imePadding()
+                .padding(horizontal = 20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
+                    .offset(y = (-36).dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Row(
+                // ═══════════════════════════════════════════════════════════════
+                // 1. CENTER-TOP HERO BRAND EMBLEM (ENLARGED & PROMINENT)
+                // ═══════════════════════════════════════════════════════════════
+                Image(
+                    painter = painterResource(id = R.drawable.app_logo_white),
+                    contentDescription = "Downloadivo",
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (detectedPlatform != null) {
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = SurfaceHighlight,
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Text(
-                                text = detectedPlatform,
-                                style = Typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = TextCrisp,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    } else {
-                        Icon(
-                            Icons.Default.Link,
-                            contentDescription = null,
-                            tint = TextTertiary,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .padding(end = 4.dp)
-                        )
-                    }
+                        .height(64.dp)
+                        .fillMaxWidth(0.85f),
+                    contentScale = ContentScale.Fit
+                )
 
-                    BasicTextField(
-                        value = inputUrl,
-                        onValueChange = onUrlChange,
-                        modifier = Modifier.weight(1f),
-                        textStyle = Typography.bodyLarge.copy(color = TextCrisp),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                if (inputUrl.startsWith("http")) onInspect(inputUrl)
-                            }
-                        ),
-                        decorationBox = { innerTextField ->
-                            if (inputUrl.isEmpty()) {
+                Spacer(modifier = Modifier.height(32.dp))
+
+                // ═══════════════════════════════════════════════════════════════
+                // 2. CONTEXTUAL CLIPBOARD PILL (FLOATS ABOVE INPUT IF DETECTED)
+                // ═══════════════════════════════════════════════════════════════
+                if (!clipboardUrl.isNullOrBlank() && clipboardUrl != inputUrl) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceElevated,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.ContentPaste,
+                                contentDescription = null,
+                                tint = TextCrisp,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "Paste video or audio link...",
-                                    style = Typography.bodyLarge,
-                                    color = TextQuaternary
+                                    text = "Copied link detected",
+                                    style = Typography.titleSmall,
+                                    color = TextCrisp
+                                )
+                                Text(
+                                    text = clipboardUrl,
+                                    style = Typography.bodySmall,
+                                    color = TextTertiary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            innerTextField()
-                        }
-                    )
-
-                    if (inputUrl.isNotBlank()) {
-                        IconButton(
-                            onClick = {
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                onClear()
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextTertiary, modifier = Modifier.size(18.dp))
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Button(
-                            onClick = {
-                                HapticUtil.mediumClick(context)
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                if (inputUrl.startsWith("http")) onInspect(inputUrl)
-                            },
-                            shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TextCrisp,
-                                contentColor = CanvasDark
-                            ),
-                            contentPadding = PaddingValues(0.dp),
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Inspect", tint = CanvasDark, modifier = Modifier.size(18.dp))
-                        }
-                    } else {
-                        Button(
-                            onClick = {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                                val clean = DownloadEngine.sanitizeUrl(clip)
-                                if (clean.startsWith("http")) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
                                     HapticUtil.mediumClick(context)
                                     keyboardController?.hide()
                                     focusManager.clearFocus()
-                                    onUrlChange(clean)
-                                    onInspect(clean)
-                                } else {
-                                    Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
+                                    onUrlChange(clipboardUrl)
+                                    onClearClipboard()
+                                    onInspect(clipboardUrl)
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TextCrisp,
+                                    contentColor = CanvasDark
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Paste & Inspect", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                            IconButton(
+                                onClick = onClearClipboard,
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = TextTertiary)
+                            }
+                        }
+                    }
+                }
+
+                // ═══════════════════════════════════════════════════════════════
+                // 3. SCULPTED LUXURY INPUT CAPSULE (60dp, SLIGHTLY BELOW CENTER)
+                // ═══════════════════════════════════════════════════════════════
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = SurfaceDark,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (detectedPlatform != null) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = SurfaceHighlight,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(
+                                    text = detectedPlatform,
+                                    style = Typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        } else {
+                            Icon(
+                                Icons.Default.Link,
+                                contentDescription = null,
+                                tint = TextTertiary,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .padding(end = 4.dp)
+                            )
+                        }
+
+                        BasicTextField(
+                            value = inputUrl,
+                            onValueChange = onUrlChange,
+                            modifier = Modifier.weight(1f),
+                            textStyle = Typography.bodyLarge.copy(color = TextCrisp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    if (inputUrl.startsWith("http")) onInspect(inputUrl)
                                 }
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = SurfaceElevated,
-                                contentColor = TextCrisp
                             ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(34.dp)
-                        ) {
-                            Icon(Icons.Default.ContentPaste, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(14.dp))
+                            decorationBox = { innerTextField ->
+                                if (inputUrl.isEmpty()) {
+                                    Text(
+                                        "Paste video or audio link...",
+                                        style = Typography.bodyLarge,
+                                        color = TextQuaternary
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+
+                        if (inputUrl.isNotBlank()) {
+                            IconButton(
+                                onClick = {
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    onClear()
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextTertiary, modifier = Modifier.size(18.dp))
+                            }
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Paste", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = TextCrisp)
+                            Button(
+                                onClick = {
+                                    HapticUtil.mediumClick(context)
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    if (inputUrl.startsWith("http")) onInspect(inputUrl)
+                                },
+                                shape = CircleShape,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TextCrisp,
+                                    contentColor = CanvasDark
+                                ),
+                                contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Inspect", tint = CanvasDark, modifier = Modifier.size(18.dp))
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                    val clean = DownloadEngine.sanitizeUrl(clip)
+                                    if (clean.startsWith("http")) {
+                                        HapticUtil.mediumClick(context)
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                        onUrlChange(clean)
+                                        onInspect(clean)
+                                    } else {
+                                        Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceElevated,
+                                    contentColor = TextCrisp
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.height(34.dp)
+                            ) {
+                                Icon(Icons.Default.ContentPaste, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Paste", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = TextCrisp)
+                            }
                         }
                     }
                 }
             }
-        } else {
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .imePadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             // ═══════════════════════════════════════════════════════════════
             // ACTIVE INSPECTION HEADER & COMPACT INPUT
             // ═══════════════════════════════════════════════════════════════
