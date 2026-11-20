@@ -1808,6 +1808,13 @@ def index():
         return f.read()
 
 
+@app.get("/onboarding", response_class=HTMLResponse)
+def get_onboarding():
+    html_file = Path(__file__).parent / "onboarding.html"
+    with open(html_file, encoding="utf-8") as f:
+        return f.read()
+
+
 @app.get("/system-info")
 def system_info(request: Request):
     is_remote = _is_remote_request(request)
