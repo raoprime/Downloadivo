@@ -1,3 +1,5 @@
+import ipaddress
+import socket
 """
 FastDownloader Studio Multi-Engine Backend
 Engine 1: Instaloader Pro (Instagram Reels, Photos, Carousels, Stories)
@@ -199,14 +201,51 @@ def _enable_system_wakelock():
 _enable_system_wakelock()
 
 # ──────────────────────────────────────────────────────────────
+
+def _is_safe_target_url(url: str) -> bool:
+    """Validate URL against SSRF attacks (block private IPs, metadata endpoints, and invalid schemes)."""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url.strip())
+        if parsed.scheme.lower() not in ("http", "https"):
+            return False
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        hostname_lower = hostname.lower()
+        if hostname_lower in ("localhost", "127.0.0.1", "::1", "metadata.google.internal"):
+            return False
+        # Block private IP ranges and cloud metadata IPs
+        try:
+            ip_str = socket.gethostbyname(hostname)
+            ip = ipaddress.ip_address(ip_str)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                return False
+        except socket.error:
+            # Let yt-dlp handle external resolution failures
+            pass
+        return True
+    except Exception:
+        return False
+
 # In-Memory Rate Limiter (Token Bucket / Anti-Abuse)
 # ──────────────────────────────────────────────────────────────
 _request_counts: Dict[str, List[float]] = {}
 _rate_limit_lock = threading.Lock()
 
-def _check_rate_limit(client_ip: str, max_requests: int = 50, window_seconds: int = 60) -> bool:
+def _get_real_client_ip(request: Request) -> str:
+    """Extract real client IP prioritizing Cloudflare and reverse-proxy headers."""
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip and cf_ip.strip():
+        return cf_ip.strip()
+    x_forwarded = request.headers.get("x-forwarded-for")
+    if x_forwarded and x_forwarded.strip():
+        return x_forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
+
+def _check_rate_limit(client_ip: str, max_requests: int = 60, window_seconds: int = 60, is_local_exempt: bool = False) -> bool:
     """Sliding-window rate limiter per client IP address."""
-    if client_ip in ["127.0.0.1", "localhost", "::1"]:
+    if is_local_exempt and client_ip in ["127.0.0.1", "localhost", "::1"]:
         return True
     now = time.time()
     with _rate_limit_lock:
