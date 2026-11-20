@@ -1,0 +1,9 @@
+{
+  "api_url": "https://police-urge-prefix-journal.trycloudflare.com",
+  "tunnel_url": "https://police-urge-prefix-journal.trycloudflare.com",
+  "backup_urls": [
+    "https://police-urge-prefix-journal.trycloudflare.com"
+  ],
+  "version": "5.0.0",
+  "updated_at": "2026-11-20T21:26:00Z"
+}
