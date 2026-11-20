@@ -1230,6 +1230,12 @@ def _info_ydl_opts() -> dict:
         "youtube_include_dash_manifest": False,
         "youtube_include_hls_manifest": False,
         "js_runtimes": js_runtimes,
+        "remote_components": {"ejs:github"},
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb", "web"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
             "Accept": "*/*",
@@ -1978,7 +1984,7 @@ async def start_download(req: DownloadRequest, request: Request):
 @app.api_route("/stream", methods=["GET", "HEAD"])
 @app.api_route("/stream.mp4", methods=["GET", "HEAD"])
 @app.api_route("/stream.mp3", methods=["GET", "HEAD"])
-def stream_media(url: str, format: str = "best", start_time: Optional[str] = None, end_time: Optional[str] = None, audio_lang: Optional[str] = None, request: Request = None):
+def stream_media(url: str, format: Optional[str] = None, start_time: Optional[str] = None, end_time: Optional[str] = None, audio_lang: Optional[str] = None, request: Request = None):
     """Zero-disk high-speed chunked stream proxy directly into client Chrome browser or Android app."""
     if request:
         client_ip = (
@@ -1988,6 +1994,8 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         )
         if not _check_rate_limit(client_ip):
             raise HTTPException(status_code=429, detail="Rate limit exceeded.")
+        if not format and request.url.path.endswith(".mp3"):
+            format = "mp3"
 
     extracted = _extract_urls(url)
     target_url = extracted[0] if extracted else url.strip()
@@ -2013,18 +2021,25 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
 
     # Pre-download trimmer fast path (if start_time and end_time provided)
     if start_time and end_time and _FFMPEG_PATH:
-        is_audio = fmt_lower in ["mp3", "audio"]
+        is_audio = fmt_lower in ["mp3", "audio", "m4a"]
         s_clean = start_time.replace(":", ".")
         e_clean = end_time.replace(":", ".")
         if is_audio:
             author = info.get("artist") or info.get("uploader") or info.get("creator") or "Downloadivo Studio"
             audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
             audio_fmts.sort(key=lambda x: x.get("abr") or 0, reverse=True)
-            src_url = audio_fmts[0]["url"] if audio_fmts else formats[-1]["url"]
+            chosen_a = audio_fmts[0] if audio_fmts else (formats[-1] if formats else {})
+            src_url = chosen_a.get("url")
+            a_ua = chosen_a.get("http_headers", {}).get("User-Agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
             cmd = [
                 _FFMPEG_PATH,
                 "-y",
                 "-loglevel", "error",
+                "-reconnect", "1",
+                "-reconnect_at_eof", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5",
+                "-headers", f"User-Agent: {a_ua}\r\n",
                 "-ss", start_time,
                 "-to", end_time,
                 "-i", src_url,
@@ -2039,20 +2054,37 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 "pipe:1"
             ]
             media_type = "audio/mpeg"
-            clip_name = f"{safe_name}_Clip_{s_clean}_to_{e_clean}.mp3"
         else:
             prog = [f for f in formats if f.get("vcodec") != "none" and f.get("acodec") != "none" and f.get("url")]
             if prog:
-                src_url = prog[-1]["url"]
-                cmd = [_FFMPEG_PATH, "-y", "-loglevel", "error", "-ss", start_time, "-to", end_time, "-i", src_url, "-c", "copy", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1"]
+                src_fmt = prog[-1]
+                src_url = src_fmt["url"]
+                src_ua = src_fmt.get("http_headers", {}).get("User-Agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+                cmd = [
+                    _FFMPEG_PATH, "-y", "-loglevel", "error",
+                    "-reconnect", "1", "-reconnect_at_eof", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+                    "-headers", f"User-Agent: {src_ua}\r\n",
+                    "-ss", start_time, "-to", end_time, "-i", src_url,
+                    "-c", "copy", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1"
+                ]
             else:
                 video_fmts = [f for f in formats if f.get("vcodec") != "none" and f.get("url")]
                 audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
-                chosen_v = video_fmts[-1]["url"] if video_fmts else formats[-1]["url"]
-                chosen_a = audio_fmts[-1]["url"] if audio_fmts else chosen_v
-                cmd = [_FFMPEG_PATH, "-y", "-loglevel", "error", "-ss", start_time, "-to", end_time, "-i", chosen_v, "-ss", start_time, "-to", end_time, "-i", chosen_a, "-c:v", "copy", "-c:a", "aac", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1"]
+                v_f = video_fmts[-1] if video_fmts else (formats[-1] if formats else {})
+                a_f = audio_fmts[-1] if audio_fmts else v_f
+                v_ua = v_f.get("http_headers", {}).get("User-Agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+                a_ua = a_f.get("http_headers", {}).get("User-Agent") or v_ua
+                cmd = [
+                    _FFMPEG_PATH, "-y", "-loglevel", "error",
+                    "-reconnect", "1", "-reconnect_at_eof", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+                    "-headers", f"User-Agent: {v_ua}\r\n",
+                    "-ss", start_time, "-to", end_time, "-i", v_f.get("url", ""),
+                    "-reconnect", "1", "-reconnect_at_eof", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+                    "-headers", f"User-Agent: {a_ua}\r\n",
+                    "-ss", start_time, "-to", end_time, "-i", a_f.get("url", ""),
+                    "-c:v", "copy", "-c:a", "aac", "-movflags", "frag_keyframe+empty_moov+default_base_moof", "-f", "mp4", "pipe:1"
+                ]
             media_type = "video/mp4"
-            clip_name = f"{safe_name}_Clip_{s_clean}_to_{e_clean}.mp4"
 
         def iter_trimmed_pipe():
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -2076,15 +2108,17 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         )
 
     # 1. Audio stream requested (MP3 / Audio)
-    if fmt_lower in ["mp3", "audio"]:
+    if fmt_lower in ["mp3", "audio", "m4a"]:
         audio_fmts = [f for f in formats if f.get("acodec") != "none" and f.get("url")]
         audio_fmts.sort(key=lambda x: (x.get("abr") or x.get("tbr") or 0), reverse=True)
         if not audio_fmts:
             raise HTTPException(status_code=400, detail="No audio stream available")
-        direct_url = audio_fmts[0]["url"]
+        chosen_a_fmt = audio_fmts[0]
+        direct_url = chosen_a_fmt["url"]
+        a_ua = chosen_a_fmt.get("http_headers", {}).get("User-Agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
         dur_sec = info.get("duration") or 0
-        audio_expected_bytes = int(320000 * dur_sec / 8) if dur_sec else (int(audio_fmts[0].get("filesize") or audio_fmts[0].get("filesize_approx") or 0) if audio_fmts else 0)
+        audio_expected_bytes = int(320000 * dur_sec / 8) if dur_sec else (int(chosen_a_fmt.get("filesize") or chosen_a_fmt.get("filesize_approx") or 0))
         audio_headers = {
             "Content-Disposition": _safe_content_disposition(safe_name, "mp3"),
             "Accept-Ranges": "bytes",
@@ -2106,6 +2140,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
+                "-headers", f"User-Agent: {a_ua}\r\n",
                 "-i", direct_url,
                 "-vn",
                 "-c:a", "libmp3lame",
@@ -2118,7 +2153,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 "pipe:1"
             ]
             def iter_mp3_pipe():
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=512 * 1024)
                 try:
                     while True:
                         data = proc.stdout.read(64 * 1024)
@@ -2137,7 +2172,7 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
 
         def iter_audio():
             import requests
-            with requests.get(direct_url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as r:
+            with requests.get(direct_url, stream=True, timeout=30, headers=chosen_a_fmt.get("http_headers") or {"User-Agent": a_ua}) as r:
                 for chunk in r.iter_content(chunk_size=1024 * 512):
                     if chunk:
                         yield chunk
@@ -2163,22 +2198,27 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
     prog.sort(key=lambda x: (x.get("height") or 0, x.get("tbr") or 0))
 
     # Fast progressive stream candidate (preferred for instant seek and mobile hardware compatibility)
-    chosen_url = None
+    chosen_prog_fmt = None
     if prog:
         if fmt_lower in ["720p", "720"]:
             matches = [f for f in prog if (f.get("height") or 0) <= 720]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+            chosen_prog_fmt = matches[-1] if matches else prog[-1]
         elif fmt_lower in ["480p", "480"]:
             matches = [f for f in prog if (f.get("height") or 0) <= 480]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
+            chosen_prog_fmt = matches[-1] if matches else prog[-1]
         elif fmt_lower in ["360p", "360"]:
             matches = [f for f in prog if (f.get("height") or 0) <= 360]
-            chosen_url = matches[-1]["url"] if matches else prog[-1]["url"]
-        elif fmt_lower in ["best", "original"] and not video_fmts:
-            chosen_url = prog[-1]["url"]
+            chosen_prog_fmt = matches[-1] if matches else prog[-1]
+        elif fmt_lower in ["best", "original", "stream"]:
+            # If 720p or higher progressive exists, use it for zero-transcode instant start
+            hi_prog = [f for f in prog if (f.get("height") or 0) >= 720]
+            if hi_prog:
+                chosen_prog_fmt = hi_prog[-1]
+            elif not video_fmts:
+                chosen_prog_fmt = prog[-1]
 
     use_ffmpeg_mux = False
-    chosen_v = None
+    chosen_v_fmt = None
     # Select audio track matching requested audio_lang, or default to Hindi / best audio
     chosen_a_fmt = None
     if audio_lang:
@@ -2190,72 +2230,59 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
                 chosen_a_fmt = f
                 break
     if not chosen_a_fmt:
-        # Default priority: Hindi if available, else m4a/aac, else highest bitrate audio
         hindi_audio = [f for f in audio_fmts if (f.get("language") or "").lower() in ("hi", "hin", "hindi") or "hindi" in (f.get("format_note") or "").lower()]
         if hindi_audio:
             chosen_a_fmt = hindi_audio[0]
         else:
             m4a_audio = [f for f in audio_fmts if "mp4a" in (f.get("acodec") or "") or f.get("ext") == "m4a"]
             chosen_a_fmt = m4a_audio[0] if m4a_audio else (audio_fmts[-1] if audio_fmts else None)
-    chosen_a = chosen_a_fmt["url"] if chosen_a_fmt else None
-    can_copy_audio = bool(chosen_a_fmt and ("mp4a" in (chosen_a_fmt.get("acodec") or "") or chosen_a_fmt.get("ext") == "m4a"))
 
     # Use FFmpeg muxer for high quality streams (1080p, 1440p, 4K, 8K) or when no matching progressive stream exists
-    if video_fmts and chosen_a and _FFMPEG_PATH and not chosen_url:
+    if video_fmts and chosen_a_fmt and _FFMPEG_PATH and not chosen_prog_fmt:
+        use_ffmpeg_mux = True
         if fmt_lower in ["best", "original"]:
-            use_ffmpeg_mux = True
             matches_1080 = [f for f in video_fmts if (f.get("height") or 0) <= 1080]
-            chosen_v = matches_1080[-1]["url"] if matches_1080 else video_fmts[-1]["url"]
+            chosen_v_fmt = matches_1080[-1] if matches_1080 else video_fmts[-1]
         elif fmt_lower in ["8k", "4320p", "4320"]:
-            use_ffmpeg_mux = True
-            chosen_v = video_fmts[-1]["url"]
+            chosen_v_fmt = video_fmts[-1]
         elif fmt_lower in ["4k", "2160p", "2160"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 2160]
-            if matches:
-                use_ffmpeg_mux = True
-                chosen_v = matches[-1]["url"]
+            chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
         elif fmt_lower in ["2k", "1440p", "1440"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 1440]
-            if matches:
-                use_ffmpeg_mux = True
-                chosen_v = matches[-1]["url"]
+            chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
         elif fmt_lower in ["1080p", "1080"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 1080]
-            if matches:
-                use_ffmpeg_mux = True
-                chosen_v = matches[-1]["url"]
+            chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
         elif fmt_lower in ["720p", "720"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 720]
-            if matches:
-                use_ffmpeg_mux = True
-                chosen_v = matches[-1]["url"]
+            chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
         elif fmt_lower in ["480p", "480"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 480]
-            if matches:
-                use_ffmpeg_mux = True
-                chosen_v = matches[-1]["url"]
+            chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
         elif fmt_lower in ["360p", "360"]:
             matches = [f for f in video_fmts if (f.get("height") or 0) <= 360]
-            if matches:
-                use_ffmpeg_mux = True
-                chosen_v = matches[-1]["url"]
+            chosen_v_fmt = matches[-1] if matches else video_fmts[-1]
+        else:
+            chosen_v_fmt = video_fmts[-1]
+
+    if not use_ffmpeg_mux and not chosen_prog_fmt:
+        if prog:
+            chosen_prog_fmt = prog[-1]
+        elif video_fmts:
+            chosen_v_fmt = video_fmts[-1]
+            use_ffmpeg_mux = bool(_FFMPEG_PATH and chosen_a_fmt)
 
     # Calculate estimated byte size for video stream
     dur_sec = info.get("duration") or 0
-    best_a_size = (audio_fmts[-1].get("filesize") or audio_fmts[-1].get("filesize_approx") or (int(128000 * dur_sec / 8) if dur_sec else 0)) if audio_fmts else 0
+    best_a_size = (chosen_a_fmt.get("filesize") or chosen_a_fmt.get("filesize_approx") or (int(128000 * dur_sec / 8) if dur_sec else 0)) if chosen_a_fmt else 0
 
     expected_video_bytes = 0
-    if use_ffmpeg_mux and chosen_v:
-        for f in video_fmts:
-            if f.get("url") == chosen_v:
-                v_sz = f.get("filesize") or f.get("filesize_approx") or 0
-                expected_video_bytes = int(v_sz + best_a_size)
-                break
-    elif chosen_url:
-        for f in prog:
-            if f.get("url") == chosen_url:
-                expected_video_bytes = int(f.get("filesize") or f.get("filesize_approx") or 0)
-                break
+    if use_ffmpeg_mux and chosen_v_fmt:
+        v_sz = chosen_v_fmt.get("filesize") or chosen_v_fmt.get("filesize_approx") or 0
+        expected_video_bytes = int(v_sz + best_a_size)
+    elif chosen_prog_fmt:
+        expected_video_bytes = int(chosen_prog_fmt.get("filesize") or chosen_prog_fmt.get("filesize_approx") or 0)
     if not expected_video_bytes and formats:
         expected_video_bytes = int(formats[-1].get("filesize") or formats[-1].get("filesize_approx") or 0)
 
@@ -2266,29 +2293,37 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
         "X-Total-Content-Length": str(expected_video_bytes),
     }
 
-    if use_ffmpeg_mux and chosen_v and chosen_a:
+    if use_ffmpeg_mux and chosen_v_fmt and chosen_a_fmt:
+        chosen_v = chosen_v_fmt["url"]
+        chosen_a = chosen_a_fmt["url"]
+        v_ua = chosen_v_fmt.get("http_headers", {}).get("User-Agent") or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        a_ua = chosen_a_fmt.get("http_headers", {}).get("User-Agent") or v_ua
+        can_copy_audio = bool("mp4a" in (chosen_a_fmt.get("acodec") or "") or chosen_a_fmt.get("ext") == "m4a")
+
         def iter_ffmpeg_pipe():
             cmd = [
                 _FFMPEG_PATH,
                 "-y",
                 "-loglevel", "error",
-                "-probesize", "32768",
-                "-analyzeduration", "0",
-                "-fflags", "nobuffer+fastseek",
+                "-probesize", "65536",
+                "-analyzeduration", "500000",
+                "-fflags", "+nobuffer+fastseek",
                 "-flags", "low_delay",
                 "-reconnect", "1",
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
+                "-headers", f"User-Agent: {v_ua}\r\n",
                 "-i", chosen_v,
-                "-probesize", "32768",
-                "-analyzeduration", "0",
-                "-fflags", "nobuffer+fastseek",
+                "-probesize", "65536",
+                "-analyzeduration", "500000",
+                "-fflags", "+nobuffer+fastseek",
                 "-flags", "low_delay",
                 "-reconnect", "1",
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
+                "-headers", f"User-Agent: {a_ua}\r\n",
                 "-i", chosen_a,
                 "-c:v", "copy",
                 "-c:a", "copy" if can_copy_audio else "aac",
@@ -2313,37 +2348,58 @@ def stream_media(url: str, format: str = "best", start_time: Optional[str] = Non
             headers=video_headers
         )
 
-    # Fast progressive stream path
-    if chosen_url:
+    # Fast progressive stream path (HTTP 200 / 206 with native range seeking)
+    if chosen_prog_fmt:
+        chosen_url = chosen_prog_fmt["url"]
+        p_headers = dict(chosen_prog_fmt.get("http_headers") or {})
+
+        resp_headers = dict(video_headers)
+        resp_headers["Accept-Ranges"] = "bytes"
+        status_code = 200
+
+        range_header = request.headers.get("range") if request else None
+        if range_header:
+            p_headers["Range"] = range_header
+            status_code = 206
+            if expected_video_bytes > 0 and range_header.startswith("bytes="):
+                range_val = range_header[6:].strip()
+                if range_val.endswith("-"):
+                    start_b = int(range_val[:-1]) if range_val[:-1].isdigit() else 0
+                    end_b = expected_video_bytes - 1
+                elif "-" in range_val:
+                    parts = range_val.split("-")
+                    start_b = int(parts[0]) if parts[0].isdigit() else 0
+                    end_b = int(parts[1]) if parts[1].isdigit() else expected_video_bytes - 1
+                else:
+                    start_b, end_b = 0, expected_video_bytes - 1
+                resp_headers["Content-Range"] = f"bytes {start_b}-{end_b}/{expected_video_bytes}"
+                resp_headers["Content-Length"] = str(end_b - start_b + 1)
+
         def iter_stream():
             import requests
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-            if request and "range" in request.headers:
-                headers["Range"] = request.headers["range"]
-            with requests.get(chosen_url, stream=True, timeout=30, headers=headers) as r:
+            with requests.get(chosen_url, stream=True, timeout=30, headers=p_headers) as r:
                 for chunk in r.iter_content(chunk_size=1024 * 256):
                     if chunk:
                         yield chunk
 
-        resp_headers = dict(video_headers)
-        if request and "range" in request.headers:
-            resp_headers["Accept-Ranges"] = "bytes"
         return StreamingResponse(
             iter_stream(),
+            status_code=status_code,
             media_type="video/mp4",
             headers=resp_headers
         )
 
     # 4. Fallback direct stream
-    fallback_url = formats[-1]["url"] if formats else None
-    if not fallback_url:
+    fallback_fmt = formats[-1] if formats else None
+    if not fallback_fmt or not fallback_fmt.get("url"):
         raise HTTPException(status_code=400, detail="Could not resolve media stream URL")
+
+    fallback_url = fallback_fmt["url"]
+    fb_headers = dict(fallback_fmt.get("http_headers") or {})
 
     def iter_fallback():
         import requests
-        with requests.get(fallback_url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}) as r:
+        with requests.get(fallback_url, stream=True, timeout=30, headers=fb_headers) as r:
             for chunk in r.iter_content(chunk_size=1024 * 512):
                 if chunk:
                     yield chunk
