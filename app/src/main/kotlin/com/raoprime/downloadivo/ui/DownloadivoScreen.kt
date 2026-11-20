@@ -1023,42 +1023,13 @@ private fun HomeDownloaderTab(
             .fillMaxSize()
             .verticalScroll(scrollState)
             .imePadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
             .animateContentSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ═══════════════════════════════════════════════════════════════
-        // SUPPORTED PLATFORMS MARQUEE STRIP (WHEN NO LINK ACTIVE)
-        // ═══════════════════════════════════════════════════════════════
-        if (resolvedInfo == null && !isResolving) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                listOf(
-                    "YouTube", "Instagram", "TikTok", "X / Twitter", "Spotify", "Facebook", "Reddit"
-                ).forEach { platform ->
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = SurfaceDark,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline)
-                    ) {
-                        Text(
-                            text = platform,
-                            style = Typography.labelSmall,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // SMART CLIPBOARD DETECTION PILL
+        // 1. SMART CLIPBOARD DETECTION PILL (CONTEXTUAL HERO SUGGESTION)
         // ═══════════════════════════════════════════════════════════════
         if (!clipboardUrl.isNullOrBlank() && clipboardUrl != inputUrl && resolvedInfo == null) {
             Surface(
@@ -1095,6 +1066,7 @@ private fun HomeDownloaderTab(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
+                            HapticUtil.mediumClick(context)
                             keyboardController?.hide()
                             focusManager.clearFocus()
                             onUrlChange(clipboardUrl)
@@ -1121,18 +1093,20 @@ private fun HomeDownloaderTab(
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // SEAMLESS UNIFIED INPUT CAPSULE (56dp APPLE / SEAL STYLE)
+        // 2. PRIMARY ANCHOR: SCULPTED UNIFIED INPUT CAPSULE (58dp LUXURY)
         // ═══════════════════════════════════════════════════════════════
         Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(18.dp),
             color = SurfaceDark,
             border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp)
         ) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .fillMaxSize()
+                    .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (detectedPlatform != null) {
@@ -1200,6 +1174,7 @@ private fun HomeDownloaderTab(
                     Spacer(modifier = Modifier.width(4.dp))
                     Button(
                         onClick = {
+                            HapticUtil.mediumClick(context)
                             keyboardController?.hide()
                             focusManager.clearFocus()
                             if (inputUrl.startsWith("http")) onInspect(inputUrl)
@@ -1221,6 +1196,7 @@ private fun HomeDownloaderTab(
                             val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
                             val clean = DownloadEngine.sanitizeUrl(clip)
                             if (clean.startsWith("http")) {
+                                HapticUtil.mediumClick(context)
                                 keyboardController?.hide()
                                 focusManager.clearFocus()
                                 onUrlChange(clean)
@@ -1242,6 +1218,95 @@ private fun HomeDownloaderTab(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Paste", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = TextCrisp)
                     }
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // 3. SUPPORTED PLATFORMS & SYSTEM SPECS (BALANCED IDLE RHYTHM)
+        // ═══════════════════════════════════════════════════════════════
+        if (resolvedInfo == null && !isResolving) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "SUPPORTED SOURCES",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextTertiary,
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        text = "Auto-Detect",
+                        fontSize = 11.sp,
+                        color = TextQuaternary
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "YouTube", "Instagram", "TikTok", "X / Twitter", "Spotify", "Reddit", "Facebook"
+                    ).forEach { platform ->
+                        Surface(
+                            onClick = {
+                                HapticUtil.lightClick(context)
+                                Toast.makeText(context, "Paste any $platform link above", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = SurfaceDark,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(TextTertiary)
+                                )
+                                Text(
+                                    text = platform,
+                                    style = Typography.labelMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Apple / Linear Minimalist Engine Specs Bar
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("4K Ultra HD", style = Typography.labelSmall, color = TextTertiary)
+                    Text("  •  ", style = Typography.labelSmall, color = TextQuaternary)
+                    Text("320kbps MP3", style = Typography.labelSmall, color = TextTertiary)
+                    Text("  •  ", style = Typography.labelSmall, color = TextQuaternary)
+                    Text("Zero Watermarks", style = Typography.labelSmall, color = TextTertiary)
+                    Text("  •  ", style = Typography.labelSmall, color = TextQuaternary)
+                    Text("Direct Stream", style = Typography.labelSmall, color = TextTertiary)
                 }
             }
         }

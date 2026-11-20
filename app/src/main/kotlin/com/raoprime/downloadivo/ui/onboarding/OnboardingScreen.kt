@@ -187,27 +187,13 @@ fun OnboardingScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Brand Mark: High-Contrast "D" Emblem + Typography
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.app_icon),
-                        contentDescription = "Downloadivo",
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Fit
-                    )
-                    Text(
-                        text = "Downloadivo",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextZinc100,
-                        letterSpacing = (-0.2).sp
-                    )
-                }
+                // Pure Official Downloadivo Brand Wordmark
+                Image(
+                    painter = painterResource(id = R.drawable.app_logo_white),
+                    contentDescription = "Downloadivo",
+                    modifier = Modifier.height(26.dp),
+                    contentScale = ContentScale.Fit
+                )
 
                 // Step Counter Pill + Skip Action
                 Row(
@@ -410,7 +396,7 @@ private fun SlideHeroBrand() {
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = "Fetch, stream, convert, and manage high-definition media across platforms without limits.",
+                text = "All platforms. Zero paywalls. Direct to device storage.",
                 fontSize = 13.sp,
                 color = TextZinc400,
                 textAlign = TextAlign.Center,
@@ -815,7 +801,7 @@ private fun SlidePlatformsGrid(platforms: List<PlatformItem>) {
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "Download, stream, or extract from any major platform in pristine quality with zero watermark barriers.",
+            text = "Universal media extraction with zero watermark barriers.",
             fontSize = 13.sp,
             color = TextZinc400,
             textAlign = TextAlign.Center,
@@ -849,12 +835,33 @@ private fun SlidePlatformsGrid(platforms: List<PlatformItem>) {
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(item.color)
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = item.color.copy(alpha = 0.15f),
+                                border = androidx.compose.foundation.BorderStroke(0.5.dp, item.color.copy(alpha = 0.6f)),
+                                modifier = Modifier.size(22.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    val initials = when (item.name) {
+                                        "YouTube" -> "YT"
+                                        "Instagram" -> "IG"
+                                        "TikTok" -> "TT"
+                                        "X / Twitter" -> "X"
+                                        "Facebook" -> "FB"
+                                        "Reddit" -> "RD"
+                                        "Pinterest" -> "PIN"
+                                        "SoundCloud" -> "SC"
+                                        "Vimeo" -> "VM"
+                                        else -> "ALL"
+                                    }
+                                    Text(
+                                        text = initials,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = item.color
+                                    )
+                                }
+                            }
                             Text(
                                 text = item.name,
                                 fontSize = 12.sp,
@@ -908,7 +915,7 @@ private fun SlideTurboEngine() {
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "Aria2c multi-connection acceleration splits heavy 4K/8K video into parallel channels with automatic HTTP Range resume.",
+                text = "16-channel Aria2c acceleration with instant HTTP Range auto-resume.",
                 fontSize = 12.sp,
                 color = TextZinc400,
                 textAlign = TextAlign.Center,
@@ -963,7 +970,7 @@ private fun SlideMediaStudio() {
             )
 
             Text(
-                text = "Floating PiP, MP3 & Trimmer",
+                text = "Studio Quality & PiP",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextWhite,
@@ -974,7 +981,7 @@ private fun SlideMediaStudio() {
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "Stream links ad-free with fluid Picture-in-Picture, extract 320kbps studio audio, or trim custom clips directly into storage.",
+                text = "Ad-free streaming, 320kbps audio extraction, and floating Picture-in-Picture.",
                 fontSize = 12.sp,
                 color = TextZinc400,
                 textAlign = TextAlign.Center,
