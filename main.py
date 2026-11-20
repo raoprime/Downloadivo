@@ -1843,11 +1843,23 @@ async def get_info(request: Request, url: Optional[str] = None):
 
             heights = set()
             format_sizes = {}
+            standard_bitrates = {4320: 35000, 2160: 18000, 1440: 9000, 1080: 4200, 720: 2200, 480: 1000, 360: 500}
+            standard_default_mb = {4320: 750, 2160: 350, 1440: 180, 1080: 85, 720: 42, 480: 22, 360: 12}
+
             for f in formats:
                 h = f.get("height")
                 if h and isinstance(h, int) and h >= 360:
                     heights.add(h)
                     sz = f.get("filesize") or f.get("filesize_approx") or 0
+                    if not sz or sz <= 0:
+                        tbr = f.get("tbr") or ((f.get("vbr") or 0) + (f.get("abr") or 128))
+                        if tbr and duration and duration > 0:
+                            sz = int(tbr * 1000 * duration / 8)
+                        elif duration and duration > 0:
+                            kbps = standard_bitrates.get(h, 2500)
+                            sz = int(kbps * 1000 * duration / 8)
+                        else:
+                            sz = standard_default_mb.get(h, 45) * 1024 * 1024
                     if f.get("acodec") == "none":
                         sz += best_a_size
                     if str(h) not in format_sizes or sz > format_sizes[str(h)]["bytes"]:
@@ -1858,6 +1870,21 @@ async def get_info(request: Request, url: Optional[str] = None):
                         else:
                             lbl = f"{sz / 1024:.0f} KB"
                         format_sizes[str(h)] = {"bytes": sz, "label": lbl}
+
+            # Guarantee sensible size labels for standard resolutions if missing
+            for std_h, std_kbps in standard_bitrates.items():
+                if str(std_h) not in format_sizes:
+                    if duration and duration > 0:
+                        calc_sz = int(std_kbps * 1000 * duration / 8)
+                    else:
+                        calc_sz = standard_default_mb.get(std_h, 45) * 1024 * 1024
+                    if calc_sz >= 1024 * 1024 * 1024:
+                        calc_lbl = f"{calc_sz / (1024 * 1024 * 1024):.2f} GB"
+                    elif calc_sz >= 1024 * 1024:
+                        calc_lbl = f"{calc_sz / (1024 * 1024):.1f} MB"
+                    else:
+                        calc_lbl = f"{calc_sz / 1024:.0f} KB"
+                    format_sizes[str(std_h)] = {"bytes": calc_sz, "label": calc_lbl}
 
             sorted_resolutions = sorted(list(heights), reverse=True)
             extractor = (info.get("extractor_key") or "Web").capitalize()
@@ -1890,10 +1917,15 @@ async def get_info(request: Request, url: Optional[str] = None):
             if "360" in format_sizes:
                 format_sizes["360p"] = format_sizes["360"]
 
-            if sorted_resolutions:
-                best_h = str(sorted_resolutions[0])
-                if best_h in format_sizes:
-                    format_sizes["best"] = format_sizes[best_h]
+            best_fmt = (
+                format_sizes.get("2160p")
+                or format_sizes.get("1080p")
+                or format_sizes.get("1080")
+                or format_sizes.get("720p")
+                or format_sizes.get("360p")
+            )
+            if best_fmt:
+                format_sizes["best"] = best_fmt
 
             # Simplified string map of format sizes for easy client consumption
             clean_sizes = {k: v["label"] for k, v in format_sizes.items()}
