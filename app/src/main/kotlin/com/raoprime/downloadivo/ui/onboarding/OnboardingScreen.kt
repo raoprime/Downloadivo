@@ -81,6 +81,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.Uri
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.viewinterop.AndroidView
+import com.raoprime.downloadivo.R
 import com.raoprime.downloadivo.ui.theme.HapticUtil
 import kotlinx.coroutines.launch
 import kotlin.math.cos
@@ -386,10 +391,10 @@ private fun SlideHeroBrand() {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            GoogleExpressiveMediaCore(
+            Flagship3DMediaHero(
                 modifier = Modifier
-                    .size(180.dp)
-                    .padding(bottom = 8.dp)
+                    .size(200.dp)
+                    .padding(bottom = 6.dp)
             )
 
             Text(
@@ -441,6 +446,70 @@ private fun SlideHeroBrand() {
 // ─────────────────────────────────────────────────────────────
 // COMPOSABLE 1: Google Expressive 120Hz Floating Media Core
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// COMPOSABLE 1: Flagship 3D Media Core (Cinema4D / Octane 60fps Loop)
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun Flagship3DMediaHero(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val rawUri = remember {
+        Uri.parse("android.resource://${context.packageName}/${R.raw.intro_3d}")
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+    ) {
+        // Soft ambient radial glow matching cyan/violet caustics
+        Box(
+            modifier = Modifier
+                .size(190.dp)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF00E5FF).copy(alpha = 0.16f),
+                            Color(0xFF7C4DFF).copy(alpha = 0.10f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
+
+        // Instant base 3D render plate (zero black frame delay)
+        Image(
+            painter = painterResource(id = R.drawable.intro_3d_render),
+            contentDescription = "Downloadivo 3D Media Core",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .size(180.dp)
+                .clip(RoundedCornerShape(24.dp))
+        )
+
+        // Hardware-accelerated 60fps looping video view overlay
+        AndroidView(
+            factory = { ctx ->
+                android.widget.VideoView(ctx).apply {
+                    setVideoURI(rawUri)
+                    setOnPreparedListener { mp ->
+                        mp.isLooping = true
+                        mp.setVolume(0f, 0f)
+                        start()
+                    }
+                    setOnErrorListener { _, _, _ -> true }
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                }
+            },
+            modifier = Modifier
+                .size(180.dp)
+                .clip(RoundedCornerShape(24.dp))
+        )
+    }
+}
+
 @Composable
 private fun GoogleExpressiveMediaCore(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "google_core_transition")
