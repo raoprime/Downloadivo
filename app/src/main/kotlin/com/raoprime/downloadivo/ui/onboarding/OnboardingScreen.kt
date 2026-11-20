@@ -85,6 +85,13 @@ import android.net.Uri
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.runtime.DisposableEffect
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+
 import com.raoprime.downloadivo.R
 import com.raoprime.downloadivo.ui.theme.HapticUtil
 import kotlinx.coroutines.launch
@@ -185,20 +192,14 @@ fun OnboardingScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(
+                    Image(
+                        painter = painterResource(id = R.drawable.app_icon),
+                        contentDescription = "Downloadivo",
                         modifier = Modifier
                             .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.White),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "D",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
-                    }
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Fit
+                    )
                     Text(
                         text = "Downloadivo",
                         fontSize = 14.sp,
@@ -452,8 +453,21 @@ private fun SlideHeroBrand() {
 @Composable
 private fun Flagship3DMediaHero(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val rawUri = remember {
-        Uri.parse("android.resource://${context.packageName}/${R.raw.intro_3d}")
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            val rawUri = Uri.parse("android.resource://${context.packageName}/${R.raw.intro_3d}")
+            setMediaItem(MediaItem.fromUri(rawUri))
+            repeatMode = Player.REPEAT_MODE_ALL
+            volume = 0f
+            playWhenReady = true
+            prepare()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            exoPlayer.release()
+        }
     }
 
     Box(
@@ -476,7 +490,7 @@ private fun Flagship3DMediaHero(modifier: Modifier = Modifier) {
                 )
         )
 
-        // Instant base 3D render plate (zero black frame delay)
+        // Instant base 3D render plate (pure Downloadivo official emblem)
         Image(
             painter = painterResource(id = R.drawable.intro_3d_render),
             contentDescription = "Downloadivo 3D Media Core",
@@ -486,17 +500,14 @@ private fun Flagship3DMediaHero(modifier: Modifier = Modifier) {
                 .clip(RoundedCornerShape(24.dp))
         )
 
-        // Hardware-accelerated 60fps looping video view overlay
+        // Hardware-accelerated Media3 ExoPlayer looping view
         AndroidView(
             factory = { ctx ->
-                android.widget.VideoView(ctx).apply {
-                    setVideoURI(rawUri)
-                    setOnPreparedListener { mp ->
-                        mp.isLooping = true
-                        mp.setVolume(0f, 0f)
-                        start()
-                    }
-                    setOnErrorListener { _, _, _ -> true }
+                PlayerView(ctx).apply {
+                    player = exoPlayer
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     layoutParams = android.view.ViewGroup.LayoutParams(
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -510,159 +521,6 @@ private fun Flagship3DMediaHero(modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-private fun GoogleExpressiveMediaCore(modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition(label = "google_core_transition")
-    
-    // Smooth harmonic rotation and oscillation
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 14000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1.04f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse"
-    )
-
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        // Real-time Canvas Rendering: Floating Platform Satellites & Energy Rings
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val center = Offset(size.width / 2f, size.height / 2f)
-            val baseRadius = size.width * 0.38f
-
-            // 1. Organic Breathing Energy Waves
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.08f * pulse),
-                        Color(0x186366F1),
-                        Color.Transparent
-                    ),
-                    center = center,
-                    radius = baseRadius * 1.35f
-                ),
-                radius = baseRadius * 1.35f,
-                center = center
-            )
-
-            // 2. Translucent Orbital Guide Rings
-            drawCircle(
-                color = Color.White.copy(alpha = 0.06f),
-                radius = baseRadius,
-                center = center,
-                style = Stroke(width = 1.dp.toPx())
-            )
-            drawCircle(
-                color = Color(0x1A6366F1),
-                radius = baseRadius * 0.72f,
-                center = center,
-                style = Stroke(width = 1.dp.toPx())
-            )
-
-            // 3. Floating Expressive Platform Satellite Orbs
-            val satellites = listOf(
-                Pair(Color(0xFFFF0000), 0f),      // YouTube
-                Pair(Color(0xFFE1306C), 60f),     // Instagram
-                Pair(Color(0xFF00F2FE), 120f),    // TikTok
-                Pair(Color(0xFFFFFFFF), 180f),    // X
-                Pair(Color(0xFF1877F2), 240f),    // Facebook
-                Pair(Color(0xFFFF4500), 300f)     // Reddit
-            )
-
-            satellites.forEach { (color, angleOffset) ->
-                val angleRad = Math.toRadians((rotation + angleOffset).toDouble())
-                // Subtle 3D perspective distortion (ellipse tilt)
-                val sx = center.x + (baseRadius * cos(angleRad)).toFloat()
-                val sy = center.y + (baseRadius * 0.65f * sin(angleRad)).toFloat()
-                val depthScale = (0.75f + 0.35f * sin(angleRad)).toFloat()
-
-                // Satellite Glow
-                drawCircle(
-                    color = color.copy(alpha = 0.25f * depthScale),
-                    radius = 9.dp.toPx() * depthScale,
-                    center = Offset(sx, sy)
-                )
-                // Satellite Core
-                drawCircle(
-                    color = color.copy(alpha = 0.9f * depthScale),
-                    radius = 4.5.dp.toPx() * depthScale,
-                    center = Offset(sx, sy)
-                )
-                // Specular Light
-                drawCircle(
-                    color = Color.White.copy(alpha = 0.8f * depthScale),
-                    radius = 1.5.dp.toPx() * depthScale,
-                    center = Offset(sx - 1.5f, sy - 1.5f)
-                )
-            }
-        }
-
-        // Center Glassmorphic Core Container
-        Box(
-            modifier = Modifier
-                .size(76.dp)
-                .graphicsLayer {
-                    scaleX = pulse
-                    scaleY = pulse
-                }
-                .clip(RoundedCornerShape(22.dp))
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.12f),
-                            Color.White.copy(alpha = 0.03f)
-                        )
-                    )
-                )
-                .border(
-                    1.dp,
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.25f),
-                            Color.White.copy(alpha = 0.05f)
-                        )
-                    ),
-                    RoundedCornerShape(22.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            // High-Contrast Pure White Emblem Card
-            Box(
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White)
-                    .shadow(12.dp, RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "D",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color.Black
-                )
-            }
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────
-// COMPOSABLE 2: Google Expressive 16-Lane Speed Stream (Slide 3)
-// ─────────────────────────────────────────────────────────────
 @Composable
 private fun GoogleExpressiveSpeedStream(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "speed_transition")
