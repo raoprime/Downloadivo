@@ -1,3 +1,6 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@file:OptIn(androidx.media3.common.util.UnstableApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.raoprime.downloadivo.ui
 
 import android.content.ClipboardManager
@@ -81,6 +84,7 @@ enum class AppTab(val label: String) {
     SETTINGS("Settings")
 }
 
+@androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
 @Composable
 fun DownloadivoScreen(
