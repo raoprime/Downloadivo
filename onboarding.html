@@ -126,22 +126,32 @@
             </div>
           </header>
 
-          {/* Borderless Hero Stage (Ready for <Rive /> or <Lottie /> asset) */}
-          <div className="relative z-10 my-auto flex flex-col items-center text-center pt-4 pb-4">
-            <div className="relative w-44 h-44 flex items-center justify-center mb-6">
-              {/* Sleek Glass Core Placeholder — Swap inner div with <Lottie /> or <Rive /> */}
-              <div className="absolute inset-4 rounded-3xl bg-gradient-to-b from-white/[0.09] to-white/[0.02] border border-white/[0.12] backdrop-blur-2xl shadow-2xl flex items-center justify-center">
-                <div className="w-16 h-16 rounded-2xl bg-white text-black font-extrabold text-2xl flex items-center justify-center shadow-lg">
-                  D
-                </div>
-              </div>
+          {/* Borderless 3D Flagship Hero Stage */}
+          <div className="relative z-10 my-auto flex flex-col items-center text-center pt-2 pb-2">
+            <div className="relative w-56 h-56 sm:w-64 sm:h-64 flex items-center justify-center mb-3">
+              {/* Ambient radial glow behind the 3D core */}
+              <div className="absolute inset-0 rounded-full bg-cyan-500/15 blur-[50px] pointer-events-none" />
+              <div className="absolute inset-4 rounded-full bg-violet-500/15 blur-[60px] pointer-events-none" />
+              
+              {/* 3D Motion Loop Video */}
+              <video
+                autoPlay
+                loop
+                muted
+                playsInline
+                poster="/assets/intro_3d_render.jpg"
+                className="w-full h-full object-contain rounded-3xl drop-shadow-[0_20px_35px_rgba(0,0,0,0.85)] filter contrast-[1.04]"
+              >
+                <source src="/assets/intro_3d.mp4" type="video/mp4" />
+                <img src="/assets/intro_3d_render.jpg" alt="Downloadivo 3D Media Core" className="w-full h-full object-contain rounded-3xl" />
+              </video>
             </div>
 
-            <h1 className="text-2xl font-semibold tracking-tight text-white max-w-xs leading-snug">
+            <h1 className="text-2xl font-bold tracking-tight text-white max-w-xs leading-snug">
               The Next-Gen Media Suite
             </h1>
-            <p className="mt-2.5 text-sm text-zinc-400 max-w-[300px] leading-relaxed">
-              Fetch, stream, convert, and manage high-definition media across platforms without limits.
+            <p className="mt-2 text-xs sm:text-sm text-zinc-400 max-w-[310px] leading-relaxed">
+              Direct high-fidelity streaming, multi-platform media ingestion & conversion without paywalls.
             </p>
           </div>
 
