@@ -1,9 +1,17 @@
 package com.raoprime.downloadivo.ui.onboarding
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -51,7 +59,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -60,29 +67,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.raoprime.downloadivo.R
 import com.raoprime.downloadivo.ui.theme.HapticUtil
-import com.raoprime.downloadivo.ui.theme.Typography
 import kotlinx.coroutines.launch
+import kotlin.math.cos
+import kotlin.math.sin
 
-// ── Obsidian Studio Design Tokens (Apple / Linear Tier) ───────
+// ── Google Material 3 Expressive & Obsidian Tokens ────────────
 private val CanvasVoid = Color(0xFF060608)
-private val SurfaceGlassCard = Color(0x08FFFFFF)      // bg-white/[0.03]
-private val BorderGlassCard = Color(0x12FFFFFF)       // border-white/[0.07]
-private val SurfaceBadge = Color(0x0FFFFFFF)          // bg-white/[0.06]
-private val BorderBadge = Color(0x14FFFFFF)           // border-white/[0.08]
+private val SurfaceGlassCard = Color(0x0AFFFFFF)      // 4% white card
+private val BorderGlassCard = Color(0x14FFFFFF)       // 8% white hairline
+private val SurfaceBadge = Color(0x0FFFFFFF)          // 6% white badge
+private val BorderBadge = Color(0x18FFFFFF)           // 9% white border
 private val TextWhite = Color(0xFFFFFFFF)
 private val TextZinc100 = Color(0xFFF4F4F5)
 private val TextZinc400 = Color(0xFFA1A1AA)
@@ -134,18 +143,18 @@ fun OnboardingScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
-        // Subtle Ambient Background Mesh (Apple / Linear style soft mesh blur)
+        // Google Ambient Light Mesh (Soft multi-point radial gradient)
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 40.dp)
-                .size(280.dp)
+                .padding(top = 20.dp)
+                .size(320.dp)
                 .clip(CircleShape)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0x266366F1), // indigo-500 at 15%
-                            Color(0x0C6366F1),
+                            Color(0x286366F1), // Indigo aura (16%)
+                            Color(0x0C8B5CF6), // Purple falloff
                             Color.Transparent
                         )
                     )
@@ -155,10 +164,10 @@ fun OnboardingScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 20.dp),
+                .padding(horizontal = 24.dp, vertical = 18.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // ── Top Header Bar ─────────────────────────────────
+            // ── Top Header Bar (Google/Apple Tier Minimalist) ───
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -166,7 +175,7 @@ fun OnboardingScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Brand Mark: White "D" Badge + Downloadivo Typography
+                // Brand Mark: High-Contrast "D" Emblem + Typography
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -243,15 +252,15 @@ fun OnboardingScreen(
                 }
             }
 
-            // ── Bottom Pagination & Tactile CTA ─────────────────
+            // ── Bottom Navigation & Expressive CTA ──────────────
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp),
+                    .padding(top = 10.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Expanding Animated Indicator Pills
+                // Expanding Spring Pagination Indicator Pills
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -259,9 +268,12 @@ fun OnboardingScreen(
                     repeat(totalPages) { index ->
                         val isSelected = pagerState.currentPage == index
                         val width by animateDpAsState(
-                            targetValue = if (isSelected) 24.dp else 6.dp,
-                            animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-                            label = "dot_width"
+                            targetValue = if (isSelected) 26.dp else 6.dp,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            ),
+                            label = "pill_width"
                         )
                         Box(
                             modifier = Modifier
@@ -281,14 +293,14 @@ fun OnboardingScreen(
                     }
                 }
 
-                // Tactile CTA Button with micro-press physics
+                // Tactile CTA Button with Micro-Press Physics
                 val isLastPage = pagerState.currentPage == totalPages - 1
                 val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
                 val scale by animateFloatAsState(
                     targetValue = if (isPressed) 0.98f else 1.0f,
                     animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                    label = "cta_press_scale"
+                    label = "cta_press"
                 )
 
                 Button(
@@ -349,7 +361,7 @@ fun OnboardingScreen(
 }
 
 // ─────────────────────────────────────────────────────────────
-// SLIDE 1: Hero Visual & Fixed 2x2 Bento Feature Grid
+// SLIDE 1: Google Expressive Media Core & Fixed 2x2 Bento Grid
 // ─────────────────────────────────────────────────────────────
 @Composable
 private fun SlideHeroBrand() {
@@ -365,65 +377,20 @@ private fun SlideHeroBrand() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceEvenly
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Borderless Hero Stage (Ready for <Rive /> / <Lottie /> asset)
+        // Google Material 3 Expressive Floating Orbit Core (120Hz Hardware Accelerated)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Sleek Glass Core Placeholder
-            Box(
+            GoogleExpressiveMediaCore(
                 modifier = Modifier
-                    .size(176.dp)
-                    .padding(bottom = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Glassmorphic Outer Card with 1px Specular Border
-                Box(
-                    modifier = Modifier
-                        .size(140.dp)
-                        .clip(RoundedCornerShape(32.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.09f),
-                                    Color.White.copy(alpha = 0.02f)
-                                )
-                            )
-                        )
-                        .border(
-                            1.dp,
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.18f),
-                                    Color.White.copy(alpha = 0.04f)
-                                )
-                            ),
-                            RoundedCornerShape(32.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Center Floating Brand Emblem
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(Color.White)
-                            .shadow(12.dp, RoundedCornerShape(20.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "D",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.Black
-                        )
-                    }
-                }
-            }
+                    .size(180.dp)
+                    .padding(bottom = 8.dp)
+            )
 
             Text(
                 text = "The Next-Gen Media Suite",
@@ -434,23 +401,23 @@ private fun SlideHeroBrand() {
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
                 text = "Fetch, stream, convert, and manage high-definition media across platforms without limits.",
                 fontSize = 13.sp,
                 color = TextZinc400,
                 textAlign = TextAlign.Center,
-                lineHeight = 19.sp,
-                modifier = Modifier.padding(horizontal = 24.dp)
+                lineHeight = 18.sp,
+                modifier = Modifier.padding(horizontal = 20.dp)
             )
         }
 
-        // Fixed 2x2 Bento Grid — Zero Awkward Line Wrapping
+        // Fixed 2x2 Bento Grid (Zero Line-Wrapping, 1px Specular Border)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp),
+                .padding(top = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
@@ -466,6 +433,331 @@ private fun SlideHeroBrand() {
             ) {
                 BentoCard(features[2], modifier = Modifier.weight(1f))
                 BentoCard(features[3], modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMPOSABLE 1: Google Expressive 120Hz Floating Media Core
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun GoogleExpressiveMediaCore(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "google_core_transition")
+    
+    // Smooth harmonic rotation and oscillation
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 14000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    val pulse by infiniteTransition.animateFloat(
+        initialValue = 0.96f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2400, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        // Real-time Canvas Rendering: Floating Platform Satellites & Energy Rings
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val baseRadius = size.width * 0.38f
+
+            // 1. Organic Breathing Energy Waves
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.08f * pulse),
+                        Color(0x186366F1),
+                        Color.Transparent
+                    ),
+                    center = center,
+                    radius = baseRadius * 1.35f
+                ),
+                radius = baseRadius * 1.35f,
+                center = center
+            )
+
+            // 2. Translucent Orbital Guide Rings
+            drawCircle(
+                color = Color.White.copy(alpha = 0.06f),
+                radius = baseRadius,
+                center = center,
+                style = Stroke(width = 1.dp.toPx())
+            )
+            drawCircle(
+                color = Color(0x1A6366F1),
+                radius = baseRadius * 0.72f,
+                center = center,
+                style = Stroke(width = 1.dp.toPx())
+            )
+
+            // 3. Floating Expressive Platform Satellite Orbs
+            val satellites = listOf(
+                Pair(Color(0xFFFF0000), 0f),      // YouTube
+                Pair(Color(0xFFE1306C), 60f),     // Instagram
+                Pair(Color(0xFF00F2FE), 120f),    // TikTok
+                Pair(Color(0xFFFFFFFF), 180f),    // X
+                Pair(Color(0xFF1877F2), 240f),    // Facebook
+                Pair(Color(0xFFFF4500), 300f)     // Reddit
+            )
+
+            satellites.forEach { (color, angleOffset) ->
+                val angleRad = Math.toRadians((rotation + angleOffset).toDouble())
+                // Subtle 3D perspective distortion (ellipse tilt)
+                val sx = center.x + (baseRadius * cos(angleRad)).toFloat()
+                val sy = center.y + (baseRadius * 0.65f * sin(angleRad)).toFloat()
+                val depthScale = (0.75f + 0.35f * sin(angleRad)).toFloat()
+
+                // Satellite Glow
+                drawCircle(
+                    color = color.copy(alpha = 0.25f * depthScale),
+                    radius = 9.dp.toPx() * depthScale,
+                    center = Offset(sx, sy)
+                )
+                // Satellite Core
+                drawCircle(
+                    color = color.copy(alpha = 0.9f * depthScale),
+                    radius = 4.5.dp.toPx() * depthScale,
+                    center = Offset(sx, sy)
+                )
+                // Specular Light
+                drawCircle(
+                    color = Color.White.copy(alpha = 0.8f * depthScale),
+                    radius = 1.5.dp.toPx() * depthScale,
+                    center = Offset(sx - 1.5f, sy - 1.5f)
+                )
+            }
+        }
+
+        // Center Glassmorphic Core Container
+        Box(
+            modifier = Modifier
+                .size(76.dp)
+                .graphicsLayer {
+                    scaleX = pulse
+                    scaleY = pulse
+                }
+                .clip(RoundedCornerShape(22.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.12f),
+                            Color.White.copy(alpha = 0.03f)
+                        )
+                    )
+                )
+                .border(
+                    1.dp,
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.25f),
+                            Color.White.copy(alpha = 0.05f)
+                        )
+                    ),
+                    RoundedCornerShape(22.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            // High-Contrast Pure White Emblem Card
+            Box(
+                modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White)
+                    .shadow(12.dp, RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "D",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.Black
+                )
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMPOSABLE 2: Google Expressive 16-Lane Speed Stream (Slide 3)
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun GoogleExpressiveSpeedStream(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "speed_transition")
+    
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase"
+    )
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val maxR = size.width * 0.42f
+
+            // Outer Speed Gauge Arc
+            drawCircle(
+                color = Color(0x18FFFFFF),
+                radius = maxR,
+                center = center,
+                style = Stroke(width = 2.dp.toPx())
+            )
+
+            // Dynamic 16 High-Speed Stream Beams radiating outward
+            val streamCount = 16
+            for (i in 0 until streamCount) {
+                val baseAngle = (i.toFloat() / streamCount.toFloat()) * 2f * Math.PI.toFloat()
+                val currentPhase = (phase + (i * 0.0625f)) % 1f
+
+                val startDist = maxR * (0.35f + currentPhase * 0.45f)
+                val endDist = startDist + (maxR * 0.25f)
+
+                val x1 = center.x + cos(baseAngle) * startDist
+                val y1 = center.y + sin(baseAngle) * startDist
+                val x2 = center.x + cos(baseAngle) * endDist
+                val y2 = center.y + sin(baseAngle) * endDist
+
+                val beamColor = if (i % 2 == 0) Color(0xFF10B981) else Color.White
+                drawLine(
+                    color = beamColor.copy(alpha = (1f - currentPhase) * 0.75f),
+                    start = Offset(x1, y1),
+                    end = Offset(x2, y2),
+                    strokeWidth = 2.dp.toPx()
+                )
+            }
+
+            // Central Bolt Glow
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        Color(0x3310B981),
+                        Color.Transparent
+                    ),
+                    center = center,
+                    radius = maxR * 0.6f
+                ),
+                radius = maxR * 0.6f,
+                center = center
+            )
+        }
+
+        // Center Bolt Icon Pill
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .shadow(8.dp, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Bolt,
+                contentDescription = null,
+                tint = Color.Black,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMPOSABLE 3: Google Expressive Equalizer Visualizer (Slide 4)
+// ─────────────────────────────────────────────────────────────
+@Composable
+private fun GoogleExpressiveEqualizer(modifier: Modifier = Modifier) {
+    val infiniteTransition = rememberInfiniteTransition(label = "equalizer_transition")
+    
+    val waveOffset by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * Math.PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "waveOffset"
+    )
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val barCount = 19
+            val barWidth = 4.dp.toPx()
+            val spacing = 3.5.dp.toPx()
+            val totalWidth = barCount * barWidth + (barCount - 1) * spacing
+            val startX = center.x - totalWidth / 2f
+
+            for (i in 0 until barCount) {
+                // Multi-frequency harmonic wave algorithm (like Google Recorder / Pixel Sound)
+                val factor = sin(waveOffset + (i * 0.45f)) * 0.5f + 0.5f
+                val harmonic = cos(waveOffset * 1.5f + (i * 0.3f)) * 0.3f
+                val normalizedHeight = (factor + harmonic).coerceIn(0.15f, 1.0f)
+
+                val barH = (size.height * 0.38f) * normalizedHeight
+                val bx = startX + i * (barWidth + spacing)
+                val by = center.y - barH / 2f
+
+                // Google Gradient Color from White to Sapphire Blue
+                val barColor = if (i in 7..11) Color(0xFF3B82F6) else Color.White
+
+                drawRoundRect(
+                    color = barColor.copy(alpha = 0.3f + normalizedHeight * 0.65f),
+                    topLeft = Offset(bx, by),
+                    size = Size(barWidth, barH),
+                    cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                )
+            }
+        }
+
+        // Floating Minimalist PiP Play Pill
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 6.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(SurfaceBadge)
+                .border(1.dp, BorderBadge, RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = TextWhite,
+                    modifier = Modifier.size(12.dp)
+                )
+                Text(
+                    text = "320kbps Studio Master",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = TextZinc100
+                )
             }
         }
     }
@@ -656,66 +948,47 @@ private fun SlidePlatformsGrid(platforms: List<PlatformItem>) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SLIDE 3: Turbo Engine & Speed
+// SLIDE 3: Turbo Engine & Speed with Google Expressive Stream
 // ─────────────────────────────────────────────────────────────
 @Composable
 private fun SlideTurboEngine() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(vertical = 12.dp),
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = SurfaceBadge,
-            border = androidx.compose.foundation.BorderStroke(1.dp, BorderBadge)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Bolt,
-                    contentDescription = null,
-                    tint = TextWhite,
-                    modifier = Modifier.size(14.dp)
-                )
-                Text(
-                    text = "UNTHROTTLED PIPELINE",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextWhite,
-                    letterSpacing = 1.sp
-                )
-            }
+            GoogleExpressiveSpeedStream(
+                modifier = Modifier
+                    .size(150.dp)
+                    .padding(bottom = 6.dp)
+            )
+
+            Text(
+                text = "16x Multi-Thread Turbo",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextWhite,
+                letterSpacing = (-0.3).sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Aria2c multi-connection acceleration splits heavy 4K/8K video into parallel channels with automatic HTTP Range resume.",
+                fontSize = 12.sp,
+                color = TextZinc400,
+                textAlign = TextAlign.Center,
+                lineHeight = 17.sp,
+                modifier = Modifier.padding(horizontal = 14.dp)
+            )
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "16x Multi-Thread Turbo",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextWhite,
-            letterSpacing = (-0.3).sp,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = "Aria2c multi-connection acceleration splits heavy 4K/8K video into parallel channels with automatic HTTP Range resume.",
-            fontSize = 13.sp,
-            color = TextZinc400,
-            textAlign = TextAlign.Center,
-            lineHeight = 18.sp,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
 
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -741,66 +1014,47 @@ private fun SlideTurboEngine() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SLIDE 4: Media Studio & Control
+// SLIDE 4: Media Studio & Control with Google Expressive Wave
 // ─────────────────────────────────────────────────────────────
 @Composable
 private fun SlideMediaStudio() {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(vertical = 12.dp),
+            .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = SurfaceBadge,
-            border = androidx.compose.foundation.BorderStroke(1.dp, BorderBadge)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PictureInPicture,
-                    contentDescription = null,
-                    tint = TextWhite,
-                    modifier = Modifier.size(14.dp)
-                )
-                Text(
-                    text = "TOTAL CONTROL",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextWhite,
-                    letterSpacing = 1.sp
-                )
-            }
+            GoogleExpressiveEqualizer(
+                modifier = Modifier
+                    .size(150.dp)
+                    .padding(bottom = 6.dp)
+            )
+
+            Text(
+                text = "Floating PiP, MP3 & Trimmer",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextWhite,
+                letterSpacing = (-0.3).sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Stream links ad-free with fluid Picture-in-Picture, extract 320kbps studio audio, or trim custom clips directly into storage.",
+                fontSize = 12.sp,
+                color = TextZinc400,
+                textAlign = TextAlign.Center,
+                lineHeight = 17.sp,
+                modifier = Modifier.padding(horizontal = 14.dp)
+            )
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Floating PiP, MP3 & Trimmer",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextWhite,
-            letterSpacing = (-0.3).sp,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = "Stream links ad-free with fluid Picture-in-Picture, extract 320kbps studio audio, or trim custom clips directly into storage.",
-            fontSize = 13.sp,
-            color = TextZinc400,
-            textAlign = TextAlign.Center,
-            lineHeight = 18.sp,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
 
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -838,7 +1092,7 @@ private fun LinearFeatureRow(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
