@@ -2537,12 +2537,11 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
             matches = [f for f in prog if (f.get("height") or 0) <= 360]
             chosen_prog_fmt = matches[-1] if matches else prog[-1]
         elif fmt_lower in ["best", "original", "stream"]:
-            # If 720p or higher progressive exists, use it for zero-transcode instant start
-            hi_prog = [f for f in prog if (f.get("height") or 0) >= 720]
-            if hi_prog:
-                chosen_prog_fmt = hi_prog[-1]
-            elif not video_fmts:
-                chosen_prog_fmt = prog[-1]
+            # Pick highest available progressive stream for zero-transcode instant start & native seeking
+            chosen_prog_fmt = prog[-1]
+        elif not chosen_prog_fmt and prog:
+            # Fallback to best progressive stream for instant mobile playback
+            chosen_prog_fmt = prog[-1]
 
     use_ffmpeg_mux = False
     chosen_v_fmt = None
