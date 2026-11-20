@@ -127,13 +127,14 @@ fun DownloadivoScreen(
     // Persistent Single ExoPlayer Instance across Miniplayer, Full Player & PiP
     val exoPlayer = remember(context) {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Downloadivo-Stream/4.0")
+            .setUserAgent("Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(20000)
             .setReadTimeoutMs(35000)
 
         val defaultDataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
-        val mediaSourceFactory = DefaultMediaSourceFactory(context).setDataSourceFactory(defaultDataSourceFactory)
+        val extractorsFactory = androidx.media3.extractor.DefaultExtractorsFactory()
+        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory).setDataSourceFactory(defaultDataSourceFactory)
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
@@ -293,10 +294,20 @@ fun DownloadivoScreen(
             }
         },
         topBar = {
-            if (currentTab != AppTab.HOME) {
+            if (currentTab != AppTab.HOME || resolvedInfo != null || isResolving) {
                 CenterAlignedTopAppBar(
                     title = {
                         when (currentTab) {
+                            AppTab.HOME -> {
+                                Image(
+                                    painter = painterResource(id = R.drawable.app_logo_white),
+                                    contentDescription = "Downloadivo",
+                                    modifier = Modifier
+                                        .height(28.dp)
+                                        .padding(vertical = 2.dp),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
                             AppTab.QUEUE -> {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -360,11 +371,21 @@ fun DownloadivoScreen(
                                     )
                                 }
                             }
-                            else -> {}
                         }
                     },
                     actions = {
-                        if (currentTab == AppTab.LIBRARY && historyList.any { it.status == DownloadStatus.SUCCESS }) {
+                        if (currentTab == AppTab.HOME && (resolvedInfo != null || isResolving)) {
+                            IconButton(
+                                onClick = {
+                                    inputUrl = ""
+                                    resolvedInfo = null
+                                    errorMessage = null
+                                    isCustomizeExpanded = false
+                                }
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextSecondary)
+                            }
+                        } else if (currentTab == AppTab.LIBRARY && historyList.any { it.status == DownloadStatus.SUCCESS }) {
                             TextButton(
                                 onClick = { DownloadRepository.clearHistory() }
                             ) {
@@ -1267,30 +1288,8 @@ private fun HomeDownloaderTab(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // ═══════════════════════════════════════════════════════════════
-            // ACTIVE INSPECTION HEADER & COMPACT INPUT
+            // COMPACT TOP INPUT CAPSULE (ALWAYS VISIBLE & PINNED AT TOP)
             // ═══════════════════════════════════════════════════════════════
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.app_logo_white),
-                    contentDescription = "Downloadivo",
-                    modifier = Modifier.height(26.dp),
-                    contentScale = ContentScale.Fit
-                )
-                if (resolvedInfo != null) {
-                    IconButton(
-                        onClick = { onClear() },
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary)
-                    }
-                }
-            }
 
             // Compact input capsule when reviewing or loading
             Surface(

@@ -157,8 +157,11 @@ fun BuiltInPlayerSheet(
             playerError = null
             isBuffering = true
             val uri = Uri.parse(mediaUri)
-            val mimeType = if (isAudio) MimeTypes.AUDIO_MPEG else MimeTypes.VIDEO_MP4
-            val item = MediaItem.Builder().setUri(uri).setMimeType(mimeType).build()
+            val item = if (isAudio) {
+                MediaItem.Builder().setUri(uri).setMimeType(MimeTypes.AUDIO_MPEG).build()
+            } else {
+                MediaItem.Builder().setUri(uri).build()
+            }
             exoPlayer.setMediaItem(item)
             exoPlayer.prepare()
             exoPlayer.playWhenReady = true
