@@ -98,6 +98,7 @@ fun BuiltInPlayerSheet(
     var durationMs by remember(duration) { mutableLongStateOf(DownloadEngine.parseDurationToMillis(duration)) }
     var isScrubbing by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableLongStateOf(0L) }
+    var lastSeekTimestamp by remember { mutableLongStateOf(0L) }
 
     // Pure Video PiP Mode: Full bleed zero-overlay video surface
     if (inPipMode && !isAudio) {
@@ -176,17 +177,18 @@ fun BuiltInPlayerSheet(
         }
     }
 
-    // Ticker for currentPosition
+    // Ticker for currentPosition with seek-debounce to prevent jumping back
     LaunchedEffect(exoPlayer) {
         while (true) {
-            if (!isScrubbing) {
+            val now = System.currentTimeMillis()
+            if (!isScrubbing && (now - lastSeekTimestamp > 650L)) {
                 currentPositionMs = exoPlayer.currentPosition
                 if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) {
                     durationMs = exoPlayer.duration
                 }
             }
             isPlaying = exoPlayer.isPlaying
-            delay(400)
+            delay(250)
         }
     }
 
@@ -688,6 +690,7 @@ fun BuiltInPlayerSheet(
                     onValueChangeFinished = {
                         exoPlayer.seekTo(scrubPositionMs)
                         currentPositionMs = scrubPositionMs
+                        lastSeekTimestamp = System.currentTimeMillis()
                         isScrubbing = false
                     },
                     modifier = Modifier
@@ -718,40 +721,45 @@ fun BuiltInPlayerSheet(
                     if (!isAudio) {
                         IconButton(
                             onClick = { onFullscreenChange?.invoke(!isFullscreen) },
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier
+                                .size(28.dp)
+                                .bouncyClick { onFullscreenChange?.invoke(!isFullscreen) }
                         ) {
                             Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = TextCrisp, modifier = Modifier.size(22.dp))
                         }
                     }
                 }
 
-                // Dedicated Playback Control Row (-10s, Play/Pause, +10s)
+                // Dedicated Playback Control Row (-10s, Play/Pause, +10s) with Spring Tactile Physics
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = {
-                            val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
-                            exoPlayer.seekTo(target)
-                            currentPositionMs = target
-                        },
-                        modifier = Modifier.size(46.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .bouncyClick {
+                                val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
+                                exoPlayer.seekTo(target)
+                                currentPositionMs = target
+                                lastSeekTimestamp = System.currentTimeMillis()
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s", tint = TextCrisp, modifier = Modifier.size(30.dp))
                     }
 
-                    Spacer(modifier = Modifier.width(20.dp))
+                    Spacer(modifier = Modifier.width(22.dp))
 
-                    Surface(
-                        shape = CircleShape,
-                        color = TextCrisp,
-                        shadowElevation = 6.dp,
+                    Box(
                         modifier = Modifier
-                            .size(54.dp)
-                            .clickable {
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(TextCrisp)
+                            .bouncyClick(scaleDown = 0.90f) {
                                 if (isPlaying) {
                                     exoPlayer.pause()
                                     isPlaying = false
@@ -759,28 +767,31 @@ fun BuiltInPlayerSheet(
                                     exoPlayer.play()
                                     isPlaying = true
                                 }
-                            }
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                tint = CanvasDark,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = CanvasDark,
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
 
-                    Spacer(modifier = Modifier.width(20.dp))
+                    Spacer(modifier = Modifier.width(22.dp))
 
-                    IconButton(
-                        onClick = {
-                            val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
-                            val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
-                            exoPlayer.seekTo(target)
-                            currentPositionMs = target
-                        },
-                        modifier = Modifier.size(46.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .bouncyClick {
+                                val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
+                                val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
+                                exoPlayer.seekTo(target)
+                                currentPositionMs = target
+                                lastSeekTimestamp = System.currentTimeMillis()
+                            },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = TextCrisp, modifier = Modifier.size(30.dp))
                     }
@@ -796,22 +807,25 @@ fun BuiltInPlayerSheet(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 1. Speed Selector Button
-                    Surface(
-                        onClick = { showSpeedSheet = true },
-                        shape = RoundedCornerShape(10.dp),
-                        color = SurfaceElevated,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-                        modifier = Modifier.weight(1f).height(42.dp)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SurfaceElevated)
+                            .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
+                            .bouncyClick { showSpeedSheet = true },
+                        contentAlignment = Alignment.Center
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp)
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
                         ) {
-                            Icon(Icons.Default.Speed, contentDescription = "Speed", tint = TextCrisp, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Speed, contentDescription = "Speed", tint = TextCrisp, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Speed: ${currentSpeed}x",
+                                text = "${currentSpeed}x",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextCrisp
@@ -830,22 +844,25 @@ fun BuiltInPlayerSheet(
                             currentQuality.contains("360") -> "360p"
                             else -> if (currentQuality.isNotBlank()) currentQuality else "Auto"
                         }
-                        Surface(
-                            onClick = { showQualitySheet = true },
-                            shape = RoundedCornerShape(10.dp),
-                            color = SurfaceElevated,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-                            modifier = Modifier.weight(1.15f).height(42.dp)
+                        Box(
+                            modifier = Modifier
+                                .weight(1.1f)
+                                .height(42.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(SurfaceElevated)
+                                .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
+                                .bouncyClick { showQualitySheet = true },
+                            contentAlignment = Alignment.Center
                         ) {
                             Row(
                                 horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp)
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
                             ) {
-                                Icon(Icons.Default.Settings, contentDescription = "Quality", tint = TextCrisp, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Settings, contentDescription = "Quality", tint = TextCrisp, modifier = Modifier.size(15.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Qual: $activeQualLabel",
+                                    text = activeQualLabel,
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = TextCrisp,
@@ -865,19 +882,22 @@ fun BuiltInPlayerSheet(
                             else -> currentAudioTrack.take(8)
                         }
                     } else "Audio"
-                    Surface(
-                        onClick = { showAudioTrackSheet = true },
-                        shape = RoundedCornerShape(10.dp),
-                        color = SurfaceElevated,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-                        modifier = Modifier.weight(1f).height(42.dp)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SurfaceElevated)
+                            .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
+                            .bouncyClick { showAudioTrackSheet = true },
+                        contentAlignment = Alignment.Center
                     ) {
                         Row(
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp)
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
                         ) {
-                            Icon(Icons.Default.Audiotrack, contentDescription = "Audio", tint = TextCrisp, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Audiotrack, contentDescription = "Audio", tint = TextCrisp, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = activeAudioLabel,

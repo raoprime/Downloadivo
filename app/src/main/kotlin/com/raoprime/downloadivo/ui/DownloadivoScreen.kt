@@ -70,11 +70,16 @@ import com.raoprime.downloadivo.model.DownloadStatus
 import com.raoprime.downloadivo.model.DownloadTask
 import com.raoprime.downloadivo.model.FormatOption
 import com.raoprime.downloadivo.model.MediaInfo
+import com.raoprime.downloadivo.model.AppUpdateInfo
 import com.raoprime.downloadivo.network.DownloadEngine
+import com.raoprime.downloadivo.network.UpdateManager
+import com.raoprime.downloadivo.network.UpdateState
 import com.raoprime.downloadivo.service.DownloadService
+import com.raoprime.downloadivo.ui.dialog.UpdateDialog
 import com.raoprime.downloadivo.ui.player.BuiltInPlayerSheet
 import com.raoprime.downloadivo.ui.player.YouTubeFloatingMiniplayer
 import com.raoprime.downloadivo.ui.theme.*
+import com.raoprime.downloadivo.BuildConfig
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -108,6 +113,20 @@ fun DownloadivoScreen(
     var isResolving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isCustomizeExpanded by remember { mutableStateOf(false) }
+
+    // In-App Update System State
+    var activeUpdateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
+    // Automatic silent check for in-app updates on startup
+    LaunchedEffect(Unit) {
+        delay(1200) // Brief grace period for smooth startup
+        val update = UpdateManager.checkForUpdates(BuildConfig.VERSION_CODE)
+        if (update != null) {
+            activeUpdateInfo = update
+            showUpdateDialog = true
+        }
+    }
 
     // Built-in Player State (YouTube-Grade Player with Multi-Language Audio & Floating Miniplayer)
     var activePlaybackUri by remember { mutableStateOf<String?>(null) }
@@ -437,11 +456,7 @@ fun DownloadivoScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable(
-                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        HapticUtil.lightClick(context)
+                                    .bouncyClick(scaleDown = 0.92f) {
                                         currentTab = tab
                                     }
                                     .padding(vertical = 4.dp),
@@ -519,13 +534,21 @@ fun DownloadivoScreen(
             AnimatedContent(
                 targetState = currentTab,
                 transitionSpec = {
-                    if (targetState.ordinal > initialState.ordinal) {
-                        (slideInHorizontally(animationSpec = tween(240, easing = FastOutSlowInEasing)) { width -> (width * 0.25f).toInt() } + fadeIn(tween(240)))
-                            .togetherWith(slideOutHorizontally(animationSpec = tween(200, easing = FastOutSlowInEasing)) { width -> (-width * 0.25f).toInt() } + fadeOut(tween(200)))
-                    } else {
-                        (slideInHorizontally(animationSpec = tween(240, easing = FastOutSlowInEasing)) { width -> (-width * 0.25f).toInt() } + fadeIn(tween(240)))
-                            .togetherWith(slideOutHorizontally(animationSpec = tween(200, easing = FastOutSlowInEasing)) { width -> (width * 0.25f).toInt() } + fadeOut(tween(200)))
-                    }
+                    val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (slideInHorizontally(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ) { width -> direction * (width * 0.28f).toInt() } + fadeIn(tween(200)))
+                    .togetherWith(
+                        slideOutHorizontally(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            )
+                        ) { width -> -direction * (width * 0.28f).toInt() } + fadeOut(tween(180))
+                    )
                 },
                 label = "tab_navigation_sliding"
             ) { targetTab ->
@@ -670,7 +693,13 @@ fun DownloadivoScreen(
                         onNavigateHome = { currentTab = AppTab.HOME }
                     )
 
-                    AppTab.SETTINGS -> SettingsTab(onShowIntro = onShowIntro)
+                    AppTab.SETTINGS -> SettingsTab(
+                        onShowIntro = onShowIntro,
+                        onShowUpdateDialog = { update ->
+                            activeUpdateInfo = update
+                            showUpdateDialog = true
+                        }
+                    )
                 }
             }
 
@@ -1026,6 +1055,14 @@ fun DownloadivoScreen(
                     )
                 }
             }
+        }
+
+        // In-App Update Dialog Modal
+        if (showUpdateDialog && activeUpdateInfo != null) {
+            UpdateDialog(
+                updateInfo = activeUpdateInfo!!,
+                onDismiss = { showUpdateDialog = false }
+            )
         }
     }
 }
@@ -2854,21 +2891,17 @@ private fun LibraryTab(
                     Triple("Audio", "Audio ($audioCount)", Icons.Default.MusicNote)
                 ).forEach { (key, label, icon) ->
                     val isSelected = filterType == key
-                    Surface(
-                        onClick = {
-                            HapticUtil.lightClick(context)
-                            filterType = key
-                        },
-                        shape = RoundedCornerShape(20.dp),
-                        color = if (isSelected) TextCrisp else SurfaceElevated,
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (isSelected) TextCrisp else CardBorderDark
-                        )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isSelected) TextCrisp else SurfaceElevated)
+                            .border(1.dp, if (isSelected) TextCrisp else CardBorderDark, RoundedCornerShape(20.dp))
+                            .bouncyClick { filterType = key },
+                        contentAlignment = Alignment.Center
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
                         ) {
                             Icon(
                                 imageVector = icon,
@@ -3079,22 +3112,21 @@ private fun LibraryTab(
 
                             // Right Action: Quick Play Circle Button + Menu
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = SurfaceElevated,
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                                Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .clickable { onPlay(task) }
+                                        .clip(CircleShape)
+                                        .background(SurfaceElevated)
+                                        .border(1.dp, BorderSubtle, CircleShape)
+                                        .bouncyClick { onPlay(task) },
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            Icons.Default.PlayArrow,
-                                            contentDescription = "Play",
-                                            tint = TextCrisp,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = "Play",
+                                        tint = TextCrisp,
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
 
                                 Box {
@@ -3158,9 +3190,15 @@ private fun LibraryTab(
 // TAB 4: REDESIGNED SETTINGS TAB (CLEAN SECTIONS, ZERO DUPLICATE TITLE)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
-private fun SettingsTab(onShowIntro: (() -> Unit)? = null) {
+private fun SettingsTab(
+    onShowIntro: (() -> Unit)? = null,
+    onShowUpdateDialog: (AppUpdateInfo) -> Unit = {}
+) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val updateState by UpdateManager.updateState.collectAsState()
+    var isCheckingUpdate by remember { mutableStateOf(false) }
 
     var backendUrlInput by remember { mutableStateOf(DownloadEngine.activeBaseUrl) }
     var testStatus by remember { mutableStateOf<String?>(null) }
@@ -3294,23 +3332,87 @@ private fun SettingsTab(onShowIntro: (() -> Unit)? = null) {
 
                 HorizontalDivider(color = BorderHairline)
 
-                // App version & branding
-                Row(
+                // App version & In-App Update System
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column {
-                        Text("Downloadivo Mobile", style = Typography.titleSmall, color = TextCrisp)
-                        Text("v5.0.0 Pro Edition (Ultra-Fast, Lag-Free & High Performance)", style = Typography.bodySmall, color = TextSecondary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                painter = painterResource(id = R.drawable.app_icon_white),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Downloadivo Mobile", style = Typography.titleMedium, color = TextCrisp, fontWeight = FontWeight.Bold)
+                                Text("v${BuildConfig.VERSION_NAME} • Build ${BuildConfig.VERSION_CODE}", style = Typography.bodySmall, color = TextSecondary)
+                            }
+                        }
+
+                        // Version Status Badge
+                        val isUpdateAvail = updateState is UpdateState.Available
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isUpdateAvail) TextCrisp else SurfaceElevated)
+                                .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (isUpdateAvail) "Update Ready" else "Up to date",
+                                color = if (isUpdateAvail) CanvasDark else TextCrisp,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
-                    Image(
-                        painter = painterResource(id = R.drawable.app_icon_white),
-                        contentDescription = null,
+
+                    // Check for Updates Button with Spring Bounce & Tactile Haptic
+                    Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SurfaceElevated)
+                            .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+                            .bouncyClick(enabled = !isCheckingUpdate) {
+                                isCheckingUpdate = true
+                                coroutineScope.launch {
+                                    val update = UpdateManager.checkForUpdates(BuildConfig.VERSION_CODE)
+                                    isCheckingUpdate = false
+                                    if (update != null) {
+                                        onShowUpdateDialog(update)
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Downloadivo is up to date (v${BuildConfig.VERSION_NAME})", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isCheckingUpdate) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = TextCrisp,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Checking for updates...", color = TextCrisp, style = Typography.labelMedium)
+                            } else {
+                                Icon(Icons.Default.Sync, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Check for Updates", color = TextCrisp, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
         }

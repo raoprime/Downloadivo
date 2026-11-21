@@ -11,8 +11,8 @@ android {
     applicationId = "com.raoprime.downloadivo"
     minSdk = 26
     targetSdk = 36
-    versionCode = 19
-    versionName = "5.3.1"
+    versionCode = 20
+    versionName = "5.3.2"
   }
 
   buildTypes {
@@ -30,7 +30,7 @@ android {
   buildFeatures {
     compose = true
     aidl = false
-    buildConfig = false
+    buildConfig = true
     shaders = false
   }
 
