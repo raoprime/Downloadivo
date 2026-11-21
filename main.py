@@ -333,7 +333,7 @@ def _cleanup_old_files_daemon():
 _cleaner_thread = threading.Thread(target=_cleanup_old_files_daemon, daemon=True, name="storage_cleaner")
 _cleaner_thread.start()
 
-app = FastAPI(title="Downloadivo Multi-Engine", version="5.1.0")
+app = FastAPI(title="Downloadivo Multi-Engine", version="5.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -868,15 +868,29 @@ def _download_instagram(task_id: str, url: str, fmt: str):
 # ──────────────────────────────────────────────────────────────
 def _download_spotify(task_id: str, url: str, fmt: str):
     downloads[task_id].update({"status": "downloading", "progress": 15, "speed": "Spotify Engine", "eta": ""})
+    clean_url = re.sub(r"\?.*$", "", url.strip())
+    track_title = "Spotify Song"
+    thumb = ""
     try:
-        req = urllib.request.Request(f"https://open.spotify.com/oembed?url={url}", headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        encoded_url = urllib.parse.quote(clean_url, safe=":/")
+        req = urllib.request.Request(f"https://open.spotify.com/oembed?url={encoded_url}", headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
             sdata = json.loads(resp.read().decode())
             track_title = sdata.get("title") or "Spotify Song"
             thumb = sdata.get("thumbnail_url") or ""
     except Exception:
-        track_title = "Spotify Song"
-        thumb = ""
+        try:
+            req2 = urllib.request.Request(clean_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+            with urllib.request.urlopen(req2, timeout=6) as r2:
+                html = r2.read().decode(errors="ignore")
+                m = re.search(r'<meta property="og:title" content="([^"]+)"', html)
+                if m:
+                    track_title = m.group(1)
+                m_img = re.search(r'<meta property="og:image" content="([^"]+)"', html)
+                if m_img:
+                    thumb = m_img.group(1)
+        except Exception:
+            pass
 
     if fmt == "thumbnail" and thumb:
         safe_name = _clean_filename(track_title)
@@ -1825,7 +1839,7 @@ def health_check():
     return {
         "status": "healthy",
         "service": "Downloadivo",
-        "version": "5.1.0",
+        "version": "5.2.0",
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -1836,19 +1850,18 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 510,
-        "version_name": "5.1",
+        "version_code": 520,
+        "version_name": "5.2",
         "min_version_code": 10,
         "apk_url": apk_url,
         "changelog": (
-            "- Downloadivo v5.1 Update\n"
-            "- Fullscreen Immersive Mode: Status bar (battery, time) & nav bar hidden for true edge-to-edge view\n"
-            "- Back Navigation: Dedicated Back button in Fullscreen overlay\n"
-            "- Next & Previous Controls: SkipNext and SkipPrevious in both Fullscreen & Normal player\n"
-            "- Playlist Auto-Play: Automatic transition to next video in Library upon completion\n"
-            "- Dynamic Aspect Ratio: Auto-syncs to 9:16 vertical reels & 16:9 wide\n"
-            "- Audio Mode: Real album art thumbnail with animated spinning music badge\n"
-            "- Lock Screen & Notification: Persistent media playback controls & artwork"
+            "- Downloadivo v5.2 Update\n"
+            "- Gemini Liquid Glow: Ethereal low-opacity liquid ambient gradient on Home screen\n"
+            "- Ultra-Fast Player: Instant playback for short videos/reels & zero-lag buffering\n"
+            "- Seamless Auto-Play: Next video in Library plays automatically on completion\n"
+            "- Spotify Pro Support: Fast track metadata & 320kbps audio pipeline\n"
+            "- Simple Navigation Switch: Clean, lightweight tab transition animation\n"
+            "- Library Empty State Fix: High-contrast legible text & crisp action button"
         ),
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
@@ -1857,6 +1870,7 @@ def get_app_version():
 
 @app.api_route("/downloadivo.apk", methods=["GET", "HEAD"])
 @app.api_route("/api/downloadivo.apk", methods=["GET", "HEAD"])
+@app.api_route("/downloadivo-v5.2.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v5.1.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v5.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v4.0.apk", methods=["GET", "HEAD"])
@@ -1866,21 +1880,24 @@ def get_app_version():
 @app.api_route("/downloadivo-v5.0.0.apk", methods=["GET", "HEAD"])
 def download_app_apk():
     apk_paths = [
+        ASSETS_DIR / "downloadivo-v5.2.apk",
         ASSETS_DIR / "downloadivo.apk",
+        ASSETS_DIR / "downloadivo-v5.1.apk",
+        ASSETS_DIR / "downloadivo-v5.0.apk",
         ASSETS_DIR / "downloadivo-v4.0.apk",
         ASSETS_DIR / "downloadivo-v3.0.apk",
         ASSETS_DIR / "downloadivo-v2.0.apk",
         ASSETS_DIR / "downloadivo-v1.0.apk",
         Path(__file__).parent / "assets" / "downloadivo.apk",
         Path(__file__).parent / "downloadivo.apk",
-        Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\downloadivo-v3.0.apk"),
+        Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\downloadivo-v5.2.apk"),
         Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\downloadivo.apk"),
     ]
     for p in apk_paths:
         if p.exists() and p.stat().st_size > 1000000:
             return FileResponse(
                 path=str(p),
-                filename="Downloadivo-v4.0.apk",
+                filename="Downloadivo-v5.2.apk",
                 media_type="application/vnd.android.package-archive"
             )
     raise HTTPException(status_code=404, detail="APK build in progress")
@@ -2145,20 +2162,41 @@ async def get_info(request: Request, url: Optional[str] = None):
 
     # 2. Spotify fast inspector
     if "spotify.com" in url_lower:
+        clean_sp_url = re.sub(r"\?.*$", "", url.strip())
+        sp_title = "Spotify Song"
+        sp_thumb = ""
+        sp_uploader = "Spotify"
         try:
-            req_sp = urllib.request.Request(f"https://open.spotify.com/oembed?url={url}", headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req_sp, timeout=4) as resp:
+            encoded_sp = urllib.parse.quote(clean_sp_url, safe=":/")
+            req_sp = urllib.request.Request(f"https://open.spotify.com/oembed?url={encoded_sp}", headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req_sp, timeout=5) as resp:
                 sdata = json.loads(resp.read().decode())
-                return {
-                    "title": sdata.get("title") or "Spotify Song",
-                    "thumbnail": sdata.get("thumbnail_url") or "",
-                    "duration": "Track",
-                    "uploader": sdata.get("author_name") or "Spotify",
-                    "extractor": "Spotify",
-                    "resolutions": [],
-                }
+                sp_title = sdata.get("title") or "Spotify Song"
+                sp_thumb = sdata.get("thumbnail_url") or ""
+                sp_uploader = sdata.get("author_name") or "Spotify"
         except Exception:
-            pass
+            try:
+                req_sp2 = urllib.request.Request(clean_sp_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+                with urllib.request.urlopen(req_sp2, timeout=5) as r_sp2:
+                    sp_html = r_sp2.read().decode(errors="ignore")
+                    m = re.search(r'<meta property="og:title" content="([^"]+)"', sp_html)
+                    if m:
+                        sp_title = m.group(1)
+                    m_img = re.search(r'<meta property="og:image" content="([^"]+)"', sp_html)
+                    if m_img:
+                        sp_thumb = m_img.group(1)
+            except Exception:
+                pass
+
+        return {
+            "title": sp_title,
+            "thumbnail": sp_thumb,
+            "duration": "Track",
+            "uploader": sp_uploader,
+            "extractor": "Spotify",
+            "is_audio": True,
+            "resolutions": ["320kbps MP3", "192kbps MP3", "128kbps M4A"],
+        }
 
     # 3. Standard yt-dlp inspector
     try:

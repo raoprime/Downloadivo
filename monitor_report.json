@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-11-22T02:40:23.005619",
+  "timestamp": "2026-11-22T03:11:18.462859",
   "interior": {
     "backend_port_8899": "HEALTHY",
     "in_app_version_api": "HEALTHY",
     "version_data": {
-      "version_code": 500,
-      "version_name": "5.0",
+      "version_code": 520,
+      "version_name": "5.2",
       "min_version_code": 10,
       "apk_url": "https://mazda-prints-equity-albuquerque.trycloudflare.com/downloadivo.apk",
-      "changelog": "- Downloadivo v5.0 Major Release\n- Dynamic Video Player: Auto-syncs to 9:16 reels/shorts & 16:9 wide\n- Audio Mode: Real album artwork thumbnail with animated spinning music badge\n- Lock Screen & Notification: Persistent media playback controls & artwork\n- Multi-Platform Support: YouTube, Instagram, Facebook, TikTok, X, Spotify, Reddit, Pinterest, Threads\n- Playback Isolation: Unsupported links rejected cleanly without interrupting playback\n- Player Reliability: Instant library item switching & safe non-exit dismissal\n- Android Media Player: Native file association for video and audio",
+      "changelog": "- Downloadivo v5.2 Update\n- Gemini Liquid Glow: Ethereal low-opacity liquid ambient gradient on Home screen\n- Ultra-Fast Player: Instant playback for short videos/reels & zero-lag buffering\n- Seamless Auto-Play: Next video in Library plays automatically on completion\n- Spotify Pro Support: Fast track metadata & 320kbps audio pipeline\n- Simple Navigation Switch: Clean, lightweight tab transition animation\n- Library Empty State Fix: High-contrast legible text & crisp action button",
       "force_update": false,
       "release_date": "2026-11-22"
     }
@@ -21,17 +21,17 @@
   "speed_benchmark": {
     "concurrent_streams": 3,
     "individual_speeds_mb_s": [
-      1.49,
-      1.26,
-      1.35
+      1.47,
+      1.46,
+      1.29
     ],
-    "aggregate_throughput_mb_s": 4.1,
+    "aggregate_throughput_mb_s": 4.22,
     "status": "PASS"
   },
   "platform_support": {
     "YouTube_Video": {
       "status": "SUCCESS",
-      "latency_sec": 0.01,
+      "latency_sec": 0.0,
       "code": 200
     },
     "YouTube_Shorts": {
@@ -41,31 +41,31 @@
     },
     "TikTok": {
       "status": "FAILED",
-      "latency_sec": 0.63,
+      "latency_sec": 0.44,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "Twitter_X": {
       "status": "FAILED",
-      "latency_sec": 1.0,
+      "latency_sec": 1.03,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "Reddit": {
       "status": "FAILED",
-      "latency_sec": 1.12,
+      "latency_sec": 1.19,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "Vimeo": {
       "status": "FAILED",
-      "latency_sec": 0.65,
+      "latency_sec": 1.54,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "SoundCloud": {
       "status": "FAILED",
-      "latency_sec": 0.44,
+      "latency_sec": 0.38,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     }
