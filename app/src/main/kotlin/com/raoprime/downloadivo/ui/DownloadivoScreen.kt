@@ -53,6 +53,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -1133,37 +1135,37 @@ private fun HomeDownloaderTab(
     }
 
     if (resolvedInfo == null && !isResolving) {
+        val restingScrollState = rememberScrollState()
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .imePadding()
-                .padding(horizontal = 20.dp),
+                .verticalScroll(restingScrollState),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = (-36).dp),
+                    .padding(horizontal = 20.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // ═══════════════════════════════════════════════════════════════
-                // 1. CENTER-TOP HERO BRAND EMBLEM (ENLARGED & PROMINENT)
+                // 1. BRAND EMBLEM & INPUT FIELD UNIFIED CONTROL GROUP
                 // ═══════════════════════════════════════════════════════════════
                 Image(
                     painter = painterResource(id = R.drawable.app_logo_white),
                     contentDescription = "Downloadivo",
                     modifier = Modifier
-                        .height(64.dp)
-                        .fillMaxWidth(0.85f),
+                        .height(36.dp)
+                        .fillMaxWidth(0.62f),
                     contentScale = ContentScale.Fit
                 )
 
-                Spacer(modifier = Modifier.height(32.dp))
+                // 24–32 dp visible space between artwork and field (zero transparent padding)
+                Spacer(modifier = Modifier.height(28.dp))
 
-                // ═══════════════════════════════════════════════════════════════
-                // 2. CONTEXTUAL CLIPBOARD PILL (FLOATS ABOVE INPUT IF DETECTED)
-                // ═══════════════════════════════════════════════════════════════
+                // Contextual Clipboard Pill (floats above input if detected)
                 if (!clipboardUrl.isNullOrBlank() && clipboardUrl != inputUrl) {
                     Surface(
                         shape = RoundedCornerShape(14.dp),
@@ -1228,22 +1230,23 @@ private fun HomeDownloaderTab(
                 }
 
                 // ═══════════════════════════════════════════════════════════════
-                // 3. SCULPTED LUXURY INPUT CAPSULE (60dp, SLIGHTLY BELOW CENTER)
+                // REFINED LINK FIELD & PASTE BUTTON (SINGLE CONTROL GROUP)
                 // ═══════════════════════════════════════════════════════════════
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = SurfaceDark,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(60.dp)
+                        .defaultMinSize(minHeight = 56.dp)
                 ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 14.dp),
+                            .fillMaxWidth()
+                            .padding(start = 14.dp, top = 6.dp, end = 6.dp, bottom = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Leading Link Icon or Platform Tag
                         if (detectedPlatform != null) {
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
@@ -1252,29 +1255,30 @@ private fun HomeDownloaderTab(
                             ) {
                                 Text(
                                     text = detectedPlatform,
-                                    style = Typography.labelSmall,
+                                    style = Typography.labelSmall.copy(fontSize = 11.sp),
                                     fontWeight = FontWeight.Bold,
                                     color = TextCrisp,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp)
                                 )
                             }
                         } else {
                             Icon(
-                                Icons.Default.Link,
+                                imageVector = Icons.Default.Link,
                                 contentDescription = null,
                                 tint = TextTertiary,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .padding(end = 4.dp)
+                                modifier = Modifier.size(19.dp)
                             )
+                            Spacer(modifier = Modifier.width(10.dp))
                         }
 
+                        // Dedicated Editable Link Field (weight = 1f ensures zero overlap with button)
                         BasicTextField(
                             value = inputUrl,
                             onValueChange = onUrlChange,
                             modifier = Modifier.weight(1f),
-                            textStyle = Typography.bodyLarge.copy(color = TextCrisp),
+                            textStyle = Typography.bodyLarge.copy(color = TextCrisp, fontSize = 15.sp),
                             singleLine = true,
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(TextCrisp),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                             keyboardActions = KeyboardActions(
                                 onSearch = {
@@ -1284,48 +1288,77 @@ private fun HomeDownloaderTab(
                                 }
                             ),
                             decorationBox = { innerTextField ->
-                                if (inputUrl.isEmpty()) {
-                                    Text(
-                                        "Video or audio link",
-                                        style = Typography.bodyLarge,
-                                        color = TextSecondary
-                                    )
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (inputUrl.isEmpty()) {
+                                        Text(
+                                            text = "Video or audio link",
+                                            style = Typography.bodyLarge.copy(fontSize = 15.sp),
+                                            color = TextSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.semantics {
+                                                contentDescription = "Video or audio link"
+                                            }
+                                        )
+                                    }
+                                    innerTextField()
                                 }
-                                innerTextField()
                             }
                         )
 
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Separate Width Action Slot (Paste Button or Clear / Submit)
                         if (inputUrl.isNotBlank()) {
-                            IconButton(
-                                onClick = {
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                    onClear()
-                                },
-                                modifier = Modifier.size(32.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextTertiary, modifier = Modifier.size(18.dp))
-                            }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Button(
-                                onClick = {
-                                    HapticUtil.mediumClick(context)
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                    if (inputUrl.startsWith("http")) onInspect(inputUrl)
-                                },
-                                shape = CircleShape,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = TextCrisp,
-                                    contentColor = CanvasDark
-                                ),
-                                contentPadding = PaddingValues(0.dp),
-                                modifier = Modifier.size(38.dp)
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Inspect", tint = CanvasDark, modifier = Modifier.size(18.dp))
+                                IconButton(
+                                    onClick = {
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                        onClear()
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Clear link",
+                                        tint = TextTertiary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+
+                                Surface(
+                                    onClick = {
+                                        HapticUtil.mediumClick(context)
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                        if (inputUrl.startsWith("http")) onInspect(inputUrl)
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = TextCrisp,
+                                    modifier = Modifier
+                                        .height(40.dp)
+                                        .width(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowForward,
+                                            contentDescription = "Submit link",
+                                            tint = CanvasDark,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
                             }
                         } else {
-                            Button(
+                            // Quieter Inner Button Border & Legible Vertically Aligned "Paste"
+                            Surface(
                                 onClick = {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     val clip = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
@@ -1340,83 +1373,103 @@ private fun HomeDownloaderTab(
                                         Toast.makeText(context, "No link in clipboard", Toast.LENGTH_SHORT).show()
                                     }
                                 },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = SurfaceElevated,
-                                    contentColor = TextCrisp
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.height(34.dp)
+                                shape = RoundedCornerShape(10.dp),
+                                color = SurfaceElevated,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF26262C)),
+                                modifier = Modifier.defaultMinSize(minHeight = 40.dp)
                             ) {
-                                Icon(Icons.Default.ContentPaste, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Paste", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = TextCrisp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentPaste,
+                                        contentDescription = null,
+                                        tint = TextCrisp,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Paste",
+                                        style = Typography.labelMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = 13.sp
+                                        ),
+                                        color = TextCrisp
+                                    )
+                                }
                             }
                         }
                     }
                 }
 
                 // Quick Action Buttons directly beneath center input when a link is pasted or typed
-                if (inputUrl.isNotBlank() && (inputUrl.startsWith("http://") || inputUrl.startsWith("https://"))) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                HapticUtil.mediumClick(context)
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                onInspect(inputUrl)
-                            },
-                            modifier = Modifier.weight(1f).height(46.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = TextCrisp,
-                                contentColor = CanvasDark
-                            ),
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                AnimatedVisibility(
+                    visible = inputUrl.isNotBlank() && (inputUrl.startsWith("http://") || inputUrl.startsWith("https://")),
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Column {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                "Download Video",
-                                style = Typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = CanvasDark,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                            Button(
+                                onClick = {
+                                    HapticUtil.mediumClick(context)
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    onInspect(inputUrl)
+                                },
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TextCrisp,
+                                    contentColor = CanvasDark
+                                ),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    "Download Video",
+                                    style = Typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CanvasDark,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
 
-                        Button(
-                            onClick = {
-                                HapticUtil.mediumClick(context)
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                onInstantDownload(inputUrl, "mp3")
-                            },
-                            modifier = Modifier.weight(1f).height(46.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = SurfaceElevated,
-                                contentColor = TextCrisp
-                            ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
-                        ) {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(17.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                "Audio MP3",
-                                style = Typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextCrisp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Button(
+                                onClick = {
+                                    HapticUtil.mediumClick(context)
+                                    keyboardController?.hide()
+                                    focusManager.clearFocus()
+                                    onInstantDownload(inputUrl, "mp3")
+                                },
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceElevated,
+                                    contentColor = TextCrisp
+                                ),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
+                            ) {
+                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    "Audio MP3",
+                                    style = Typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
