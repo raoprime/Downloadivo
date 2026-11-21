@@ -19,10 +19,10 @@ import java.util.concurrent.TimeUnit
 object DownloadEngine {
 
     // Default Edge Cloud Endpoint (Can be overridden in Settings)
-    var activeBaseUrl: String = "https://police-urge-prefix-journal.trycloudflare.com"
+    var activeBaseUrl: String = "https://mazda-prints-equity-albuquerque.trycloudflare.com"
 
     // High-Speed Direct Tunnel Endpoint
-    var directStreamBaseUrl: String = "https://police-urge-prefix-journal.trycloudflare.com"
+    var directStreamBaseUrl: String = "https://mazda-prints-equity-albuquerque.trycloudflare.com"
 
     private val apiClient = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
@@ -56,9 +56,39 @@ object DownloadEngine {
         val list = mutableListOf<String>()
         if (directStreamBaseUrl.isNotBlank()) list.add(directStreamBaseUrl.trim().trimEnd('/'))
         if (activeBaseUrl.isNotBlank()) list.add(activeBaseUrl.trim().trimEnd('/'))
-        list.add("https://police-urge-prefix-journal.trycloudflare.com")
+        list.add("https://mazda-prints-equity-albuquerque.trycloudflare.com")
         list.add("https://downloadivo.vercel.app")
         return list.filter { it.startsWith("http") }.distinct()
+    }
+
+    suspend fun syncLatestTunnelUrl(): Unit = withContext(Dispatchers.IO) {
+        try {
+            val req = Request.Builder()
+                .url("https://raw.githubusercontent.com/raoprime/Downloadivo/main/tunnel_url.txt")
+                .header("Cache-Control", "no-cache")
+                .get()
+                .build()
+            val resp = apiClient.newCall(req).execute()
+            if (resp.isSuccessful) {
+                val url = resp.body?.string()?.trim()
+                resp.close()
+                if (!url.isNullOrBlank() && url.startsWith("https://") && url.contains("trycloudflare.com")) {
+                    try {
+                        val healthReq = Request.Builder().url("$url/health").get().build()
+                        val healthResp = apiClient.newCall(healthReq).execute()
+                        if (healthResp.isSuccessful) {
+                            activeBaseUrl = url
+                            directStreamBaseUrl = url
+                        }
+                        healthResp.close()
+                    } catch (_: Exception) {
+                        // Stale tunnel rejected; keep fallback
+                    }
+                }
+            } else {
+                resp.close()
+            }
+        } catch (_: Exception) {}
     }
 
     suspend fun fetchMediaInfo(targetUrl: String): Result<MediaInfo> = withContext(Dispatchers.IO) {

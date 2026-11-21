@@ -1051,6 +1051,19 @@ private fun HomeDownloaderTab(
         }
     }
 
+    // Auto-inspect when a valid URL is entered or pasted into inputUrl
+    LaunchedEffect(inputUrl) {
+        val trimmed = inputUrl.trim()
+        if ((trimmed.startsWith("http://") || trimmed.startsWith("https://")) && trimmed.contains(".") && trimmed.length > 10) {
+            if (resolvedInfo == null && !isResolving) {
+                kotlinx.coroutines.delay(650)
+                if (inputUrl.trim() == trimmed && resolvedInfo == null && !isResolving) {
+                    onInspect(trimmed)
+                }
+            }
+        }
+    }
+
     if (resolvedInfo == null && !isResolving) {
         Box(
             modifier = Modifier
@@ -1275,6 +1288,54 @@ private fun HomeDownloaderTab(
                         }
                     }
                 }
+
+                // Quick Action Buttons directly beneath center input when a link is pasted or typed
+                if (inputUrl.isNotBlank() && (inputUrl.startsWith("http://") || inputUrl.startsWith("https://"))) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                HapticUtil.mediumClick(context)
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                onInspect(inputUrl)
+                            },
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TextCrisp,
+                                contentColor = CanvasDark
+                            )
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Download Video", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = CanvasDark)
+                        }
+
+                        Button(
+                            onClick = {
+                                HapticUtil.mediumClick(context)
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                onInstantDownload(inputUrl, "mp3")
+                            },
+                            modifier = Modifier.weight(1f).height(46.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SurfaceElevated,
+                                contentColor = TextCrisp
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                        ) {
+                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Audio MP3", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = TextCrisp)
+                        }
+                    }
+                }
             }
         }
     } else {
@@ -1348,6 +1409,24 @@ private fun HomeDownloaderTab(
                             modifier = Modifier.size(28.dp)
                         ) {
                             Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextTertiary, modifier = Modifier.size(16.dp))
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Button(
+                            onClick = {
+                                HapticUtil.mediumClick(context)
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                if (inputUrl.startsWith("http")) onInspect(inputUrl)
+                            },
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = TextCrisp,
+                                contentColor = CanvasDark
+                            ),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Inspect", tint = CanvasDark, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
