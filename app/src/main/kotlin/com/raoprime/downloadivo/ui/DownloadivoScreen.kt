@@ -659,7 +659,6 @@ fun DownloadivoScreen(
                         },
                         onDelete = { task ->
                             HapticUtil.lightClick(context)
-                            // Delete physical file from MediaStore
                             task.filePath?.let { uriStr ->
                                 try {
                                     val fileUri = Uri.parse(uriStr)
@@ -667,7 +666,8 @@ fun DownloadivoScreen(
                                 } catch (_: Exception) {}
                             }
                             DownloadRepository.removeTask(task.id)
-                        }
+                        },
+                        onNavigateHome = { currentTab = AppTab.HOME }
                     )
 
                     AppTab.SETTINGS -> SettingsTab(onShowIntro = onShowIntro)
@@ -2685,20 +2685,21 @@ private fun QueueTab(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 3: REDESIGNED LIBRARY TAB (16:9 THUMBNAILS, SLEEK FILTER)
+// TAB 3: YOUTUBE-GRADE STUDIO LIBRARY (CLEAN 16:9, STORAGE STATS, OUTLINES)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
 private fun LibraryTab(
     history: List<DownloadTask>,
     onPlay: (DownloadTask) -> Unit,
     onShare: (DownloadTask) -> Unit,
-    onDelete: (DownloadTask) -> Unit
+    onDelete: (DownloadTask) -> Unit,
+    onNavigateHome: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var filterType by remember { mutableStateOf("All") }
 
     // Strict Library Invariant: ONLY fully completed, on-disk media appears in Library
-    // In-progress, queued, or initializing downloads stay exclusively in the Queue tab
     val completedHistory = remember(history) {
         history.filter { it.status == DownloadStatus.SUCCESS && !it.filePath.isNullOrBlank() }
     }
@@ -2715,63 +2716,174 @@ private fun LibraryTab(
         }
     }
 
+    val totalBytes = remember(completedHistory) { completedHistory.sumOf { it.totalBytes } }
+    val videoCount = remember(completedHistory) { completedHistory.count { !it.isAudio } }
+    val audioCount = remember(completedHistory) { completedHistory.count { it.isAudio } }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
         if (completedHistory.isNotEmpty()) {
-            // Search Capsule
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search downloaded media...", style = Typography.bodyMedium, color = TextQuaternary) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(18.dp)) },
-                trailingIcon = {
-                    if (searchQuery.isNotBlank()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = TextTertiary, modifier = Modifier.size(16.dp))
+            // ── 1. STUDIO STORAGE & DOWNLOAD SUMMARY CARD ──
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(SurfaceDark)
+                                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Folder,
+                                contentDescription = null,
+                                tint = TextCrisp,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Offline Downloads",
+                                style = Typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "${completedHistory.size} items • ${formatByteSize(totalBytes)} used",
+                                style = Typography.bodySmall,
+                                color = TextSecondary
+                            )
                         }
                     }
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = TextCrisp,
-                    unfocusedBorderColor = BorderHairline,
-                    focusedTextColor = TextCrisp,
-                    unfocusedTextColor = TextCrisp,
-                    focusedContainerColor = SurfaceDark,
-                    unfocusedContainerColor = SurfaceDark
-                )
-            )
+
+                    TextButton(
+                        onClick = {
+                            HapticUtil.mediumClick(context)
+                            DownloadRepository.clearHistory()
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("Clear All", color = TextSecondary, style = Typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Filter Chips Row
+            // ── 2. SCULPTED SEARCH BAR WITH HIGH CONTRAST OUTLINE ──
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = SurfaceDark,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = TextTertiary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = 10.dp),
+                        textStyle = Typography.bodyMedium.copy(color = TextCrisp),
+                        singleLine = true,
+                        decorationBox = { innerTextField ->
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    "Search offline library...",
+                                    style = Typography.bodyMedium,
+                                    color = TextQuaternary
+                                )
+                            }
+                            innerTextField()
+                        }
+                    )
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = { searchQuery = "" },
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextTertiary, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // ── 3. FILTER CHIPS WITH ICONS & BADGE COUNTS ──
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                listOf("All", "Videos", "Audio").forEach { filter ->
-                    val isSelected = filterType == filter
+                listOf(
+                    Triple("All", "All (${completedHistory.size})", Icons.Default.Layers),
+                    Triple("Videos", "Videos ($videoCount)", Icons.Default.Videocam),
+                    Triple("Audio", "Audio ($audioCount)", Icons.Default.MusicNote)
+                ).forEach { (key, label, icon) ->
+                    val isSelected = filterType == key
                     Surface(
-                        onClick = { filterType = filter },
+                        onClick = {
+                            HapticUtil.lightClick(context)
+                            filterType = key
+                        },
                         shape = RoundedCornerShape(20.dp),
-                        color = if (isSelected) TextCrisp else SurfaceDark,
+                        color = if (isSelected) TextCrisp else SurfaceElevated,
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (isSelected) TextCrisp else BorderHairline
+                            if (isSelected) TextCrisp else CardBorderDark
                         )
                     ) {
-                        Text(
-                            text = filter,
-                            style = Typography.labelMedium,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = if (isSelected) CanvasDark else TextSecondary,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = if (isSelected) CanvasDark else TextSecondary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = label,
+                                style = Typography.labelSmall,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) CanvasDark else TextSecondary
+                            )
+                        }
                     }
                 }
             }
@@ -2786,26 +2898,63 @@ private fun LibraryTab(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.FolderOpen,
-                        contentDescription = null,
-                        tint = TextTertiary,
-                        modifier = Modifier.size(44.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = if (completedHistory.isEmpty()) "No Downloaded Media Yet" else "No matching downloads",
-                        style = Typography.titleSmall,
-                        color = TextSecondary
-                    )
-                    if (completedHistory.isEmpty()) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = SurfaceDark,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .padding(16.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(24.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(SurfaceElevated)
+                                .border(1.dp, BorderSubtle, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                tint = TextCrisp,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Completed downloads will appear here ready for offline playback.",
-                            style = Typography.bodySmall,
-                            color = TextTertiary
+                            text = if (completedHistory.isEmpty()) "Your Library is Empty" else "No Matching Media",
+                            style = Typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextCrisp
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (completedHistory.isEmpty())
+                                "Downloaded videos and audio will appear here for high-speed offline playback."
+                            else
+                                "Try searching for another keyword or switch category filters.",
+                            style = Typography.bodySmall,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                        if (completedHistory.isEmpty()) {
+                            Spacer(modifier = Modifier.height(18.dp))
+                            Button(
+                                onClick = onNavigateHome,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = TextCrisp, contentColor = CanvasDark),
+                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Download Media Now", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -2815,26 +2964,30 @@ private fun LibraryTab(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(filteredHistory, key = { it.id }) { task ->
+                    var showItemMenu by remember { mutableStateOf(false) }
+
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = SurfaceDark,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
-                        modifier = Modifier.fillMaxWidth()
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPlay(task) }
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(12.dp),
+                                .padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // 16:9 Crisp YouTube-Grade Thumbnail (Zero unwanted overlays, clear thumbnail)
+                            // 16:9 Cinema Thumbnail (Completely clear, no obstructive play icon)
                             Box(
                                 modifier = Modifier
-                                    .width(92.dp)
-                                    .height(52.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .width(104.dp)
+                                    .height(60.dp)
+                                    .clip(RoundedCornerShape(10.dp))
                                     .background(CanvasDark)
-                                    .clickable { onPlay(task) },
+                                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (task.thumbnail.isNotBlank()) {
@@ -2846,26 +2999,28 @@ private fun LibraryTab(
                                     )
                                 } else {
                                     Icon(
-                                        if (task.isAudio) Icons.Default.MusicNote else Icons.Default.Videocam,
+                                        if (task.isAudio) Icons.Default.MusicNote else Icons.Default.SmartDisplay,
                                         contentDescription = null,
-                                        tint = TextSecondary,
-                                        modifier = Modifier.size(22.dp)
+                                        tint = TextTertiary,
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
+
+                                // Bottom Right Duration Pill
                                 if (task.duration.isNotBlank()) {
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
                                         color = Color.Black.copy(alpha = 0.82f),
                                         modifier = Modifier
                                             .align(Alignment.BottomEnd)
-                                            .padding(3.dp)
+                                            .padding(4.dp)
                                     ) {
                                         Text(
                                             text = task.duration,
                                             fontSize = 9.sp,
-                                            fontWeight = FontWeight.SemiBold,
+                                            fontWeight = FontWeight.Bold,
                                             color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                         )
                                     }
                                 }
@@ -2873,57 +3028,119 @@ private fun LibraryTab(
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            Column(modifier = Modifier.weight(1f)) {
+                            // Metadata Column (Title 2 lines allowed + Format badge + Size)
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.Center
+                            ) {
                                 Text(
                                     text = task.title,
                                     style = Typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = TextCrisp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    lineHeight = 17.sp
                                 )
-                                Spacer(modifier = Modifier.height(3.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
-                                        color = SurfaceHighlight
+                                        color = if (task.isAudio) Color(0xFF2E2412) else SurfaceHighlight,
+                                        border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline)
                                     ) {
                                         Text(
                                             text = if (task.isAudio) "MP3" else "MP4",
-                                            color = TextCrisp,
-                                            style = Typography.labelSmall,
+                                            color = if (task.isAudio) Color(0xFFFFB74D) else TextCrisp,
+                                            fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
                                         )
                                     }
                                     if (task.totalBytes > 0) {
                                         Text(
                                             text = formatByteSize(task.totalBytes),
                                             style = Typography.bodySmall,
-                                            color = TextTertiary
+                                            fontSize = 11.sp,
+                                            color = TextSecondary
                                         )
                                     }
-                                    if (task.duration.isNotBlank()) {
-                                        Text(
-                                            text = "• ${task.duration}",
-                                            style = Typography.bodySmall,
-                                            color = TextTertiary
-                                        )
-                                    }
+                                    Text(
+                                        text = "• Ready",
+                                        style = Typography.bodySmall,
+                                        fontSize = 11.sp,
+                                        color = StatusSuccess
+                                    )
                                 }
                             }
 
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                IconButton(onClick = { onPlay(task) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = TextCrisp)
+                            // Right Action: Quick Play Circle Button + Menu
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = SurfaceElevated,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clickable { onPlay(task) }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Default.PlayArrow,
+                                            contentDescription = "Play",
+                                            tint = TextCrisp,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
-                                IconButton(onClick = { onShare(task) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.Share, contentDescription = "Share", tint = TextSecondary)
-                                }
-                                IconButton(onClick = { onDelete(task) }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = TextTertiary)
+
+                                Box {
+                                    IconButton(
+                                        onClick = { showItemMenu = true },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.MoreVert,
+                                            contentDescription = "More",
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showItemMenu,
+                                        onDismissRequest = { showItemMenu = false },
+                                        modifier = Modifier.background(SurfaceElevated)
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Play Media", color = TextCrisp) },
+                                            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = TextCrisp) },
+                                            onClick = {
+                                                showItemMenu = false
+                                                onPlay(task)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Share", color = TextCrisp) },
+                                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = TextCrisp) },
+                                            onClick = {
+                                                showItemMenu = false
+                                                onShare(task)
+                                            }
+                                        )
+                                        HorizontalDivider(color = BorderHairline)
+                                        DropdownMenuItem(
+                                            text = { Text("Delete", color = StatusError) },
+                                            leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = StatusError) },
+                                            onClick = {
+                                                showItemMenu = false
+                                                onDelete(task)
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
