@@ -1836,11 +1836,11 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 19,
-        "version_name": "5.3.1",
+        "version_code": 20,
+        "version_name": "5.3.2",
         "min_version_code": 10,
         "apk_url": apk_url,
-        "changelog": "✨ Full Video Resolutions Restored (1080p, 720p, 480p, 360p, 240p, 144p + accurate sizes)\n✨ Fully Redesigned Studio Library (Storage summary card, crisp outlines & metadata)\n✨ YouTube-Grade 16:9 Thumbnails (Clean duration pill, zero blocking icons)\n✨ Play Circle Button & 3-Dot Options Menu (Play, Share, Delete)\n✨ Seamless Tab Transitions & Spring-Loaded Video Player",
+        "changelog": "✨ Production In-App Update System (Auto-check, download progress & seamless install)\n✨ Tactile Spring Bounce Physics (Apple/YouTube-grade micro-interactions)\n✨ Fluid Tab Slide Physics with Directional Spring Navigation\n✨ Zero-Glitch Video Scrubbing (Eliminated seek jump-back)\n✨ Perfectly Balanced Player Quick Controls (Speed, Quality, Audio)",
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
     }
