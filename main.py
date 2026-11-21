@@ -1841,21 +1841,14 @@ def get_app_version():
         "min_version_code": 10,
         "apk_url": apk_url,
         "changelog": (
-            "• Downloadivo v5.0 Major Release
-"
-            "• Dynamic Video Player: Auto-syncs to 9:16 reels/shorts & 16:9 wide
-"
-            "• Audio Mode: Real album artwork thumbnail with animated spinning music badge
-"
-            "• Lock Screen & Notification: Persistent media playback controls & artwork
-"
-            "• Multi-Platform Support: YouTube, Instagram, Facebook, TikTok, X, Spotify, Reddit, Pinterest, Threads
-"
-            "• Playback Isolation: Unsupported links rejected cleanly without interrupting playback
-"
-            "• Player Reliability: Instant library item switching & safe non-exit dismissal
-"
-            "• Android Media Player: Native file association for video and audio"
+            "- Downloadivo v5.0 Major Release\n"
+            "- Dynamic Video Player: Auto-syncs to 9:16 reels/shorts & 16:9 wide\n"
+            "- Audio Mode: Real album artwork thumbnail with animated spinning music badge\n"
+            "- Lock Screen & Notification: Persistent media playback controls & artwork\n"
+            "- Multi-Platform Support: YouTube, Instagram, Facebook, TikTok, X, Spotify, Reddit, Pinterest, Threads\n"
+            "- Playback Isolation: Unsupported links rejected cleanly without interrupting playback\n"
+            "- Player Reliability: Instant library item switching & safe non-exit dismissal\n"
+            "- Android Media Player: Native file association for video and audio"
         ),
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
