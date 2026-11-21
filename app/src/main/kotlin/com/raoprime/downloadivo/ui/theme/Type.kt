@@ -69,23 +69,20 @@ val Typography = Typography(
         fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp,
         lineHeight = 18.sp,
-        letterSpacing = 0.1.sp,
-        color = TextCrisp
+        letterSpacing = 0.1.sp
     ),
     labelMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
         fontSize = 11.5.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.2.sp,
-        color = TextSecondary
+        letterSpacing = 0.2.sp
     ),
     labelSmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Medium,
         fontSize = 10.sp,
         lineHeight = 14.sp,
-        letterSpacing = 0.3.sp,
-        color = TextTertiary
+        letterSpacing = 0.3.sp
     )
 )

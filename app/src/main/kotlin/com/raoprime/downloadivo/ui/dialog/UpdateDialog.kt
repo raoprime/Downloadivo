@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -232,9 +233,24 @@ fun UpdateDialog(
                                     .fillMaxWidth()
                                     .heightIn(min = 48.dp)
                             ) {
-                                Icon(Icons.Default.DownloadDone, contentDescription = null, tint = Color(0xFF111114))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Install Update", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DownloadDone,
+                                        contentDescription = null,
+                                        tint = Color(0xFF111114),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Install Update",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.5.sp,
+                                        color = Color(0xFF111114)
+                                    )
+                                }
                             }
                         }
                     }
@@ -291,7 +307,8 @@ fun UpdateDialog(
                                     Text(
                                         text = "Later",
                                         fontWeight = FontWeight.SemiBold,
-                                        fontSize = 13.5.sp
+                                        fontSize = 13.5.sp,
+                                        color = Color(0xFFDCDCE2)
                                     )
                                 }
                             }
@@ -315,11 +332,24 @@ fun UpdateDialog(
                                     .weight(if (!updateInfo.forceUpdate) 1.25f else 1f)
                                     .heightIn(min = 48.dp)
                             ) {
-                                Text(
-                                    text = "Update",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.5.sp
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = null,
+                                        tint = Color(0xFF111114),
+                                        modifier = Modifier.size(17.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Update",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.5.sp,
+                                        color = Color(0xFF111114)
+                                    )
+                                }
                             }
                         }
                     }
