@@ -1366,9 +1366,7 @@ def _base_ydl_opts(outtmpl: str, hooks: list) -> dict:
     proxy_url = _get_proxy_url()
     ua = _get_random_user_agent()
 
-    yt_extractor_args = {
-        "player_client": ["android", "ios", "mweb", "web"],
-    }
+    yt_extractor_args = {}
     po_token = os.environ.get("YOUTUBE_PO_TOKEN") or os.environ.get("PO_TOKEN")
     visitor_data = os.environ.get("VISITOR_DATA")
     if po_token:
@@ -1384,9 +1382,6 @@ def _base_ydl_opts(outtmpl: str, hooks: list) -> dict:
         "keepvideo": False,
         "js_runtimes": js_runtimes,
         "remote_components": {"ejs:github"},
-        "extractor_args": {
-            "youtube": yt_extractor_args
-        },
         "http_headers": {
             "User-Agent": ua,
             "Accept": "*/*",
@@ -1437,9 +1432,7 @@ def _info_ydl_opts() -> dict:
     proxy_url = _get_proxy_url()
     ua = _get_random_user_agent()
 
-    yt_extractor_args = {
-        "player_client": ["android", "ios", "mweb", "web"],
-    }
+    yt_extractor_args = {}
     po_token = os.environ.get("YOUTUBE_PO_TOKEN") or os.environ.get("PO_TOKEN")
     visitor_data = os.environ.get("VISITOR_DATA")
     if po_token:
@@ -1450,13 +1443,10 @@ def _info_ydl_opts() -> dict:
         "no_warnings": True,
         "noplaylist": True,
         "skip_download": True,
-        "youtube_include_dash_manifest": False,
-        "youtube_include_hls_manifest": False,
+        "youtube_include_dash_manifest": True,
+        "youtube_include_hls_manifest": True,
         "js_runtimes": js_runtimes,
         "remote_components": {"ejs:github"},
-        "extractor_args": {
-            "youtube": yt_extractor_args
-        },
         "http_headers": {
             "User-Agent": ua,
             "Accept": "*/*",
@@ -1846,11 +1836,11 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 18,
-        "version_name": "5.3.0",
+        "version_code": 19,
+        "version_name": "5.3.1",
         "min_version_code": 10,
         "apk_url": apk_url,
-        "changelog": "✨ YouTube-Inspired Fluid UX & Physics Transitions\n✨ Clean & Uncluttered Library Thumbnails (Removed dark tint & blocking play icon)\n✨ Smooth Tab Slide Transitions & Spring-Loaded Player Sheet\n✨ Perfect UI Alignment & Removed Duplicate Buttons\n✨ Accurate Video Resolutions & Instant Range Scrubbing",
+        "changelog": "✨ Full Video Resolutions Restored (1080p, 720p, 480p, 360p, 240p, 144p + accurate sizes)\n✨ Fully Redesigned Studio Library (Storage summary card, crisp outlines & metadata)\n✨ YouTube-Grade 16:9 Thumbnails (Clean duration pill, zero blocking icons)\n✨ Play Circle Button & 3-Dot Options Menu (Play, Share, Delete)\n✨ Seamless Tab Transitions & Spring-Loaded Video Player",
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
     }
@@ -2174,12 +2164,12 @@ async def get_info(request: Request, url: Optional[str] = None):
 
             heights = set()
             format_sizes = {}
-            standard_bitrates = {4320: 35000, 2160: 18000, 1440: 9000, 1080: 4200, 720: 2200, 480: 1000, 360: 500}
-            standard_default_mb = {4320: 750, 2160: 350, 1440: 180, 1080: 85, 720: 42, 480: 22, 360: 12}
+            standard_bitrates = {4320: 35000, 2160: 18000, 1440: 9000, 1080: 4200, 720: 2200, 480: 1000, 360: 500, 240: 300, 144: 150}
+            standard_default_mb = {4320: 750, 2160: 350, 1440: 180, 1080: 85, 720: 42, 480: 22, 360: 12, 240: 7, 144: 4}
 
             for f in formats:
                 h = f.get("height")
-                if h and isinstance(h, int) and h >= 360:
+                if h and isinstance(h, int) and h >= 144:
                     heights.add(h)
                     sz = f.get("filesize") or f.get("filesize_approx") or 0
                     if not sz or sz <= 0:

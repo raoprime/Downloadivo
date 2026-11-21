@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-11-21T17:46:56.888107",
+  "timestamp": "2026-11-21T18:27:19.280380",
   "interior": {
     "backend_port_8899": "HEALTHY",
     "in_app_version_api": "HEALTHY",
     "version_data": {
-      "version_code": 16,
-      "version_name": "5.1.0",
+      "version_code": 18,
+      "version_name": "5.3.0",
       "min_version_code": 10,
       "apk_url": "https://mazda-prints-equity-albuquerque.trycloudflare.com/downloadivo.apk",
-      "changelog": "\u2728 All video (4K, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p) & audio (320k, 256k, 192k, 128k, M4A, WAV) qualities\n\u2728 Left-aligned brand logo in TopAppBar\n\u2728 Butter-smooth lazy scroll layout without lockups\n\u2728 1-tap instant download actions under preview\n\u2728 In-app seamless auto-updates\n\u2728 Multi-platform ultra-fast streaming engine",
+      "changelog": "\u2728 YouTube-Inspired Fluid UX & Physics Transitions\n\u2728 Clean & Uncluttered Library Thumbnails (Removed dark tint & blocking play icon)\n\u2728 Smooth Tab Slide Transitions & Spring-Loaded Player Sheet\n\u2728 Perfect UI Alignment & Removed Duplicate Buttons\n\u2728 Accurate Video Resolutions & Instant Range Scrubbing",
       "force_update": false,
       "release_date": "2026-11-21"
     }
@@ -21,11 +21,11 @@
   "speed_benchmark": {
     "concurrent_streams": 3,
     "individual_speeds_mb_s": [
-      0.9,
-      0.89,
-      0.88
+      1.33,
+      1.53,
+      1.28
     ],
-    "aggregate_throughput_mb_s": 2.67,
+    "aggregate_throughput_mb_s": 4.14,
     "status": "PASS"
   },
   "platform_support": {
@@ -41,31 +41,31 @@
     },
     "TikTok": {
       "status": "FAILED",
-      "latency_sec": 0.78,
+      "latency_sec": 0.57,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "Twitter_X": {
       "status": "FAILED",
-      "latency_sec": 0.95,
+      "latency_sec": 1.07,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "Reddit": {
       "status": "FAILED",
-      "latency_sec": 1.16,
+      "latency_sec": 2.78,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "Vimeo": {
       "status": "FAILED",
-      "latency_sec": 0.25,
+      "latency_sec": 0.78,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "SoundCloud": {
       "status": "FAILED",
-      "latency_sec": 1.14,
+      "latency_sec": 0.45,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     }
