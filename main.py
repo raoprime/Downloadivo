@@ -278,7 +278,18 @@ def _get_public_tunnel_url() -> str:
     url_file = Path(__file__).parent / "tunnel_url.txt"
     cf_log = Path(__file__).parent / "cloudflared.log"
 
-    # Prefer the active live URL from cloudflared.log
+    # Prefer the explicit tunnel_url.txt first
+    if url_file.exists():
+        try:
+            txt = url_file.read_text("utf-8").strip()
+            if txt.startswith("http") and "trycloudflare.com" in txt:
+                with _tunnel_lock:
+                    _cached_tunnel_url = txt
+                return txt
+        except Exception:
+            pass
+
+    # Fallback to cloudflared.log
     if cf_log.exists():
         try:
             content = cf_log.read_text("utf-8", errors="ignore")
@@ -287,21 +298,7 @@ def _get_public_tunnel_url() -> str:
                 url = matches[-1]
                 with _tunnel_lock:
                     _cached_tunnel_url = url
-                try:
-                    url_file.write_text(url + "\n", encoding="utf-8")
-                except Exception:
-                    pass
                 return url
-        except Exception:
-            pass
-
-    if url_file.exists():
-        try:
-            txt = url_file.read_text("utf-8").strip()
-            if txt.startswith("http"):
-                with _tunnel_lock:
-                    _cached_tunnel_url = txt
-                return txt
         except Exception:
             pass
     return ""
