@@ -516,10 +516,18 @@ fun DownloadivoScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            Crossfade(
+            AnimatedContent(
                 targetState = currentTab,
-                animationSpec = tween(140),
-                label = "tab_navigation_crossfade"
+                transitionSpec = {
+                    if (targetState.ordinal > initialState.ordinal) {
+                        (slideInHorizontally(animationSpec = tween(240, easing = FastOutSlowInEasing)) { width -> (width * 0.25f).toInt() } + fadeIn(tween(240)))
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(200, easing = FastOutSlowInEasing)) { width -> (-width * 0.25f).toInt() } + fadeOut(tween(200)))
+                    } else {
+                        (slideInHorizontally(animationSpec = tween(240, easing = FastOutSlowInEasing)) { width -> (-width * 0.25f).toInt() } + fadeIn(tween(240)))
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(200, easing = FastOutSlowInEasing)) { width -> (width * 0.25f).toInt() } + fadeOut(tween(200)))
+                    }
+                },
+                label = "tab_navigation_sliding"
             ) { targetTab ->
                 when (targetTab) {
                     AppTab.HOME -> HomeDownloaderTab(
@@ -935,7 +943,20 @@ fun DownloadivoScreen(
         }
 
         // Fullscreen / Maximized YouTube-Grade Native Player
-        if (activePlaybackUri != null && !isPlayerMinimized) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = activePlaybackUri != null && !isPlayerMinimized,
+            enter = slideInVertically(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) { it } + fadeIn(tween(200)),
+            exit = slideOutVertically(
+                animationSpec = spring(
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) { it } + fadeOut(tween(180))
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1760,52 +1781,6 @@ private fun HomeDownloaderTab(
 
                         HorizontalDivider(color = BorderHairline)
 
-                        // ── 1-TAP ZERO-FRICTION DOWNLOAD ACTIONS (IMMEDIATELY ACCESSIBLE) ──
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    HapticUtil.heavyClick(context)
-                                    val fmtToUse = if (mediaMode == "video") (if (selectedFormat.isNotBlank() && selectedFormat != "mp3") selectedFormat else "best") else "best"
-                                    onInstantDownload(info.url, fmtToUse)
-                                },
-                                modifier = Modifier
-                                    .weight(1.15f)
-                                    .height(50.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = TextCrisp,
-                                    contentColor = CanvasDark
-                                )
-                            ) {
-                                Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Download Video", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = CanvasDark)
-                            }
-
-                            Button(
-                                onClick = {
-                                    HapticUtil.heavyClick(context)
-                                    onInstantDownload(info.url, "mp3")
-                                },
-                                modifier = Modifier
-                                    .weight(1.1f)
-                                    .height(50.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = SurfaceElevated,
-                                    contentColor = TextCrisp
-                                ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
-                            ) {
-                                Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(17.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Download Audio", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = TextCrisp)
-                            }
-                        }
-
                         // Mode Segmented Bar: Video vs Audio
                         Row(
                             modifier = Modifier
@@ -2263,49 +2238,67 @@ private fun QueueTab(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // ── TOP DASHBOARD HEADER BAR ──
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // ── TOP DASHBOARD STATUS SUMMARY CARD ──
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = SurfaceElevated,
+            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Column {
-                Text(
-                    text = "Download Manager",
-                    style = Typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = TextCrisp
-                )
-                Text(
-                    text = if (currentTask.status == DownloadStatus.DOWNLOADING) {
-                        "1 active • ${queuedTasks.size} queued"
-                    } else if (queuedTasks.isNotEmpty()) {
-                        "${queuedTasks.size} queued"
-                    } else {
-                        "Queue idle"
-                    },
-                    style = Typography.bodySmall,
-                    color = if (currentTask.status == DownloadStatus.DOWNLOADING) TextCrisp else TextTertiary
-                )
-            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(if (currentTask.status == DownloadStatus.DOWNLOADING) StatusSuccess else TextTertiary)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = if (currentTask.status == DownloadStatus.DOWNLOADING) {
+                                "Downloading Active (${currentTask.progress}%)"
+                            } else if (queuedTasks.isNotEmpty()) {
+                                "${queuedTasks.size} Tasks in Queue"
+                            } else {
+                                "Engine Idle • All Clear"
+                            },
+                            style = Typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = TextCrisp
+                        )
+                        Text(
+                            text = if (isAnyActive) "${queuedTasks.size} queued • Turbo Multi-Thread" else "Ready for next download",
+                            style = Typography.bodySmall,
+                            color = TextTertiary
+                        )
+                    }
+                }
 
-            if (isAnyActive) {
-                Surface(
-                    onClick = {
-                        HapticUtil.mediumClick(context)
-                        onCancelAll()
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    color = StatusError.copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, StatusError.copy(alpha = 0.4f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                if (isAnyActive) {
+                    Button(
+                        onClick = {
+                            HapticUtil.mediumClick(context)
+                            onCancelAll()
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = StatusError.copy(alpha = 0.15f),
+                            contentColor = StatusError
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, StatusError.copy(alpha = 0.4f)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
                     ) {
-                        Icon(Icons.Default.ClearAll, contentDescription = null, tint = StatusError, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Default.ClearAll, contentDescription = null, tint = StatusError, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Cancel All", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = StatusError)
+                        Text("Cancel All", style = Typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -2834,11 +2827,11 @@ private fun LibraryTab(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // 16:9 Thumbnail with Play overlay
+                            // 16:9 Crisp YouTube-Grade Thumbnail (Zero unwanted overlays, clear thumbnail)
                             Box(
                                 modifier = Modifier
-                                    .width(76.dp)
-                                    .height(44.dp)
+                                    .width(92.dp)
+                                    .height(52.dp)
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(CanvasDark)
                                     .clickable { onPlay(task) },
@@ -2851,40 +2844,28 @@ private fun LibraryTab(
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
                                     )
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(Color.Black.copy(alpha = 0.35f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Default.PlayArrow,
-                                            contentDescription = "Play",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
                                 } else {
                                     Icon(
-                                        if (task.isAudio) Icons.Default.MusicNote else Icons.Default.PlayArrow,
+                                        if (task.isAudio) Icons.Default.MusicNote else Icons.Default.Videocam,
                                         contentDescription = null,
-                                        tint = TextCrisp
+                                        tint = TextSecondary,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                                 if (task.duration.isNotBlank()) {
                                     Surface(
-                                        shape = RoundedCornerShape(3.dp),
-                                        color = Color.Black.copy(alpha = 0.85f),
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color.Black.copy(alpha = 0.82f),
                                         modifier = Modifier
                                             .align(Alignment.BottomEnd)
                                             .padding(3.dp)
                                     ) {
                                         Text(
                                             text = task.duration,
-                                            fontSize = 8.5.sp,
-                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.SemiBold,
                                             color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.5.dp)
                                         )
                                     }
                                 }
