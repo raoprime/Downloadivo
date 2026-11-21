@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,6 +51,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.raoprime.downloadivo.MainActivity
 import com.raoprime.downloadivo.network.DownloadEngine
 import com.raoprime.downloadivo.ui.theme.*
@@ -77,6 +81,8 @@ fun BuiltInPlayerSheet(
     onQualitySelected: ((String) -> Unit)? = null,
     onAudioTrackSelected: ((String) -> Unit)? = null,
     onEnterPip: (() -> Unit)? = null,
+    onPlayNext: (() -> Unit)? = null,
+    onPlayPrevious: (() -> Unit)? = null,
     onMinimize: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -178,15 +184,27 @@ fun BuiltInPlayerSheet(
         return
     }
 
-    // Lock orientation when toggling fullscreen
+    // Lock orientation & Hide Status Bar (time, battery) / Navigation Bar when entering Fullscreen
     DisposableEffect(isFullscreen) {
-        if (isFullscreen && !isAudio) {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        val window = activity?.window
+        val insetsController = if (window != null) {
+            WindowCompat.getInsetsController(window, window.decorView)
+        } else null
+
+        if (isFullscreen) {
+            if (!isAudio) {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+            // Hide Status Bar (time, battery) and Navigation Bar for clean edge-to-edge view
+            insetsController?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            insetsController?.hide(WindowInsetsCompat.Type.systemBars())
         } else {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
         }
         onDispose {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 
@@ -802,15 +820,26 @@ fun BuiltInPlayerSheet(
                                     )
                                 )
                         ) {
-                            // Top Bar inside Fullscreen
+                            // Top Bar inside Fullscreen with Back Navigation
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .align(Alignment.TopCenter)
                                     .padding(horizontal = 16.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                IconButton(
+                                    onClick = { onFullscreenChange?.invoke(false) },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back / Exit Fullscreen",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = title.ifBlank { "Now Playing" },
                                     color = Color.White,
@@ -825,23 +854,40 @@ fun BuiltInPlayerSheet(
                                 }
                             }
 
-                            // Center Playback Buttons in Fullscreen
+                            // Center Playback Buttons in Fullscreen (Previous, -10s, Play/Pause, +10s, Next)
                             Row(
                                 modifier = Modifier
                                     .align(Alignment.Center)
-                                    .fillMaxWidth(0.55f),
+                                    .fillMaxWidth(0.72f),
                                 horizontalArrangement = Arrangement.SpaceEvenly,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                // Previous Video Button
+                                IconButton(
+                                    onClick = {
+                                        HapticUtil.lightClick(context)
+                                        onPlayPrevious?.invoke()
+                                    },
+                                    enabled = onPlayPrevious != null,
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.SkipPrevious,
+                                        contentDescription = "Previous Video",
+                                        tint = if (onPlayPrevious != null) Color.White else Color.White.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+
                                 IconButton(
                                     onClick = {
                                         val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
                                         exoPlayer.seekTo(target)
                                         currentPositionMs = target
                                     },
-                                    modifier = Modifier.size(48.dp)
+                                    modifier = Modifier.size(46.dp)
                                 ) {
-                                    Icon(Icons.Default.Replay10, contentDescription = "-10s", tint = Color.White, modifier = Modifier.size(34.dp))
+                                    Icon(Icons.Default.Replay10, contentDescription = "-10s", tint = Color.White, modifier = Modifier.size(32.dp))
                                 }
 
                                 Surface(
@@ -872,9 +918,26 @@ fun BuiltInPlayerSheet(
                                         exoPlayer.seekTo(target)
                                         currentPositionMs = target
                                     },
-                                    modifier = Modifier.size(48.dp)
+                                    modifier = Modifier.size(46.dp)
                                 ) {
-                                    Icon(Icons.Default.Forward10, contentDescription = "+10s", tint = Color.White, modifier = Modifier.size(34.dp))
+                                    Icon(Icons.Default.Forward10, contentDescription = "+10s", tint = Color.White, modifier = Modifier.size(32.dp))
+                                }
+
+                                // Next Video Button
+                                IconButton(
+                                    onClick = {
+                                        HapticUtil.lightClick(context)
+                                        onPlayNext?.invoke()
+                                    },
+                                    enabled = onPlayNext != null,
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.SkipNext,
+                                        contentDescription = "Next Video",
+                                        tint = if (onPlayNext != null) Color.White else Color.White.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(32.dp)
+                                    )
                                 }
                             }
 
@@ -981,13 +1044,32 @@ fun BuiltInPlayerSheet(
                     }
                 }
 
-                // Dedicated Playback Control Row (-10s, Play/Pause, +10s)
+                // Dedicated Playback Control Row (Previous, -10s, Play/Pause, +10s, Next)
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Previous Video Button
+                    IconButton(
+                        onClick = {
+                            HapticUtil.lightClick(context)
+                            onPlayPrevious?.invoke()
+                        },
+                        enabled = onPlayPrevious != null,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.SkipPrevious,
+                            contentDescription = "Previous Video",
+                            tint = if (onPlayPrevious != null) TextCrisp else TextQuaternary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
                     IconButton(
                         onClick = {
                             HapticUtil.lightClick(context)
@@ -998,12 +1080,12 @@ fun BuiltInPlayerSheet(
                                 lastSeekTimestamp = System.currentTimeMillis()
                             } catch (_: Exception) {}
                         },
-                        modifier = Modifier.size(46.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s", tint = TextCrisp, modifier = Modifier.size(30.dp))
+                        Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s", tint = TextCrisp, modifier = Modifier.size(28.dp))
                     }
 
-                    Spacer(modifier = Modifier.width(22.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
 
                     Surface(
                         shape = CircleShape,
@@ -1034,7 +1116,7 @@ fun BuiltInPlayerSheet(
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(22.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
 
                     IconButton(
                         onClick = {
@@ -1047,9 +1129,28 @@ fun BuiltInPlayerSheet(
                                 lastSeekTimestamp = System.currentTimeMillis()
                             } catch (_: Exception) {}
                         },
-                        modifier = Modifier.size(46.dp)
+                        modifier = Modifier.size(44.dp)
                     ) {
-                        Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = TextCrisp, modifier = Modifier.size(30.dp))
+                        Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = TextCrisp, modifier = Modifier.size(28.dp))
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    // Next Video Button
+                    IconButton(
+                        onClick = {
+                            HapticUtil.lightClick(context)
+                            onPlayNext?.invoke()
+                        },
+                        enabled = onPlayNext != null,
+                        modifier = Modifier.size(42.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.SkipNext,
+                            contentDescription = "Next Video",
+                            tint = if (onPlayNext != null) TextCrisp else TextQuaternary,
+                            modifier = Modifier.size(26.dp)
+                        )
                     }
                 }
 

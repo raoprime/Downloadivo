@@ -973,6 +973,40 @@ fun DownloadivoScreen(
                             }
                         },
                         onEnterPip = onEnterPip,
+                        onPlayNext = {
+                            val currentIndex = historyList.indexOfFirst { it.filePath == activePlaybackUri || it.url == activePlaybackOriginalUrl }
+                            if (currentIndex != -1 && currentIndex + 1 < historyList.size) {
+                                val nextTask = historyList[currentIndex + 1]
+                                nextTask.filePath?.let { uriStr ->
+                                    playMedia(
+                                        uriStr = uriStr,
+                                        title = nextTask.title,
+                                        isAudio = nextTask.isAudio,
+                                        duration = nextTask.duration,
+                                        thumbnail = nextTask.thumbnail,
+                                        author = "",
+                                        originalUrl = nextTask.url
+                                    )
+                                }
+                            }
+                        },
+                        onPlayPrevious = {
+                            val currentIndex = historyList.indexOfFirst { it.filePath == activePlaybackUri || it.url == activePlaybackOriginalUrl }
+                            if (currentIndex > 0) {
+                                val prevTask = historyList[currentIndex - 1]
+                                prevTask.filePath?.let { uriStr ->
+                                    playMedia(
+                                        uriStr = uriStr,
+                                        title = prevTask.title,
+                                        isAudio = prevTask.isAudio,
+                                        duration = prevTask.duration,
+                                        thumbnail = prevTask.thumbnail,
+                                        author = "",
+                                        originalUrl = prevTask.url
+                                    )
+                                }
+                            }
+                        },
                         onMinimize = { isPlayerMinimized = true },
                         onDismiss = {
                             try {
