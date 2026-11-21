@@ -142,7 +142,7 @@ object DownloadEngine {
             "tiktok.com",
             "facebook.com", "fb.watch", "fb.com",
             "twitter.com", "x.com",
-            "spotify.com",
+            "spotify.com", "spotify.link",
             "reddit.com", "redd.it",
             "pinterest.com", "pin.it",
             "threads.net",

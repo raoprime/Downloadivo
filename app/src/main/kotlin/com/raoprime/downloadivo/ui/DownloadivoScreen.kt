@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -202,6 +203,7 @@ fun DownloadivoScreen(
     }
 
     // Persistent Single ExoPlayer Instance across Miniplayer, Full Player & PiP
+    val historyList by DownloadRepository.history.collectAsState()
     val exoPlayer = remember(context) {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36")
@@ -215,10 +217,10 @@ fun DownloadivoScreen(
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                2500,  // minBufferMs (2.5s)
-                35000, // maxBufferMs (35s)
-                1500,  // bufferForPlaybackMs (1.5s - guarantees video keyframe is ready)
-                2000   // bufferForPlaybackAfterRebufferMs (2.0s)
+                1000,  // minBufferMs (1.0s)
+                30000, // maxBufferMs (30s)
+                300,   // bufferForPlaybackMs (300ms - ultra-responsive start for short videos/reels)
+                800    // bufferForPlaybackAfterRebufferMs (800ms)
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -273,21 +275,85 @@ fun DownloadivoScreen(
         isPlayerFullscreen = false
     }
 
+    val playNextFromHistory: () -> Unit = {
+        val list = historyList.filter { !it.filePath.isNullOrBlank() }
+        if (list.isNotEmpty()) {
+            val currentIndex = list.indexOfFirst {
+                it.filePath == activePlaybackUri ||
+                it.filePath == activePlaybackUri?.removePrefix("file://") ||
+                (activePlaybackUri != null && it.filePath != null && activePlaybackUri!!.contains(it.filePath!!)) ||
+                it.url == activePlaybackOriginalUrl
+            }
+            val nextIndex = if (currentIndex != -1 && currentIndex + 1 < list.size) currentIndex + 1 else if (currentIndex == -1) 0 else -1
+            if (nextIndex in list.indices) {
+                val nextTask = list[nextIndex]
+                nextTask.filePath?.let { uriStr ->
+                    playMedia(
+                        uriStr = uriStr,
+                        title = nextTask.title,
+                        isAudio = nextTask.isAudio,
+                        duration = nextTask.duration,
+                        thumbnail = nextTask.thumbnail,
+                        author = "",
+                        originalUrl = nextTask.url
+                    )
+                }
+            }
+        }
+    }
+
+    val playPreviousFromHistory: () -> Unit = {
+        val list = historyList.filter { !it.filePath.isNullOrBlank() }
+        if (list.isNotEmpty()) {
+            val currentIndex = list.indexOfFirst {
+                it.filePath == activePlaybackUri ||
+                it.filePath == activePlaybackUri?.removePrefix("file://") ||
+                (activePlaybackUri != null && it.filePath != null && activePlaybackUri!!.contains(it.filePath!!)) ||
+                it.url == activePlaybackOriginalUrl
+            }
+            val prevIndex = if (currentIndex > 0) currentIndex - 1 else if (currentIndex == -1) 0 else -1
+            if (prevIndex in list.indices) {
+                val prevTask = list[prevIndex]
+                prevTask.filePath?.let { uriStr ->
+                    playMedia(
+                        uriStr = uriStr,
+                        title = prevTask.title,
+                        isAudio = prevTask.isAudio,
+                        duration = prevTask.duration,
+                        thumbnail = prevTask.thumbnail,
+                        author = "",
+                        originalUrl = prevTask.url
+                    )
+                }
+            }
+        }
+    }
+
     var isExoPlaying by remember { mutableStateOf(false) }
 
-    DisposableEffect(exoPlayer) {
+    DisposableEffect(exoPlayer, historyList, activePlaybackUri) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isExoPlaying = playing
             }
             override fun onPlaybackStateChanged(state: Int) {
                 isExoPlaying = exoPlayer.isPlaying
+                if (state == Player.STATE_ENDED) {
+                    playNextFromHistory()
+                }
             }
         }
         exoPlayer.addListener(listener)
         onDispose {
             exoPlayer.removeListener(listener)
-            exoPlayer.release()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                exoPlayer.release()
+            } catch (_: Exception) {}
         }
     }
 
@@ -344,7 +410,6 @@ fun DownloadivoScreen(
 
     val activeTaskCount by DownloadService.activeTaskCount.collectAsState()
     val isAnyDownloading by DownloadService.isAnyDownloading.collectAsState()
-    val historyList by DownloadRepository.history.collectAsState()
 
     var showCompletionPill by remember { mutableStateOf(false) }
     var lastCompletedTitle by remember { mutableStateOf("") }
@@ -599,23 +664,10 @@ fun DownloadivoScreen(
             AnimatedContent(
                 targetState = currentTab,
                 transitionSpec = {
-                    val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                    (slideInHorizontally(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    ) { width -> direction * (width * 0.20f).toInt() } + fadeIn(tween(160)))
-                    .togetherWith(
-                        slideOutHorizontally(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = Spring.StiffnessMedium
-                            )
-                        ) { width -> -direction * (width * 0.20f).toInt() } + fadeOut(tween(140))
-                    )
+                    fadeIn(animationSpec = tween(durationMillis = 150)) togetherWith
+                    fadeOut(animationSpec = tween(durationMillis = 120))
                 },
-                label = "tab_navigation_sliding"
+                label = "tab_navigation_simple_fade"
             ) { targetTab ->
                 when (targetTab) {
                     AppTab.HOME -> HomeDownloaderTab(
@@ -973,40 +1025,8 @@ fun DownloadivoScreen(
                             }
                         },
                         onEnterPip = onEnterPip,
-                        onPlayNext = {
-                            val currentIndex = historyList.indexOfFirst { it.filePath == activePlaybackUri || it.url == activePlaybackOriginalUrl }
-                            if (currentIndex != -1 && currentIndex + 1 < historyList.size) {
-                                val nextTask = historyList[currentIndex + 1]
-                                nextTask.filePath?.let { uriStr ->
-                                    playMedia(
-                                        uriStr = uriStr,
-                                        title = nextTask.title,
-                                        isAudio = nextTask.isAudio,
-                                        duration = nextTask.duration,
-                                        thumbnail = nextTask.thumbnail,
-                                        author = "",
-                                        originalUrl = nextTask.url
-                                    )
-                                }
-                            }
-                        },
-                        onPlayPrevious = {
-                            val currentIndex = historyList.indexOfFirst { it.filePath == activePlaybackUri || it.url == activePlaybackOriginalUrl }
-                            if (currentIndex > 0) {
-                                val prevTask = historyList[currentIndex - 1]
-                                prevTask.filePath?.let { uriStr ->
-                                    playMedia(
-                                        uriStr = uriStr,
-                                        title = prevTask.title,
-                                        isAudio = prevTask.isAudio,
-                                        duration = prevTask.duration,
-                                        thumbnail = prevTask.thumbnail,
-                                        author = "",
-                                        originalUrl = prevTask.url
-                                    )
-                                }
-                            }
-                        },
+                        onPlayNext = playNextFromHistory,
+                        onPlayPrevious = playPreviousFromHistory,
                         onMinimize = { isPlayerMinimized = true },
                         onDismiss = {
                             try {
@@ -1302,6 +1322,111 @@ private fun CompletionFloatingPill(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// GEMINI LIQUID AMBIENT GLOW (SUBTLE LOW-OPACITY FLUID BACKGROUND)
+// ═══════════════════════════════════════════════════════════════════════
+@Composable
+fun GeminiLiquidAmbientGlow(
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "gemini_liquid_ambient")
+
+    val phase1 by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 20000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase1"
+    )
+
+    val phase2 by infiniteTransition.animateFloat(
+        initialValue = 360f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 26000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "phase2"
+    )
+
+    val breathPulse by infiniteTransition.animateFloat(
+        initialValue = 0.92f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 8000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "breathPulse"
+    )
+
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+
+        val rad1 = Math.toRadians(phase1.toDouble())
+        val rad2 = Math.toRadians(phase2.toDouble())
+
+        // 1. Celestial Deep Blue / Electric Cyan Liquid Blob
+        val c1X = (w * 0.5f) + (w * 0.22f * Math.cos(rad1).toFloat())
+        val c1Y = (h * 0.36f) + (h * 0.12f * Math.sin(rad1).toFloat())
+        val r1 = (w * 0.65f) * breathPulse
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF2563EB).copy(alpha = 0.12f), // Gemini Electric Blue
+                    Color(0xFF00E5FF).copy(alpha = 0.05f), // Fluid Cyan
+                    Color.Transparent
+                ),
+                center = androidx.compose.ui.geometry.Offset(c1X, c1Y),
+                radius = r1
+            ),
+            radius = r1,
+            center = androidx.compose.ui.geometry.Offset(c1X, c1Y)
+        )
+
+        // 2. Cosmic Violet / Soft Orchid Liquid Blob
+        val c2X = (w * 0.5f) + (w * 0.24f * Math.sin(rad2).toFloat())
+        val c2Y = (h * 0.42f) + (h * 0.14f * Math.cos(rad2).toFloat())
+        val r2 = (w * 0.70f) * (2.04f - breathPulse)
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF7C3AED).copy(alpha = 0.10f), // Deep Violet
+                    Color(0xFFEC4899).copy(alpha = 0.04f), // Soft Orchid
+                    Color.Transparent
+                ),
+                center = androidx.compose.ui.geometry.Offset(c2X, c2Y),
+                radius = r2
+            ),
+            radius = r2,
+            center = androidx.compose.ui.geometry.Offset(c2X, c2Y)
+        )
+
+        // 3. Ambient Central Fluid Shimmer
+        val c3X = w * 0.5f
+        val c3Y = h * 0.38f
+        val r3 = w * 0.55f
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFF38BDF8).copy(alpha = 0.06f),
+                    Color.Transparent
+                ),
+                center = androidx.compose.ui.geometry.Offset(c3X, c3Y),
+                radius = r3
+            ),
+            radius = r3,
+            center = androidx.compose.ui.geometry.Offset(c3X, c3Y)
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // TAB 1: STUDIO HOME DOWNLOADER TAB (NO CLUTTER, PURE LUXURY)
 // ═══════════════════════════════════════════════════════════════════════
 @Composable
@@ -1368,6 +1493,7 @@ private fun HomeDownloaderTab(
                 .verticalScroll(restingScrollState),
             contentAlignment = Alignment.Center
         ) {
+            GeminiLiquidAmbientGlow(modifier = Modifier.fillMaxSize())
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1710,15 +1836,17 @@ private fun HomeDownloaderTab(
             }
         }
     } else {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .imePadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            GeminiLiquidAmbientGlow(modifier = Modifier.fillMaxSize())
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .imePadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             // ═══════════════════════════════════════════════════════════════
             // COMPACT TOP INPUT CAPSULE (ALWAYS VISIBLE & PINNED AT TOP)
             // ═══════════════════════════════════════════════════════════════
@@ -2567,6 +2695,7 @@ private fun HomeDownloaderTab(
         Spacer(modifier = Modifier.height(130.dp))
         }
     }
+}
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -3770,8 +3899,8 @@ private fun LibraryTab(
                 ) {
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = Color(0xFF141416),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF222226)),
+                        color = Color(0xFF141418),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2E2E36)),
                         modifier = Modifier
                             .fillMaxWidth(0.92f)
                             .padding(16.dp)
@@ -3798,7 +3927,7 @@ private fun LibraryTab(
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
                                 text = if (completedHistory.isEmpty()) "Library is empty" else "No matching downloads",
-                                style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 17.sp),
+                                style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 17.5.sp),
                                 color = TextCrisp,
                                 textAlign = TextAlign.Center
                             )
@@ -3808,8 +3937,8 @@ private fun LibraryTab(
                                     "Downloaded videos and audio will appear here for offline playback anytime."
                                 else
                                     "No downloads match \"$searchQuery\". Try checking the spelling or resetting the filters.",
-                                style = Typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 17.sp),
-                                color = TextSecondary,
+                                style = Typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 18.sp),
+                                color = Color(0xFFD4D4D8),
                                 textAlign = TextAlign.Center
                             )
 
@@ -3821,12 +3950,28 @@ private fun LibraryTab(
                                         onNavigateHome()
                                     },
                                     shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = TextCrisp, contentColor = CanvasDark),
-                                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 11.dp)
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = TextCrisp,
+                                        contentColor = CanvasDark
+                                    ),
+                                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+                                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
                                 ) {
-                                    Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(17.dp))
-                                    Spacer(modifier = Modifier.width(7.dp))
-                                    Text("Start a download", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Icon(
+                                        Icons.Default.Download,
+                                        contentDescription = null,
+                                        tint = CanvasDark,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Start a download",
+                                        color = CanvasDark,
+                                        style = Typography.labelLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.5.sp
+                                        )
+                                    )
                                 }
                             } else {
                                 OutlinedButton(
@@ -3836,13 +3981,21 @@ private fun LibraryTab(
                                         filterType = "All"
                                     },
                                     shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextCrisp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = SurfaceElevated,
+                                        contentColor = TextCrisp
+                                    ),
                                     border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp)
+                                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
                                 ) {
-                                    Icon(Icons.Default.Refresh, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
+                                    Icon(Icons.Default.Refresh, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Reset filters", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                                    Text(
+                                        text = "Reset filters",
+                                        color = TextCrisp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 13.sp
+                                    )
                                 }
                             }
                         }
