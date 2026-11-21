@@ -211,14 +211,21 @@ fun BuiltInPlayerSheet(
             val now = System.currentTimeMillis()
             if (!isScrubbing && (now - lastSeekTimestamp > 650L)) {
                 try {
-                    currentPositionMs = exoPlayer.currentPosition
-                    if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) {
-                        durationMs = exoPlayer.duration
+                    val pos = exoPlayer.currentPosition
+                    if (pos != currentPositionMs) {
+                        currentPositionMs = pos
+                    }
+                    val d = exoPlayer.duration
+                    if (d > 0 && d != androidx.media3.common.C.TIME_UNSET && d != durationMs) {
+                        durationMs = d
                     }
                 } catch (_: Exception) {}
             }
             try {
-                isPlaying = exoPlayer.isPlaying
+                val p = exoPlayer.isPlaying
+                if (p != isPlaying) {
+                    isPlaying = p
+                }
             } catch (_: Exception) {}
             delay(250)
         }

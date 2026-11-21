@@ -69,6 +69,12 @@ class DownloadService : Service() {
         private val _queuedTasks = MutableStateFlow<List<DownloadTask>>(emptyList())
         val queuedTasks = _queuedTasks.asStateFlow()
 
+        private val _activeTaskCount = MutableStateFlow(0)
+        val activeTaskCount = _activeTaskCount.asStateFlow()
+
+        private val _isAnyDownloading = MutableStateFlow(false)
+        val isAnyDownloading = _isAnyDownloading.asStateFlow()
+
         fun startDownload(
             context: Context,
             url: String,
@@ -208,9 +214,17 @@ class DownloadService : Service() {
             )
             com.raoprime.downloadivo.data.DownloadRepository.addTask(queuedTask)
             Toast.makeText(applicationContext, "Added to download queue (#${pendingQueue.size})", Toast.LENGTH_SHORT).show()
+            updateForegroundNotification(_currentTask.value.title, _currentTask.value.progress, _currentTask.value.speed, _currentTask.value.eta)
         } else {
             beginDownload(item)
         }
+    }
+
+    private fun refreshActiveMetrics() {
+        val active = if (_currentTask.value.status == DownloadStatus.DOWNLOADING) 1 else 0
+        val totalActive = active + pendingQueue.size
+        _activeTaskCount.value = totalActive
+        _isAnyDownloading.value = totalActive > 0
     }
 
     private fun updateQueuedState() {
@@ -229,6 +243,7 @@ class DownloadService : Service() {
                 endTime = q.endTime
             )
         }
+        refreshActiveMetrics()
     }
 
     private fun beginDownload(item: QueuedDownload) {
@@ -262,6 +277,7 @@ class DownloadService : Service() {
         )
         _currentTask.value = initialTask
         com.raoprime.downloadivo.data.DownloadRepository.addTask(initialTask)
+        refreshActiveMetrics()
 
         startForegroundNotification(cleanTitle, 0, "Starting download...", "")
 
@@ -378,6 +394,7 @@ class DownloadService : Service() {
                     )
                     _currentTask.value = completed
                     com.raoprime.downloadivo.data.DownloadRepository.updateTask(completed)
+                    refreshActiveMetrics()
                     showCompletionNotification(cleanTitle, true, mediaUri, isAudio)
                     HapticUtil.success(applicationContext)
                 } else {
@@ -395,6 +412,7 @@ class DownloadService : Service() {
                 )
                 _currentTask.value = failed
                 com.raoprime.downloadivo.data.DownloadRepository.updateTask(failed)
+                refreshActiveMetrics()
                 showCompletionNotification(cleanTitle, false, null, isAudio)
             } finally {
                 try { outStream?.close() } catch (_: Exception) {}
@@ -411,6 +429,7 @@ class DownloadService : Service() {
             beginDownload(next)
         } else {
             _queuedTasks.value = emptyList()
+            refreshActiveMetrics()
             if (wakeLock?.isHeld == true) wakeLock?.release()
             stopForeground(STOP_FOREGROUND_DETACH)
         }
@@ -424,6 +443,7 @@ class DownloadService : Service() {
         )
         _currentTask.value = cancelled
         com.raoprime.downloadivo.data.DownloadRepository.updateTask(cancelled)
+        refreshActiveMetrics()
         isDownloading = false
         processNextInQueue()
     }
@@ -454,10 +474,15 @@ class DownloadService : Service() {
     }
 
     private fun buildProgressNotification(title: String, progress: Int, speed: String, eta: String = ""): Notification {
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            putExtra("select_tab", "queue")
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
         val contentIntent = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -485,7 +510,7 @@ class DownloadService : Service() {
                 }
                 if (progress >= 0) append(" ($progress%)")
             } else {
-                if (progress >= 0) append("$progress%") else append("Connecting")
+                if (progress >= 0) append("$progress%") else append("Preparing download")
             }
             if (speed.isNotBlank()) append(" • $speed")
             if (eta.isNotBlank()) append(" • $eta")
@@ -500,6 +525,7 @@ class DownloadService : Service() {
             .setProgress(100, if (progress >= 0) progress else 0, progress < 0)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(contentIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", cancelPendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)

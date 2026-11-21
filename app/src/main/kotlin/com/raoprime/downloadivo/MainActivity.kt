@@ -28,7 +28,13 @@ import com.raoprime.downloadivo.ui.theme.DownloadivoTheme
 class MainActivity : ComponentActivity() {
 
     private var sharedUrl by mutableStateOf<String?>(null)
+    private var sharedFormat by mutableStateOf<String?>(null)
     private var clipboardUrl by mutableStateOf<String?>(null)
+    private var targetTabName by mutableStateOf<String?>(null)
+    private var playbackUri by mutableStateOf<String?>(null)
+    private var playbackTitle by mutableStateOf("")
+    private var playbackIsAudio by mutableStateOf(false)
+    private var playbackDuration by mutableStateOf("")
 
     // Set true by BuiltInPlayerSheet while a video is playing, so Home press triggers PiP
     private val _pipEnabled = mutableStateOf(false)
@@ -72,6 +78,7 @@ class MainActivity : ComponentActivity() {
 
         handleShareIntent(intent)
         checkClipboardForUrl()
+        targetTabName = intent.getStringExtra("select_tab")
 
         // Configure Coil to support local video thumbnail frame extraction
         val imageLoader = ImageLoader.Builder(applicationContext)
@@ -93,7 +100,15 @@ class MainActivity : ComponentActivity() {
                 ) {
                     DownloadivoScreen(
                         sharedUrl = sharedUrl,
+                        sharedFormat = sharedFormat,
                         clipboardUrl = clipboardUrl,
+                        targetTabName = targetTabName,
+                        initialPlaybackUri = playbackUri,
+                        initialPlaybackTitle = playbackTitle,
+                        initialPlaybackIsAudio = playbackIsAudio,
+                        initialPlaybackDuration = playbackDuration,
+                        onClearInitialPlayback = { playbackUri = null },
+                        onClearTargetTab = { targetTabName = null },
                         onClearClipboard = { clipboardUrl = null },
                         onEnterPip = { enterPipMode() },
                         inPipMode = inPipMode,
@@ -149,6 +164,10 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleShareIntent(intent)
+        val tab = intent.getStringExtra("select_tab")
+        if (!tab.isNullOrBlank()) {
+            targetTabName = tab
+        }
     }
 
     private fun handleShareIntent(intent: Intent?) {
@@ -157,6 +176,16 @@ class MainActivity : ComponentActivity() {
         val directUrl = intent.getStringExtra("shared_url")
         if (!directUrl.isNullOrBlank()) {
             sharedUrl = extractUrl(directUrl)
+            sharedFormat = intent.getStringExtra("selected_format")
+            return
+        }
+
+        val pUri = intent.getStringExtra("playback_uri")
+        if (!pUri.isNullOrBlank()) {
+            playbackUri = pUri
+            playbackTitle = intent.getStringExtra("playback_title") ?: ""
+            playbackIsAudio = intent.getBooleanExtra("playback_is_audio", false)
+            playbackDuration = intent.getStringExtra("playback_duration") ?: ""
             return
         }
 
