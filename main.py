@@ -1836,17 +1836,18 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 300,
-        "version_name": "3.0",
+        "version_code": 400,
+        "version_name": "4.0",
         "min_version_code": 10,
         "apk_url": apk_url,
         "changelog": (
-            "• Downloadivo v3.0 Major Release\n"
-            "• Library: Graphite segmented selector & single grouped surface\n"
-            "• Player: 2-line title room, clean overflow & circular seek thumb\n"
-            "• Update: Compact matte-graphite dialog with hanging indents\n"
-            "• Settings: Reorganized sections, storage paths & Cloud Turbo\n"
-            "• System: Studio animations, auto-wrap & crash resilience"
+            "• Downloadivo v4.0 Release\n"
+            "• Quick Share: Adaptive actions, zero clipping & graphite design\n"
+            "• Quick Share: One-row video quality disclosure & instant audio\n"
+            "• Quick Share: Per-output duplicate detection (Play / View in Queue)\n"
+            "• Performance: Root recomposition eliminated on progress ticks\n"
+            "• Motion: Tuned 140-180ms transitions & instant touch haptics\n"
+            "• Notifications: Immediate delivery via FOREGROUND_SERVICE_IMMEDIATE"
         ),
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
@@ -1855,6 +1856,7 @@ def get_app_version():
 
 @app.api_route("/downloadivo.apk", methods=["GET", "HEAD"])
 @app.api_route("/api/downloadivo.apk", methods=["GET", "HEAD"])
+@app.api_route("/downloadivo-v4.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v3.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v2.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v1.0.apk", methods=["GET", "HEAD"])
@@ -1862,6 +1864,7 @@ def get_app_version():
 def download_app_apk():
     apk_paths = [
         ASSETS_DIR / "downloadivo.apk",
+        ASSETS_DIR / "downloadivo-v4.0.apk",
         ASSETS_DIR / "downloadivo-v3.0.apk",
         ASSETS_DIR / "downloadivo-v2.0.apk",
         ASSETS_DIR / "downloadivo-v1.0.apk",
@@ -1874,7 +1877,7 @@ def download_app_apk():
         if p.exists() and p.stat().st_size > 1000000:
             return FileResponse(
                 path=str(p),
-                filename="Downloadivo-v3.0.apk",
+                filename="Downloadivo-v4.0.apk",
                 media_type="application/vnd.android.package-archive"
             )
     raise HTTPException(status_code=404, detail="APK build in progress")
