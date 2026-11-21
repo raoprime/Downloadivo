@@ -1836,18 +1836,26 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 400,
-        "version_name": "4.0",
+        "version_code": 500,
+        "version_name": "5.0",
         "min_version_code": 10,
         "apk_url": apk_url,
         "changelog": (
-            "• Downloadivo v4.0 Release\n"
-            "• Quick Share: Adaptive actions, zero clipping & graphite design\n"
-            "• Quick Share: One-row video quality disclosure & instant audio\n"
-            "• Quick Share: Per-output duplicate detection (Play / View in Queue)\n"
-            "• Performance: Root recomposition eliminated on progress ticks\n"
-            "• Motion: Tuned 140-180ms transitions & instant touch haptics\n"
-            "• Notifications: Immediate delivery via FOREGROUND_SERVICE_IMMEDIATE"
+            "• Downloadivo v5.0 Major Release
+"
+            "• Dynamic Video Player: Auto-syncs to 9:16 reels/shorts & 16:9 wide
+"
+            "• Audio Mode: Real album artwork thumbnail with animated spinning music badge
+"
+            "• Lock Screen & Notification: Persistent media playback controls & artwork
+"
+            "• Multi-Platform Support: YouTube, Instagram, Facebook, TikTok, X, Spotify, Reddit, Pinterest, Threads
+"
+            "• Playback Isolation: Unsupported links rejected cleanly without interrupting playback
+"
+            "• Player Reliability: Instant library item switching & safe non-exit dismissal
+"
+            "• Android Media Player: Native file association for video and audio"
         ),
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
@@ -1856,6 +1864,7 @@ def get_app_version():
 
 @app.api_route("/downloadivo.apk", methods=["GET", "HEAD"])
 @app.api_route("/api/downloadivo.apk", methods=["GET", "HEAD"])
+@app.api_route("/downloadivo-v5.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v4.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v3.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v2.0.apk", methods=["GET", "HEAD"])
