@@ -18,6 +18,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import coil.Coil
+import coil.ImageLoader
+import coil.decode.VideoFrameDecoder
 import com.raoprime.downloadivo.ui.DownloadivoScreen
 import com.raoprime.downloadivo.ui.onboarding.OnboardingScreen
 import com.raoprime.downloadivo.ui.theme.DownloadivoTheme
@@ -69,6 +72,15 @@ class MainActivity : ComponentActivity() {
 
         handleShareIntent(intent)
         checkClipboardForUrl()
+
+        // Configure Coil to support local video thumbnail frame extraction
+        val imageLoader = ImageLoader.Builder(applicationContext)
+            .components {
+                add(VideoFrameDecoder.Factory())
+            }
+            .crossfade(true)
+            .build()
+        Coil.setImageLoader(imageLoader)
 
         val prefs = getSharedPreferences("downloadivo_prefs", Context.MODE_PRIVATE)
         prefs.edit().putBoolean("has_seen_onboarding", true).apply()

@@ -78,6 +78,7 @@ dependencies {
 
   // Media & Image Loading
   implementation(libs.coil.compose)
+  implementation(libs.coil.video)
   implementation(libs.media3.exoplayer)
   implementation(libs.media3.ui)
   // Tooling

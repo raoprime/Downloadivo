@@ -14,6 +14,10 @@ import android.provider.MediaStore
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -416,12 +420,6 @@ fun DownloadivoScreen(
                             ) {
                                 Icon(Icons.Default.Close, contentDescription = "Clear", tint = TextSecondary)
                             }
-                        } else if (currentTab == AppTab.LIBRARY && historyList.any { it.status == DownloadStatus.SUCCESS }) {
-                            TextButton(
-                                onClick = { DownloadRepository.clearHistory() }
-                            ) {
-                                Text("Clear", color = TextSecondary, style = Typography.labelMedium)
-                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -655,6 +653,20 @@ fun DownloadivoScreen(
                                 }
                             }
                         },
+                        onOpenExternal = { task ->
+                            HapticUtil.lightClick(context)
+                            task.filePath?.let { uriStr ->
+                                try {
+                                    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                                        setDataAndType(Uri.parse(uriStr), if (task.isAudio) "audio/*" else "video/*")
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(viewIntent, "Play with"))
+                                } catch (_: Exception) {
+                                    Toast.makeText(context, "No external media player installed", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
                         onDelete = { task ->
                             HapticUtil.lightClick(context)
                             task.filePath?.let { uriStr ->
@@ -748,7 +760,10 @@ fun DownloadivoScreen(
                                 Spacer(modifier = Modifier.width(10.dp))
 
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
                                             color = SurfaceHighlight,
@@ -768,7 +783,8 @@ fun DownloadivoScreen(
                                             fontWeight = FontWeight.SemiBold,
                                             color = TextCrisp,
                                             maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
                                         )
                                     }
 
@@ -779,7 +795,10 @@ fun DownloadivoScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            modifier = Modifier.weight(1f, fill = false),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Text(
                                                 text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
                                                 style = Typography.labelMedium,
@@ -790,18 +809,23 @@ fun DownloadivoScreen(
                                                 Text(
                                                     text = " • ${currentTask.speed}",
                                                     style = Typography.bodySmall,
-                                                    color = TextCrisp
+                                                    color = TextCrisp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
                                             }
                                             if (currentTask.totalBytes > 0) {
                                                 Text(
                                                     text = " (${formatByteSize(currentTask.bytesDownloaded)} / ${formatByteSize(currentTask.totalBytes)})",
                                                     style = Typography.bodySmall,
-                                                    color = TextSecondary
+                                                    color = TextSecondary,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
                                             }
                                         }
                                         if (currentTask.eta.isNotBlank()) {
+                                            Spacer(modifier = Modifier.width(6.dp))
                                             Text(
                                                 text = currentTask.eta,
                                                 style = Typography.labelSmall,
@@ -1352,11 +1376,19 @@ private fun HomeDownloaderTab(
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = TextCrisp,
                                 contentColor = CanvasDark
-                            )
+                            ),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                         ) {
-                            Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Download Video", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = CanvasDark)
+                            Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(17.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "Download Video",
+                                style = Typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = CanvasDark,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
 
                         Button(
@@ -1372,11 +1404,19 @@ private fun HomeDownloaderTab(
                                 containerColor = SurfaceElevated,
                                 contentColor = TextCrisp
                             ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                         ) {
-                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Audio MP3", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = TextCrisp)
+                            Icon(Icons.Default.MusicNote, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(17.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "Audio MP3",
+                                style = Typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -1897,7 +1937,7 @@ private fun HomeDownloaderTab(
                                             },
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(56.dp),
+                                                .defaultMinSize(minHeight = 54.dp),
                                             shape = RoundedCornerShape(12.dp),
                                             color = if (isSelected) TextCrisp else SurfaceElevated,
                                             border = androidx.compose.foundation.BorderStroke(
@@ -1907,8 +1947,8 @@ private fun HomeDownloaderTab(
                                         ) {
                                             Row(
                                                 modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 10.dp, vertical = 6.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
@@ -1934,6 +1974,7 @@ private fun HomeDownloaderTab(
                                                     )
                                                 }
                                                 if (isSelected) {
+                                                    Spacer(modifier = Modifier.width(4.dp))
                                                     Icon(
                                                         Icons.Default.Check,
                                                         contentDescription = "Selected",
@@ -2052,21 +2093,24 @@ private fun HomeDownloaderTab(
                                 },
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(52.dp),
+                                    .defaultMinSize(minHeight = 50.dp),
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = SurfaceElevated,
                                     contentColor = TextCrisp
                                 ),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                             ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(19.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = "Stream Ad-Free",
                                     style = Typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextCrisp
+                                    color = TextCrisp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
 
@@ -2081,21 +2125,24 @@ private fun HomeDownloaderTab(
                                     onDownloadCustom(info, selectedFormat, start, end)
                                 },
                                 modifier = Modifier
-                                    .weight(1.1f)
-                                    .height(52.dp),
+                                    .weight(1f)
+                                    .defaultMinSize(minHeight = 50.dp),
                                 shape = RoundedCornerShape(14.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = TextCrisp,
                                     contentColor = CanvasDark
-                                )
+                                ),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                             ) {
                                 Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(19.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
                                     text = if (isTrimming) "Save Clip" else "Download",
                                     style = Typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = CanvasDark
+                                    color = CanvasDark,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -2490,13 +2537,18 @@ private fun QueueTab(
                             color = TextCrisp
                         )
 
-                        Column(horizontalAlignment = Alignment.End) {
+                        Column(
+                            modifier = Modifier.weight(1f, fill = false).padding(start = 12.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
                             if (currentTask.speed.isNotBlank()) {
                                 Text(
                                     text = "⚡ ${currentTask.speed}",
                                     style = Typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextCrisp
+                                    color = TextCrisp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                             Text(
@@ -2512,7 +2564,9 @@ private fun QueueTab(
                                     }
                                 },
                                 style = Typography.bodySmall,
-                                color = TextSecondary
+                                color = TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -2623,7 +2677,9 @@ private fun QueueTab(
                                         }
                                     },
                                     style = Typography.bodySmall,
-                                    color = TextTertiary
+                                    color = TextTertiary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
 
@@ -2708,7 +2764,7 @@ private fun QueueTab(
 // ═══════════════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 3: YOUTUBE-GRADE STUDIO LIBRARY (CLEAN 16:9, STORAGE STATS, OUTLINES)
+// TAB 3: YOUTUBE-GRADE STUDIO OFFLINE VAULT & LIBRARY
 // ═══════════════════════════════════════════════════════════════════════
 private enum class LibrarySort(val label: String, val icon: ImageVector) {
     NEWEST("Newest First", Icons.Default.Schedule),
@@ -2717,11 +2773,52 @@ private enum class LibrarySort(val label: String, val icon: ImageVector) {
     NAME("Name (A to Z)", Icons.Default.SortByAlpha)
 }
 
+private fun formatQualityBadge(task: DownloadTask): String {
+    if (task.isAudio) {
+        val f = task.format.lowercase()
+        return when {
+            f.contains("320") || f == "mp3" -> "MP3 · 320k"
+            f.contains("m4a") -> "AAC · Lossless"
+            f.contains("wav") -> "WAV · Hi-Res"
+            else -> "MP3"
+        }
+    }
+    val f = task.format.lowercase()
+    val t = task.title.lowercase()
+    return when {
+        f.contains("4k") || f.contains("2160") || t.contains("4k") || t.contains("2160p") -> "4K UHD"
+        f.contains("1440") || f.contains("2k") || t.contains("1440p") -> "2K QHD"
+        f.contains("1080") || f == "best" || t.contains("1080p") -> "1080p FHD"
+        f.contains("720") || t.contains("720p") -> "720p HD"
+        f.contains("480") || t.contains("480p") -> "480p"
+        f.contains("360") || t.contains("360p") -> "360p"
+        else -> "MP4"
+    }
+}
+
+private fun formatTimestampRelative(timestamp: Long): String {
+    if (timestamp <= 0L) return ""
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    val oneDay = 24 * 60 * 60 * 1000L
+    return when {
+        diff < 60 * 1000L -> "Just now"
+        diff < 60 * 60 * 1000L -> "${diff / (60 * 1000L)}m ago"
+        diff < oneDay -> "Today"
+        diff < 2 * oneDay -> "Yesterday"
+        else -> {
+            val sdf = SimpleDateFormat("dd MMM", Locale.US)
+            sdf.format(Date(timestamp))
+        }
+    }
+}
+
 @Composable
 private fun LibraryTab(
     history: List<DownloadTask>,
     onPlay: (DownloadTask) -> Unit,
     onShare: (DownloadTask) -> Unit,
+    onOpenExternal: (DownloadTask) -> Unit,
     onDelete: (DownloadTask) -> Unit,
     onNavigateHome: () -> Unit = {}
 ) {
@@ -2731,6 +2828,7 @@ private fun LibraryTab(
     var sortOrder by remember { mutableStateOf(LibrarySort.NEWEST) }
     var showSortMenu by remember { mutableStateOf(false) }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
+    var selectedTaskForDetails by remember { mutableStateOf<DownloadTask?>(null) }
 
     // Strict Library Invariant: ONLY fully completed, on-disk media appears in Library
     val completedHistory = remember(history) {
@@ -2743,7 +2841,9 @@ private fun LibraryTab(
 
     val filteredHistory = remember(completedHistory, searchQuery, filterType, sortOrder) {
         val filtered = completedHistory.filter { task ->
-            val matchesSearch = searchQuery.isBlank() || task.title.contains(searchQuery, ignoreCase = true)
+            val matchesSearch = searchQuery.isBlank() ||
+                task.title.contains(searchQuery, ignoreCase = true) ||
+                task.format.contains(searchQuery, ignoreCase = true)
             val matchesFilter = when (filterType) {
                 "Videos" -> !task.isAudio
                 "Audio" -> task.isAudio
@@ -2765,14 +2865,14 @@ private fun LibraryTab(
             onDismissRequest = { showClearConfirmDialog = false },
             title = {
                 Text(
-                    text = "Clear Library History?",
+                    text = "Clear Library Index?",
                     style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = TextCrisp
                 )
             },
             text = {
                 Text(
-                    text = "This will remove all entries from your offline library list. Your actual video and audio files will remain safe in device storage (Movies/Downloadivo and Music/Downloadivo).",
+                    text = "This removes all entries from your offline library list. Your actual video and audio files remain 100% safe in device storage (Movies/Downloadivo and Music/Downloadivo).",
                     style = Typography.bodyMedium,
                     color = TextSecondary
                 )
@@ -2798,106 +2898,286 @@ private fun LibraryTab(
         )
     }
 
+    // Media File Details Dialog
+    if (selectedTaskForDetails != null) {
+        val task = selectedTaskForDetails!!
+        AlertDialog(
+            onDismissRequest = { selectedTaskForDetails = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (task.isAudio) Icons.Default.GraphicEq else Icons.Default.SmartDisplay,
+                        contentDescription = null,
+                        tint = if (task.isAudio) Color(0xFFFFB74D) else TextCrisp,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "File Details",
+                        style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = TextCrisp
+                    )
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = task.title,
+                        style = Typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = TextCrisp
+                    )
+
+                    HorizontalDivider(color = BorderHairline)
+
+                    // Specs Grid
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Type / Quality", style = Typography.bodySmall, color = TextSecondary)
+                        Text(
+                            formatQualityBadge(task),
+                            style = Typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (task.isAudio) Color(0xFFFFB74D) else TextCrisp
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("File Size", style = Typography.bodySmall, color = TextSecondary)
+                        Text(
+                            "${formatByteSize(task.totalBytes)} (${task.totalBytes} B)",
+                            style = Typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = TextCrisp
+                        )
+                    }
+
+                    if (task.duration.isNotBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Duration", style = Typography.bodySmall, color = TextSecondary)
+                            Text(task.duration, style = Typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = TextCrisp)
+                        }
+                    }
+
+                    if (task.timestamp > 0L) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Downloaded", style = Typography.bodySmall, color = TextSecondary)
+                            val fullDate = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.US).format(Date(task.timestamp))
+                            Text(fullDate, style = Typography.bodySmall, color = TextSecondary)
+                        }
+                    }
+
+                    HorizontalDivider(color = BorderHairline)
+
+                    // File Path
+                    Column {
+                        Text("Storage Location", style = Typography.labelSmall, color = TextSecondary)
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = SurfaceElevated,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = task.filePath ?: "Local storage",
+                                style = Typography.bodySmall.copy(fontSize = 11.sp),
+                                color = TextTertiary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val toPlay = task
+                        selectedTaskForDetails = null
+                        HapticUtil.lightClick(context)
+                        onPlay(toPlay)
+                    }
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Play", color = TextCrisp, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedTaskForDetails = null }) {
+                    Text("Close", color = TextSecondary)
+                }
+            },
+            containerColor = SurfaceDark,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
         if (completedHistory.isNotEmpty()) {
-            // ── TOP HEADER ROW (Title + Count Badge + Sort & Clear Actions) ──
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // ── OFFLINE VAULT STORAGE HERO BANNER ──
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SurfaceDark,
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column {
-                    Text(
-                        text = "Library",
-                        style = Typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 22.sp),
-                        color = TextCrisp
-                    )
-                    Text(
-                        text = "${completedHistory.size} items · ${formatByteSize(totalBytes)}",
-                        style = Typography.bodySmall,
-                        color = TextSecondary
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Sort Dropdown Button
-                    Box {
-                        IconButton(
-                            onClick = {
-                                HapticUtil.lightClick(context)
-                                showSortMenu = true
-                            },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Sort,
-                                contentDescription = "Sort library",
-                                tint = TextSecondary,
-                                modifier = Modifier.size(20.dp)
-                            )
+                Column(
+                    modifier = Modifier.padding(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(SurfaceElevated)
+                                    .border(1.dp, BorderHairline, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.FolderSpecial,
+                                    contentDescription = null,
+                                    tint = TextCrisp,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Offline Vault",
+                                    style = Typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 14.5.sp),
+                                    color = TextCrisp
+                                )
+                                Text(
+                                    text = "${completedHistory.size} items offline",
+                                    style = Typography.bodySmall.copy(fontSize = 11.5.sp),
+                                    color = TextSecondary
+                                )
+                            }
                         }
 
-                        DropdownMenu(
-                            expanded = showSortMenu,
-                            onDismissRequest = { showSortMenu = false },
-                            modifier = Modifier.background(SurfaceElevated)
-                        ) {
-                            LibrarySort.values().forEach { sort ->
-                                val isSelected = sort == sortOrder
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = sort.label,
-                                            color = if (isSelected) TextCrisp else TextSecondary,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = sort.icon,
-                                            contentDescription = null,
-                                            tint = if (isSelected) TextCrisp else TextSecondary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    },
-                                    trailingIcon = if (isSelected) {
-                                        { Icon(Icons.Default.Check, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp)) }
-                                    } else null,
-                                    onClick = {
-                                        HapticUtil.lightClick(context)
-                                        sortOrder = sort
-                                        showSortMenu = false
-                                    }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Storage Pill Badge
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = SurfaceElevated,
+                                border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderSubtle)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Storage,
+                                        contentDescription = null,
+                                        tint = TextSecondary,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                    Text(
+                                        text = formatByteSize(totalBytes),
+                                        style = Typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.5.sp),
+                                        color = TextCrisp
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(4.dp))
+
+                            // Safe Clear Button
+                            IconButton(
+                                onClick = {
+                                    HapticUtil.mediumClick(context)
+                                    showClearConfirmDialog = true
+                                },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.DeleteOutline,
+                                    contentDescription = "Clear library",
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
                     }
 
-                    // Clear All Button
-                    IconButton(
-                        onClick = {
-                            HapticUtil.mediumClick(context)
-                            showClearConfirmDialog = true
-                        },
-                        modifier = Modifier.size(36.dp)
+                    // Ratio Bar & Breakdown
+                    val videoBytes = completedHistory.filter { !it.isAudio }.sumOf { it.totalBytes }
+                    val audioBytes = completedHistory.filter { it.isAudio }.sumOf { it.totalBytes }
+                    val videoFraction = if (totalBytes > 0) (videoBytes.toFloat() / totalBytes.toFloat()).coerceIn(0.08f, 0.92f) else 0.5f
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(SurfaceElevated)
                     ) {
-                        Icon(
-                            Icons.Default.DeleteSweep,
-                            contentDescription = "Clear all",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        if (videoBytes > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(if (audioBytes > 0) videoFraction else 1f)
+                                    .fillMaxHeight()
+                                    .background(TextCrisp)
+                            )
+                        }
+                        if (audioBytes > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(if (videoBytes > 0) (1f - videoFraction) else 1f)
+                                    .fillMaxHeight()
+                                    .background(Color(0xFFFFB74D))
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(6.dp).background(TextCrisp, CircleShape))
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Videos ($videoCount · ${formatByteSize(videoBytes)})",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(6.dp).background(Color(0xFFFFB74D), CircleShape))
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = "Audio ($audioCount · ${formatByteSize(audioBytes)})",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
             // ── MODERN PILL SEARCH BAR ──
             Surface(
@@ -2930,7 +3210,7 @@ private fun LibraryTab(
                         decorationBox = { innerTextField ->
                             if (searchQuery.isEmpty()) {
                                 Text(
-                                    "Search offline downloads...",
+                                    "Search titles or formats...",
                                     style = Typography.bodyMedium,
                                     color = TextQuaternary
                                 )
@@ -2954,45 +3234,119 @@ private fun LibraryTab(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // ── YOUTUBE-STYLE CATEGORY FILTER CHIPS ──
+            // ── FILTER CHIPS + SORT BUTTON ROW ──
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                listOf(
-                    Triple("All", "All (${completedHistory.size})", Icons.Default.Layers),
-                    Triple("Videos", "Videos ($videoCount)", Icons.Default.SmartDisplay),
-                    Triple("Audio", "Audio ($audioCount)", Icons.Default.GraphicEq)
-                ).forEach { (key, label, icon) ->
-                    val isSelected = filterType == key
+                // Category Filter Pills
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false)
+                ) {
+                    listOf(
+                        Triple("All", "All (${completedHistory.size})", Icons.Default.Layers),
+                        Triple("Videos", "Videos ($videoCount)", Icons.Default.SmartDisplay),
+                        Triple("Audio", "Audio ($audioCount)", Icons.Default.GraphicEq)
+                    ).forEach { (key, label, icon) ->
+                        val isSelected = filterType == key
+                        Surface(
+                            onClick = {
+                                HapticUtil.lightClick(context)
+                                filterType = key
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            color = if (isSelected) TextCrisp else SurfaceElevated,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) TextCrisp else CardBorderDark
+                            )
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) CanvasDark else TextSecondary,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = label,
+                                    style = Typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) CanvasDark else TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Sort Dropdown Button
+                Box {
                     Surface(
                         onClick = {
                             HapticUtil.lightClick(context)
-                            filterType = key
+                            showSortMenu = true
                         },
                         shape = RoundedCornerShape(20.dp),
-                        color = if (isSelected) TextCrisp else SurfaceElevated,
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (isSelected) TextCrisp else CardBorderDark
-                        )
+                        color = SurfaceElevated,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
                             Icon(
-                                imageVector = icon,
+                                imageVector = sortOrder.icon,
                                 contentDescription = null,
-                                tint = if (isSelected) CanvasDark else TextSecondary,
-                                modifier = Modifier.size(14.dp)
+                                tint = TextCrisp,
+                                modifier = Modifier.size(13.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = label,
-                                style = Typography.labelSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) CanvasDark else TextSecondary
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = "Sort options",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = showSortMenu,
+                        onDismissRequest = { showSortMenu = false },
+                        modifier = Modifier.background(SurfaceElevated)
+                    ) {
+                        LibrarySort.values().forEach { sort ->
+                            val isSelected = sort == sortOrder
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = sort.label,
+                                        color = if (isSelected) TextCrisp else TextSecondary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = sort.icon,
+                                        contentDescription = null,
+                                        tint = if (isSelected) TextCrisp else TextSecondary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                trailingIcon = if (isSelected) {
+                                    { Icon(Icons.Default.Check, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp)) }
+                                } else null,
+                                onClick = {
+                                    HapticUtil.lightClick(context)
+                                    sortOrder = sort
+                                    showSortMenu = false
+                                }
                             )
                         }
                     }
@@ -3003,7 +3357,7 @@ private fun LibraryTab(
         }
 
         if (filteredHistory.isEmpty()) {
-            // ── EMPTY STATE ──
+            // ── EMPTY STATE (HIGH IMPACT MINIMALIST VAULT) ──
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -3020,45 +3374,67 @@ private fun LibraryTab(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(28.dp)
+                        modifier = Modifier.padding(26.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(72.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.radialGradient(
-                                        listOf(SurfaceHighlight, SurfaceElevated)
-                                    )
-                                )
-                                .border(1.dp, BorderSubtle, CircleShape),
+                                .size(76.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(SurfaceElevated)
+                                .border(1.dp, BorderSubtle, RoundedCornerShape(22.dp)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (completedHistory.isEmpty()) Icons.Default.CloudDownload else Icons.Default.SearchOff,
+                                imageVector = if (completedHistory.isEmpty()) Icons.Default.VideoLibrary else Icons.Default.SearchOff,
                                 contentDescription = null,
                                 tint = TextCrisp,
-                                modifier = Modifier.size(34.dp)
+                                modifier = Modifier.size(36.dp)
                             )
                         }
                         Spacer(modifier = Modifier.height(18.dp))
                         Text(
-                            text = if (completedHistory.isEmpty()) "Your Library is Empty" else "No Matching Media Found",
-                            style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 17.sp),
-                            color = TextCrisp
+                            text = if (completedHistory.isEmpty()) "Your Offline Vault is Empty" else "No Matching Media Found",
+                            style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 17.5.sp),
+                            color = TextCrisp,
+                            textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = if (completedHistory.isEmpty())
-                                "Downloaded videos and audio will appear here for high-speed offline playback anytime, anywhere."
+                                "Downloaded videos and audio are saved directly onto your device for high-speed offline playback anytime."
                             else
-                                "No downloads matched \"$searchQuery\". Try searching another title or change category filters.",
+                                "No downloads matched \"$searchQuery\". Try checking the spelling or resetting the filters.",
                             style = Typography.bodySmall.copy(fontSize = 12.5.sp, lineHeight = 18.sp),
                             color = TextSecondary,
                             textAlign = TextAlign.Center
                         )
-                        Spacer(modifier = Modifier.height(20.dp))
+
                         if (completedHistory.isEmpty()) {
+                            Spacer(modifier = Modifier.height(18.dp))
+                            // Feature pills
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf("1080p / 4K", "Lossless Audio", "100% Offline").forEach { feature ->
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = SurfaceElevated,
+                                        border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = feature,
+                                            style = Typography.labelSmall.copy(fontSize = 10.sp),
+                                            color = TextSecondary,
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.padding(vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(20.dp))
                             Button(
                                 onClick = {
                                     HapticUtil.mediumClick(context)
@@ -3073,6 +3449,7 @@ private fun LibraryTab(
                                 Text("Download Media Now", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
                             }
                         } else {
+                            Spacer(modifier = Modifier.height(20.dp))
                             OutlinedButton(
                                 onClick = {
                                     HapticUtil.lightClick(context)
@@ -3093,7 +3470,7 @@ private fun LibraryTab(
                 }
             }
         } else {
-            // ── YOUTUBE-GRADE MEDIA LIST ──
+            // ── YOUTUBE-GRADE STUDIO MEDIA LIST ──
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -3101,6 +3478,17 @@ private fun LibraryTab(
             ) {
                 items(filteredHistory, key = { it.id }) { task ->
                     var showItemMenu by remember { mutableStateOf(false) }
+
+                    val localFile = remember(task.filePath) { task.filePath?.let { File(it) } }
+                    val hasLocalFile = remember(localFile) { localFile != null && localFile.exists() }
+                    val imageModel = remember(task.thumbnail, hasLocalFile, task.filePath) {
+                        when {
+                            !task.isAudio && hasLocalFile -> localFile
+                            task.thumbnail.isNotBlank() -> task.thumbnail
+                            hasLocalFile -> localFile
+                            else -> null
+                        }
+                    }
 
                     Surface(
                         shape = RoundedCornerShape(14.dp),
@@ -3119,7 +3507,7 @@ private fun LibraryTab(
                                 .padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // 16:9 Cinema Thumbnail (124dp x 70dp - YouTube Standard with Duration Badge)
+                            // 16:9 Cinema Thumbnail (124dp x 70dp - YouTube Standard)
                             Box(
                                 modifier = Modifier
                                     .width(124.dp)
@@ -3129,9 +3517,9 @@ private fun LibraryTab(
                                     .border(0.5.dp, BorderHairline, RoundedCornerShape(10.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (task.thumbnail.isNotBlank()) {
+                                if (imageModel != null) {
                                     AsyncImage(
-                                        model = task.thumbnail,
+                                        model = imageModel,
                                         contentDescription = null,
                                         modifier = Modifier.fillMaxSize(),
                                         contentScale = ContentScale.Crop
@@ -3159,7 +3547,23 @@ private fun LibraryTab(
                                     }
                                 }
 
-                                // YouTube-Style Duration Pill on Thumbnail
+                                // Subtle Central Play Affordance Overlay
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0x66000000)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+
+                                // YouTube-Style Duration Badge
                                 if (task.duration.isNotBlank()) {
                                     Box(
                                         modifier = Modifier
@@ -3181,7 +3585,7 @@ private fun LibraryTab(
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            // Metadata Column (Title 2 lines + Format Tag + Size)
+                            // Metadata Column (Title 2 lines + Quality Badge + Size + Relative Date)
                             Column(
                                 modifier = Modifier.weight(1f),
                                 verticalArrangement = Arrangement.Center
@@ -3189,7 +3593,7 @@ private fun LibraryTab(
                                 Text(
                                     text = task.title,
                                     style = Typography.titleSmall.copy(
-                                        fontSize = 14.sp,
+                                        fontSize = 13.5.sp,
                                         lineHeight = 18.sp,
                                         fontWeight = FontWeight.SemiBold
                                     ),
@@ -3204,14 +3608,14 @@ private fun LibraryTab(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    // High-Contrast Format Badge (MP4 / MP3)
+                                    // High-Contrast Format & Quality Badge
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
                                         color = if (task.isAudio) Color(0xFF2A2012) else SurfaceHighlight,
                                         border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline)
                                     ) {
                                         Text(
-                                            text = if (task.isAudio) "MP3" else "MP4",
+                                            text = formatQualityBadge(task),
                                             color = if (task.isAudio) Color(0xFFFFB74D) else TextCrisp,
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
@@ -3222,6 +3626,21 @@ private fun LibraryTab(
                                     if (task.totalBytes > 0) {
                                         Text(
                                             text = formatByteSize(task.totalBytes),
+                                            style = Typography.bodySmall,
+                                            fontSize = 11.5.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
+
+                                    val relTime = formatTimestampRelative(task.timestamp)
+                                    if (relTime.isNotBlank()) {
+                                        Text(
+                                            text = "•",
+                                            fontSize = 11.sp,
+                                            color = TextTertiary
+                                        )
+                                        Text(
+                                            text = relTime,
                                             style = Typography.bodySmall,
                                             fontSize = 11.5.sp,
                                             color = TextSecondary
@@ -3262,12 +3681,30 @@ private fun LibraryTab(
                                         }
                                     )
                                     DropdownMenuItem(
+                                        text = { Text("Play Externally", color = TextCrisp) },
+                                        leadingIcon = { Icon(Icons.Default.OpenInNew, contentDescription = null, tint = TextCrisp) },
+                                        onClick = {
+                                            showItemMenu = false
+                                            HapticUtil.lightClick(context)
+                                            onOpenExternal(task)
+                                        }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Share File", color = TextCrisp) },
                                         leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = TextCrisp) },
                                         onClick = {
                                             showItemMenu = false
                                             HapticUtil.lightClick(context)
                                             onShare(task)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("File Details", color = TextCrisp) },
+                                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = TextCrisp) },
+                                        onClick = {
+                                            showItemMenu = false
+                                            HapticUtil.lightClick(context)
+                                            selectedTaskForDetails = task
                                         }
                                     )
                                     HorizontalDivider(color = BorderHairline)
@@ -3377,7 +3814,10 @@ private fun SettingsTab(
                         Text(
                             text = testStatus ?: "Default: https://downloadivo.vercel.app",
                             style = Typography.bodySmall,
-                            color = if (testStatus?.startsWith("✓") == true) TextCrisp else TextTertiary
+                            color = if (testStatus?.startsWith("✓") == true) TextCrisp else TextTertiary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(end = 8.dp)
                         )
                         FilledTonalButton(
                             onClick = {
@@ -3450,7 +3890,10 @@ private fun SettingsTab(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f).padding(end = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Image(
                                 painter = painterResource(id = R.drawable.app_icon_white),
                                 contentDescription = null,
@@ -3459,9 +3902,22 @@ private fun SettingsTab(
                                     .clip(RoundedCornerShape(10.dp))
                             )
                             Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Downloadivo Mobile", style = Typography.titleMedium, color = TextCrisp, fontWeight = FontWeight.Bold)
-                                Text("v${BuildConfig.VERSION_NAME} • Build ${BuildConfig.VERSION_CODE}", style = Typography.bodySmall, color = TextSecondary)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Downloadivo Mobile",
+                                    style = Typography.titleMedium,
+                                    color = TextCrisp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "v${BuildConfig.VERSION_NAME} • Build ${BuildConfig.VERSION_CODE}",
+                                    style = Typography.bodySmall,
+                                    color = TextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
 

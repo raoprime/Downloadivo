@@ -203,7 +203,8 @@ fun UpdateDialog(
                                             fontSize = 12.sp,
                                             lineHeight = 17.sp
                                         ),
-                                        color = Color(0xFFD4D4D4)
+                                        color = Color(0xFFD4D4D4),
+                                        modifier = Modifier.weight(1f)
                                     )
                                 }
                             }

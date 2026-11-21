@@ -318,7 +318,7 @@ fun BuiltInPlayerSheet(
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = title.ifBlank { "Now Playing" },
                                 fontWeight = FontWeight.Bold,
