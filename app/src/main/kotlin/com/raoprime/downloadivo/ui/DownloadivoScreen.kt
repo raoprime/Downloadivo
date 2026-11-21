@@ -10,6 +10,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -18,6 +19,8 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.Job
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -3735,245 +3738,692 @@ private fun SettingsTab(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    val prefs = remember { context.getSharedPreferences("downloadivo_prefs", Context.MODE_PRIVATE) }
+
+    // Preference: Cloud Turbo
+    var isCloudTurbo by rememberSaveable {
+        mutableStateOf(prefs.getBoolean("cloud_turbo_enabled", true))
+    }
+
+    // Default base URL
+    val defaultUrl = "https://downloadivo.vercel.app"
+
+    // Server Endpoint State
+    var backendUrlInput by rememberSaveable {
+        mutableStateOf(prefs.getString("custom_backend_url", DownloadEngine.activeBaseUrl) ?: DownloadEngine.activeBaseUrl)
+    }
+    var isAdvancedExpanded by rememberSaveable { mutableStateOf(false) }
+    var testStatus by remember { mutableStateOf<String?>(null) }
+    var isTesting by remember { mutableStateOf(false) }
+    var testJob by remember { mutableStateOf<Job?>(null) }
+
+    // Dialog state
+    var showClearHistoryConfirm by remember { mutableStateOf(false) }
+
+    // Update state
     val updateState by UpdateManager.updateState.collectAsState()
     var isCheckingUpdate by remember { mutableStateOf(false) }
 
-    var backendUrlInput by remember { mutableStateOf(DownloadEngine.activeBaseUrl) }
-    var testStatus by remember { mutableStateOf<String?>(null) }
-    var isTesting by remember { mutableStateOf(false) }
+    // Save Locations
+    val videosLocation = remember {
+        try {
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES), "Downloadivo").absolutePath
+        } catch (_: Exception) {
+            "Movies/Downloadivo"
+        }
+    }
+    val audioLocation = remember {
+        try {
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Downloadivo").absolutePath
+        } catch (_: Exception) {
+            "Music/Downloadivo"
+        }
+    }
+
+    // Clear History Safety Confirmation Dialog
+    if (showClearHistoryConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryConfirm = false },
+            title = {
+                Text(
+                    text = "Clear download history?",
+                    style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = TextCrisp
+                )
+            },
+            text = {
+                Text(
+                    text = "Downloaded files stay on this device. Only the list of past download records in Downloadivo will be cleared.",
+                    style = Typography.bodyMedium,
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        HapticUtil.mediumClick(context)
+                        showClearHistoryConfirm = false
+                        DownloadRepository.clearHistory()
+                        Toast.makeText(context, "Download history cleared", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("Clear history", color = StatusError, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryConfirm = false }) {
+                    Text("Cancel", color = TextCrisp)
+                }
+            },
+            containerColor = SurfaceDark,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
+        // ── 1. DOWNLOADS SECTION ──
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(16.dp),
             color = SurfaceDark,
-            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                // Cloud Turbo Toggle
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "DOWNLOADS",
+                    style = Typography.labelMedium.copy(
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    ),
+                    color = TextTertiary
+                )
+
+                // Cloud Turbo Toggle Row (Tapping row or switch toggles exactly once)
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            HapticUtil.lightClick(context)
+                            val next = !isCloudTurbo
+                            isCloudTurbo = next
+                            prefs.edit().putBoolean("cloud_turbo_enabled", next).apply()
+                            DownloadEngine.isCloudTurboEnabled = next
+                        },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Cloud Turbo", style = Typography.titleSmall, color = TextCrisp)
-                        Text("Line-rate edge stream multiplexing", style = Typography.bodySmall, color = TextSecondary)
-                    }
-                    Switch(
-                        checked = true,
-                        onCheckedChange = {},
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = CanvasDark,
-                            checkedTrackColor = TextCrisp
-                        )
-                    )
-                }
-
-                HorizontalDivider(color = BorderHairline)
-
-                // Backend Endpoint
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Backend Endpoint", style = Typography.titleSmall, color = TextCrisp)
-                    OutlinedTextField(
-                        value = backendUrlInput,
-                        onValueChange = {
-                            backendUrlInput = it
-                            DownloadEngine.activeBaseUrl = it.trim().trimEnd('/')
-                            testStatus = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = TextCrisp,
-                            unfocusedBorderColor = BorderHairline,
-                            focusedTextColor = TextCrisp,
-                            unfocusedTextColor = TextCrisp
-                        )
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 12.dp)
                     ) {
                         Text(
-                            text = testStatus ?: "Default: https://downloadivo.vercel.app",
-                            style = Typography.bodySmall,
-                            color = if (testStatus?.startsWith("✓") == true) TextCrisp else TextTertiary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f).padding(end = 8.dp)
+                            text = "Cloud Turbo",
+                            style = Typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.5.sp
+                            ),
+                            color = TextCrisp
                         )
-                        FilledTonalButton(
-                            onClick = {
-                                isTesting = true
-                                testStatus = "Testing..."
-                                coroutineScope.launch {
-                                    try {
-                                        val testRes = DownloadEngine.fetchMediaInfo("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
-                                        isTesting = false
-                                        if (testRes.isSuccess) {
-                                            testStatus = "✓ Connected (200 OK)"
-                                        } else {
-                                            testStatus = "✗ Failed"
-                                        }
-                                    } catch (_: Exception) {
-                                        isTesting = false
-                                        testStatus = "✗ Unreachable"
-                                    }
-                                }
-                            },
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Accelerates downloads by streaming through Downloadivo's high-speed cloud edge tunnel.",
+                            style = Typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                            color = TextSecondary
+                        )
+                    }
+
+                    Switch(
+                        checked = isCloudTurbo,
+                        onCheckedChange = { next ->
+                            HapticUtil.lightClick(context)
+                            isCloudTurbo = next
+                            prefs.edit().putBoolean("cloud_turbo_enabled", next).apply()
+                            DownloadEngine.isCloudTurboEnabled = next
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = CanvasDark,
+                            checkedTrackColor = TextCrisp,
+                            uncheckedThumbColor = TextTertiary,
+                            uncheckedTrackColor = SurfaceElevated
+                        ),
+                        modifier = Modifier.semantics {
+                            contentDescription = "Cloud Turbo acceleration"
+                        }
+                    )
+                }
+
+                HorizontalDivider(color = BorderHairline)
+
+                // Save Locations: separate rows for Videos and Audio
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Storage locations",
+                        style = Typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        ),
+                        color = TextCrisp
+                    )
+
+                    // Videos Location Row
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Videos",
+                            style = Typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            ),
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Surface(
                             shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                        ) {
-                            Text(if (isTesting) "..." else "Test", style = Typography.labelSmall)
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = BorderHairline)
-
-                // Storage location
-                Column {
-                    Text("Storage location", style = Typography.titleSmall, color = TextCrisp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text("Movies/Downloadivo & Music/Downloadivo", style = Typography.bodySmall, color = TextSecondary)
-                }
-
-                HorizontalDivider(color = BorderHairline)
-
-                // Clear Download History
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Clear History", style = Typography.titleSmall, color = TextCrisp)
-                        Text("Remove all entries from Library", style = Typography.bodySmall, color = TextSecondary)
-                    }
-                    FilledTonalButton(
-                        onClick = { DownloadRepository.clearHistory() },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Clear", style = Typography.labelSmall)
-                    }
-                }
-
-                HorizontalDivider(color = BorderHairline)
-
-                // App version & In-App Update System
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            modifier = Modifier.weight(1f).padding(end = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.app_icon_white),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Downloadivo Mobile",
-                                    style = Typography.titleMedium,
-                                    color = TextCrisp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    "v${BuildConfig.VERSION_NAME} • Build ${BuildConfig.VERSION_CODE}",
-                                    style = Typography.bodySmall,
-                                    color = TextSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-
-                        // Version Status Badge
-                        val isUpdateAvail = updateState is UpdateState.Available
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isUpdateAvail) TextCrisp else SurfaceElevated)
-                                .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                            color = SurfaceElevated,
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = if (isUpdateAvail) "Update Ready" else "Up to date",
-                                color = if (isUpdateAvail) CanvasDark else TextCrisp,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
+                                text = videosLocation,
+                                style = Typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = TextCrisp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
                             )
                         }
                     }
 
-                    // Check for Updates Button with Spring Bounce & Tactile Haptic
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(SurfaceElevated)
-                            .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
-                            .clickable(enabled = !isCheckingUpdate) {
-                                HapticUtil.lightClick(context)
-                                isCheckingUpdate = true
-                                coroutineScope.launch {
-                                    val update = UpdateManager.checkForUpdates(BuildConfig.VERSION_CODE)
-                                    isCheckingUpdate = false
-                                    if (update != null) {
-                                        onShowUpdateDialog(update)
-                                    } else {
-                                        android.widget.Toast.makeText(context, "Downloadivo is up to date (v${BuildConfig.VERSION_NAME})", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (isCheckingUpdate) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = TextCrisp,
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Checking for updates...", color = TextCrisp, style = Typography.labelMedium)
-                            } else {
-                                Icon(Icons.Default.Sync, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Check for Updates", color = TextCrisp, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
-                            }
+                    // Audio Location Row
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Audio",
+                            style = Typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
+                            ),
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = SurfaceElevated,
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = audioLocation,
+                                style = Typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = TextCrisp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                            )
                         }
                     }
                 }
             }
         }
+
+        // ── 2. LIBRARY HISTORY SECTION ──
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = SurfaceDark,
+            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "LIBRARY HISTORY",
+                    style = Typography.labelMedium.copy(
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    ),
+                    color = TextTertiary
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 12.dp)
+                    ) {
+                        Text(
+                            text = "Clear download history",
+                            style = Typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.5.sp
+                            ),
+                            color = TextCrisp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Clears past download records. Downloaded files stay on this device.",
+                            style = Typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
+                            color = TextSecondary
+                        )
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            HapticUtil.mediumClick(context)
+                            showClearHistoryConfirm = true
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = SurfaceElevated,
+                            contentColor = StatusError
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.DeleteOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                            tint = StatusError
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "Clear",
+                            style = Typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── 3. ADVANCED SERVER SETTINGS SECTION ──
+        val isDefaultActive = remember(backendUrlInput, defaultUrl) {
+            val clean = backendUrlInput.trim().trimEnd('/')
+            clean == defaultUrl.trimEnd('/') || clean == "https://mazda-prints-equity-albuquerque.trycloudflare.com"
+        }
+
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = SurfaceDark,
+            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Header Row (Click to Expand / Collapse)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            HapticUtil.lightClick(context)
+                            isAdvancedExpanded = !isAdvancedExpanded
+                        },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
+                        Text(
+                            text = "ADVANCED",
+                            style = Typography.labelMedium.copy(
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            ),
+                            color = TextTertiary
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Custom server endpoint",
+                            style = Typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.5.sp
+                            ),
+                            color = TextCrisp
+                        )
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Text(
+                            text = if (isDefaultActive) "Default server active" else "Custom: ${backendUrlInput.trim()}",
+                            style = Typography.bodySmall.copy(fontSize = 12.sp),
+                            color = if (isDefaultActive) TextSecondary else Color(0xFFFFB74D),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Icon(
+                        imageVector = if (isAdvancedExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (isAdvancedExpanded) "Collapse" else "Expand",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+
+                // Expanded Section Body
+                if (isAdvancedExpanded) {
+                    HorizontalDivider(color = BorderHairline)
+
+                    Text(
+                        text = "Server address",
+                        style = Typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        ),
+                        color = TextSecondary
+                    )
+
+                    OutlinedTextField(
+                        value = backendUrlInput,
+                        onValueChange = { newVal ->
+                            backendUrlInput = newVal
+                            testJob?.cancel()
+                            testStatus = null
+                            isTesting = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("https://your-server.com", color = TextTertiary) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = TextCrisp,
+                            unfocusedBorderColor = BorderHairline,
+                            focusedTextColor = TextCrisp,
+                            unfocusedTextColor = TextCrisp,
+                            cursorColor = TextCrisp
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = ImeAction.Done
+                        )
+                    )
+
+                    Text(
+                        text = "Default: https://downloadivo.vercel.app",
+                        style = Typography.bodySmall.copy(fontSize = 11.sp),
+                        color = TextTertiary
+                    )
+
+                    // Dedicated Test Row with clear status
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Test entered address button
+                            FilledTonalButton(
+                                onClick = {
+                                    HapticUtil.lightClick(context)
+                                    isTesting = true
+                                    testStatus = "Testing entered address..."
+                                    testJob?.cancel()
+                                    val candidate = backendUrlInput
+                                    testJob = coroutineScope.launch {
+                                        val res = DownloadEngine.testEndpoint(candidate)
+                                        isTesting = false
+                                        if (res.isSuccess) {
+                                            testStatus = "✓ ${res.getOrNull()}"
+                                        } else {
+                                            testStatus = "✗ ${res.exceptionOrNull()?.message ?: "Connection failed"}"
+                                        }
+                                    }
+                                },
+                                enabled = !isTesting && backendUrlInput.isNotBlank(),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = SurfaceElevated,
+                                    contentColor = TextCrisp
+                                ),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                if (isTesting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(13.dp),
+                                        color = TextCrisp,
+                                        strokeWidth = 1.5.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+                                Text(
+                                    text = if (isTesting) "Testing..." else "Test connection",
+                                    style = Typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
+
+                            // Save button
+                            Button(
+                                onClick = {
+                                    HapticUtil.mediumClick(context)
+                                    val clean = backendUrlInput.trim().trimEnd('/')
+                                    DownloadEngine.activeBaseUrl = clean
+                                    prefs.edit().putString("custom_backend_url", clean).apply()
+                                    Toast.makeText(context, "Server address saved", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TextCrisp,
+                                    contentColor = CanvasDark
+                                ),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 7.dp)
+                            ) {
+                                Text("Save", style = Typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                            }
+
+                            // Reset button
+                            OutlinedButton(
+                                onClick = {
+                                    HapticUtil.lightClick(context)
+                                    backendUrlInput = defaultUrl
+                                    DownloadEngine.activeBaseUrl = defaultUrl
+                                    prefs.edit().remove("custom_backend_url").apply()
+                                    testStatus = null
+                                    Toast.makeText(context, "Reset to default server", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
+                            ) {
+                                Text("Reset", style = Typography.labelSmall)
+                            }
+                        }
+
+                        // Feedback message row below action buttons
+                        if (testStatus != null) {
+                            Text(
+                                text = testStatus!!,
+                                style = Typography.bodySmall.copy(
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = when {
+                                    testStatus!!.startsWith("✓") -> Color(0xFF81C784)
+                                    testStatus!!.startsWith("✗") -> StatusError
+                                    else -> TextSecondary
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 4. ABOUT & UPDATE STATUS SECTION ──
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = SurfaceDark,
+            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "ABOUT",
+                    style = Typography.labelMedium.copy(
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.8.sp
+                    ),
+                    color = TextTertiary
+                )
+
+                // App Identity with dedicated space
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.app_icon_white),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Downloadivo Mobile",
+                            style = Typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp
+                            ),
+                            color = TextCrisp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "v${BuildConfig.VERSION_NAME} • Build ${BuildConfig.VERSION_CODE}",
+                            style = Typography.bodySmall.copy(fontSize = 12.5.sp),
+                            color = TextSecondary
+                        )
+                    }
+                }
+
+                // Quiet Inline Update Status (Placed below identity to prevent horizontal breakage)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 2.dp)
+                ) {
+                    when (val st = updateState) {
+                        is UpdateState.Checking -> {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(13.dp),
+                                color = TextSecondary,
+                                strokeWidth = 1.5.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Checking for updates...",
+                                style = Typography.bodySmall.copy(fontSize = 12.sp),
+                                color = TextSecondary
+                            )
+                        }
+                        is UpdateState.UpToDate -> {
+                            Text(
+                                text = "✓ App is up to date",
+                                style = Typography.bodySmall.copy(
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = Color(0xFF81C784)
+                            )
+                        }
+                        is UpdateState.Available -> {
+                            Text(
+                                text = "★ Update v${st.updateInfo.versionName} available",
+                                style = Typography.bodySmall.copy(
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                color = Color(0xFFFFB74D)
+                            )
+                        }
+                        is UpdateState.Error -> {
+                            Text(
+                                text = "✗ Could not check for updates (${st.message.take(28)})",
+                                style = Typography.bodySmall.copy(fontSize = 12.sp),
+                                color = StatusError
+                            )
+                        }
+                        else -> {
+                            Text(
+                                text = "✓ App is up to date",
+                                style = Typography.bodySmall.copy(fontSize = 12.sp),
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                }
+
+                // Dedicated Check for Updates Button
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SurfaceElevated)
+                        .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
+                        .clickable(enabled = !isCheckingUpdate && updateState !is UpdateState.Checking) {
+                            HapticUtil.lightClick(context)
+                            isCheckingUpdate = true
+                            coroutineScope.launch {
+                                val update = UpdateManager.checkForUpdates(BuildConfig.VERSION_CODE)
+                                isCheckingUpdate = false
+                                if (update != null) {
+                                    onShowUpdateDialog(update)
+                                } else if (UpdateManager.updateState.value is UpdateState.UpToDate) {
+                                    Toast.makeText(context, "Downloadivo is up to date (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isCheckingUpdate || updateState is UpdateState.Checking) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(15.dp),
+                                color = TextCrisp,
+                                strokeWidth = 1.5.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Checking for updates...", color = TextCrisp, style = Typography.labelMedium)
+                        } else {
+                            Icon(Icons.Default.Sync, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(17.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (updateState is UpdateState.Error) "Retry update check" else "Check for Updates",
+                                color = TextCrisp,
+                                style = Typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(76.dp))
     }
 }

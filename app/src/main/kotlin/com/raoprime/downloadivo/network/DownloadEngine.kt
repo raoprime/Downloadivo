@@ -24,6 +24,46 @@ object DownloadEngine {
     // High-Speed Direct Tunnel Endpoint
     var directStreamBaseUrl: String = "https://mazda-prints-equity-albuquerque.trycloudflare.com"
 
+    // Cloud Turbo Acceleration Preference (Persisted in SharedPreferences)
+    var isCloudTurboEnabled: Boolean = true
+
+    suspend fun testEndpoint(targetUrl: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val clean = targetUrl.trim().trimEnd('/')
+            if (clean.isBlank() || (!clean.startsWith("http://") && !clean.startsWith("https://"))) {
+                return@withContext Result.failure(Exception("URL must start with http:// or https://"))
+            }
+            try {
+                val healthReq = Request.Builder()
+                    .url("$clean/health")
+                    .header("User-Agent", "Downloadivo-Android")
+                    .get()
+                    .build()
+                apiClient.newCall(healthReq).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        return@withContext Result.success("Connected (${resp.code} OK)")
+                    }
+                }
+            } catch (_: Exception) {}
+
+            // Fallback: test root /
+            val rootReq = Request.Builder()
+                .url(clean)
+                .header("User-Agent", "Downloadivo-Android")
+                .get()
+                .build()
+            apiClient.newCall(rootReq).execute().use { resp ->
+                if (resp.isSuccessful || resp.code < 500) {
+                    Result.success("Connected (${resp.code} OK)")
+                } else {
+                    Result.failure(Exception("Server returned HTTP ${resp.code}"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(e.message ?: "Connection failed / Unreachable"))
+        }
+    }
+
     private val apiClient = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
