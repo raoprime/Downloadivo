@@ -1836,19 +1836,19 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 500,
-        "version_name": "5.0",
+        "version_code": 510,
+        "version_name": "5.1",
         "min_version_code": 10,
         "apk_url": apk_url,
         "changelog": (
-            "- Downloadivo v5.0 Major Release\n"
-            "- Dynamic Video Player: Auto-syncs to 9:16 reels/shorts & 16:9 wide\n"
-            "- Audio Mode: Real album artwork thumbnail with animated spinning music badge\n"
-            "- Lock Screen & Notification: Persistent media playback controls & artwork\n"
-            "- Multi-Platform Support: YouTube, Instagram, Facebook, TikTok, X, Spotify, Reddit, Pinterest, Threads\n"
-            "- Playback Isolation: Unsupported links rejected cleanly without interrupting playback\n"
-            "- Player Reliability: Instant library item switching & safe non-exit dismissal\n"
-            "- Android Media Player: Native file association for video and audio"
+            "- Downloadivo v5.1 Update\n"
+            "- Fullscreen Immersive Mode: Status bar (battery, time) & nav bar hidden for true edge-to-edge view\n"
+            "- Back Navigation: Dedicated Back button in Fullscreen overlay\n"
+            "- Next & Previous Controls: SkipNext and SkipPrevious in both Fullscreen & Normal player\n"
+            "- Playlist Auto-Play: Automatic transition to next video in Library upon completion\n"
+            "- Dynamic Aspect Ratio: Auto-syncs to 9:16 vertical reels & 16:9 wide\n"
+            "- Audio Mode: Real album art thumbnail with animated spinning music badge\n"
+            "- Lock Screen & Notification: Persistent media playback controls & artwork"
         ),
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
@@ -1857,6 +1857,7 @@ def get_app_version():
 
 @app.api_route("/downloadivo.apk", methods=["GET", "HEAD"])
 @app.api_route("/api/downloadivo.apk", methods=["GET", "HEAD"])
+@app.api_route("/downloadivo-v5.1.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v5.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v4.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v3.0.apk", methods=["GET", "HEAD"])
