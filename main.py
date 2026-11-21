@@ -1846,11 +1846,11 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 17,
-        "version_name": "5.2.0",
+        "version_code": 18,
+        "version_name": "5.3.0",
         "min_version_code": 10,
         "apk_url": apk_url,
-        "changelog": "✨ Accurate Video Resolutions (no fake 4K/8K on 720p/1080p videos)\n✨ Fixed Video Freeze on Playback Start (Zero lag & audio sync)\n✨ Fixed Scrubbing & Seeking (Forward/Backward without resetting)\n✨ Visible Speed, Quality & Audio Controls Grid\n✨ Bottom Navigation auto-hides when Player expands",
+        "changelog": "✨ YouTube-Inspired Fluid UX & Physics Transitions\n✨ Clean & Uncluttered Library Thumbnails (Removed dark tint & blocking play icon)\n✨ Smooth Tab Slide Transitions & Spring-Loaded Player Sheet\n✨ Perfect UI Alignment & Removed Duplicate Buttons\n✨ Accurate Video Resolutions & Instant Range Scrubbing",
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
     }
@@ -1871,7 +1871,7 @@ def download_app_apk():
         if p.exists() and p.stat().st_size > 1000000:
             return FileResponse(
                 path=str(p),
-                filename="Downloadivo-v5.1.0.apk",
+                filename="Downloadivo-v5.2.0.apk",
                 media_type="application/vnd.android.package-archive"
             )
     raise HTTPException(status_code=404, detail="APK build in progress")
