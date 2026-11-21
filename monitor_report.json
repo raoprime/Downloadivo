@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-21T19:35:54.641355",
+  "timestamp": "2026-11-21T19:52:17.011407",
   "interior": {
     "backend_port_8899": "HEALTHY",
     "in_app_version_api": "HEALTHY",
@@ -15,8 +15,8 @@
   },
   "exterior": {
     "public_tunnel_url": "https://mazda-prints-equity-albuquerque.trycloudflare.com",
-    "tunnel_status": "ONLINE",
-    "apk_serving_status": "AVAILABLE"
+    "tunnel_status": "OFFLINE",
+    "apk_serving_status": "CHECKING"
   },
   "speed_benchmark": {
     "concurrent_streams": 3,
@@ -30,42 +30,44 @@
   },
   "platform_support": {
     "YouTube_Video": {
-      "status": "SUCCESS",
-      "latency_sec": 4.47,
-      "code": 200
+      "status": "FAILED",
+      "latency_sec": 2.06,
+      "code": 0,
+      "error": "<urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
     },
     "YouTube_Shorts": {
-      "status": "SUCCESS",
-      "latency_sec": 3.44,
-      "code": 200
+      "status": "FAILED",
+      "latency_sec": 2.05,
+      "code": 0,
+      "error": "<urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
     },
     "TikTok": {
       "status": "FAILED",
-      "latency_sec": 1.06,
-      "code": 400,
-      "error": "HTTP Error 400: Bad Request"
+      "latency_sec": 2.04,
+      "code": 0,
+      "error": "<urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
     },
     "Twitter_X": {
       "status": "FAILED",
-      "latency_sec": 1.03,
-      "code": 400,
-      "error": "HTTP Error 400: Bad Request"
+      "latency_sec": 2.03,
+      "code": 0,
+      "error": "<urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
     },
     "Reddit": {
       "status": "FAILED",
-      "latency_sec": 1.34,
-      "code": 400,
-      "error": "HTTP Error 400: Bad Request"
+      "latency_sec": 2.03,
+      "code": 0,
+      "error": "<urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
     },
     "Vimeo": {
       "status": "FAILED",
-      "latency_sec": 0.63,
+      "latency_sec": 3.3,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "SoundCloud": {
       "status": "FAILED",
-      "latency_sec": 0.6,
+      "latency_sec": 0.51,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     }

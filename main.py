@@ -1836,11 +1836,11 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 21,
-        "version_name": "5.3.3",
+        "version_code": 22,
+        "version_name": "5.3.4",
         "min_version_code": 10,
         "apk_url": apk_url,
-        "changelog": "✨ Crystal Clear Thumbnails (100% clutter-free 16:9 cinema thumbnails)\n✨ Clean Unified Metadata (Duration, format and size in text subtitle)\n✨ Direct Tap-to-Play Cards (Instant playback on touch with 3-dot options menu)\n✨ Crash-Proof Stability (Protected ExoPlayer lifecycle and clean FileProvider paths)\n✨ Native Fluid Haptics (Responsive Material touch feedback)",
+        "changelog": "✨ Studio-Grade YouTube Library (124dp true 16:9 cinema thumbnails with zero overlays)\n✨ Smart Library Sorting (Newest, Oldest, Largest Size, Name A-Z)\n✨ Clear All Confirmation Dialog (Prevents accidental library wipe)\n✨ Offline Ready Badges & Artwork Gradients\n✨ Tap-to-Play Cards with Instant Haptics",
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
     }
