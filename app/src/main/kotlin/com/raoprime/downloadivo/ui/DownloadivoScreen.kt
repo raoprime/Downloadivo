@@ -456,7 +456,11 @@ fun DownloadivoScreen(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .bouncyClick(scaleDown = 0.92f) {
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        HapticUtil.lightClick(context)
                                         currentTab = tab
                                     }
                                     .padding(vertical = 4.dp),
@@ -2763,72 +2767,34 @@ private fun LibraryTab(
             .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
         if (completedHistory.isNotEmpty()) {
-            // ── 1. STUDIO STORAGE & DOWNLOAD SUMMARY CARD ──
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = SurfaceElevated,
-                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-                modifier = Modifier.fillMaxWidth()
+            // Clean YouTube-Style Header Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Text(
+                    text = "Library (${completedHistory.size})",
+                    style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = TextCrisp
+                )
+                TextButton(
+                    onClick = {
+                        HapticUtil.mediumClick(context)
+                        DownloadRepository.clearHistory()
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(SurfaceDark)
-                                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.Folder,
-                                contentDescription = null,
-                                tint = TextCrisp,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Offline Downloads",
-                                style = Typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = TextCrisp
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "${completedHistory.size} items • ${formatByteSize(totalBytes)} used",
-                                style = Typography.bodySmall,
-                                color = TextSecondary
-                            )
-                        }
-                    }
-
-                    TextButton(
-                        onClick = {
-                            HapticUtil.mediumClick(context)
-                            DownloadRepository.clearHistory()
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text("Clear All", color = TextSecondary, style = Typography.labelSmall, fontWeight = FontWeight.SemiBold)
-                    }
+                    Text("Clear All", color = TextSecondary, style = Typography.labelSmall)
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // ── 2. SCULPTED SEARCH BAR WITH HIGH CONTRAST OUTLINE ──
+            // Search Bar
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = SurfaceDark,
@@ -2880,7 +2846,7 @@ private fun LibraryTab(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // ── 3. FILTER CHIPS WITH ICONS & BADGE COUNTS ──
+            // Clean Filter Chips
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -2891,17 +2857,21 @@ private fun LibraryTab(
                     Triple("Audio", "Audio ($audioCount)", Icons.Default.MusicNote)
                 ).forEach { (key, label, icon) ->
                     val isSelected = filterType == key
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) TextCrisp else SurfaceElevated)
-                            .border(1.dp, if (isSelected) TextCrisp else CardBorderDark, RoundedCornerShape(20.dp))
-                            .bouncyClick { filterType = key },
-                        contentAlignment = Alignment.Center
+                    Surface(
+                        onClick = {
+                            HapticUtil.lightClick(context)
+                            filterType = key
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (isSelected) TextCrisp else SurfaceElevated,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) TextCrisp else CardBorderDark
+                        )
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Icon(
                                 imageVector = icon,
@@ -3039,24 +3009,7 @@ private fun LibraryTab(
                                     )
                                 }
 
-                                // Bottom Right Duration Pill
-                                if (task.duration.isNotBlank()) {
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = Color.Black.copy(alpha = 0.82f),
-                                        modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(4.dp)
-                                    ) {
-                                        Text(
-                                            text = task.duration,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                        )
-                                    }
-                                }
+
                             }
 
                             Spacer(modifier = Modifier.width(12.dp))
@@ -3101,6 +3054,14 @@ private fun LibraryTab(
                                             color = TextSecondary
                                         )
                                     }
+                                    if (task.duration.isNotBlank()) {
+                                        Text(
+                                            text = "• ${task.duration}",
+                                            style = Typography.bodySmall,
+                                            fontSize = 11.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
                                     Text(
                                         text = "• Ready",
                                         style = Typography.bodySmall,
@@ -3110,69 +3071,53 @@ private fun LibraryTab(
                                 }
                             }
 
-                            // Right Action: Quick Play Circle Button + Menu
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(SurfaceElevated)
-                                        .border(1.dp, BorderSubtle, CircleShape)
-                                        .bouncyClick { onPlay(task) },
-                                    contentAlignment = Alignment.Center
+                            // Right Action: Clean 3-Dot (⋮) Menu Button
+                            Box {
+                                IconButton(
+                                    onClick = {
+                                        HapticUtil.lightClick(context)
+                                        showItemMenu = true
+                                    },
+                                    modifier = Modifier.size(36.dp)
                                 ) {
                                     Icon(
-                                        Icons.Default.PlayArrow,
-                                        contentDescription = "Play",
-                                        tint = TextCrisp,
+                                        Icons.Default.MoreVert,
+                                        contentDescription = "Options",
+                                        tint = TextSecondary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
 
-                                Box {
-                                    IconButton(
-                                        onClick = { showItemMenu = true },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.MoreVert,
-                                            contentDescription = "More",
-                                            tint = TextSecondary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-
-                                    DropdownMenu(
-                                        expanded = showItemMenu,
-                                        onDismissRequest = { showItemMenu = false },
-                                        modifier = Modifier.background(SurfaceElevated)
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Play Media", color = TextCrisp) },
-                                            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = TextCrisp) },
-                                            onClick = {
-                                                showItemMenu = false
-                                                onPlay(task)
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Share", color = TextCrisp) },
-                                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = TextCrisp) },
-                                            onClick = {
-                                                showItemMenu = false
-                                                onShare(task)
-                                            }
-                                        )
-                                        HorizontalDivider(color = BorderHairline)
-                                        DropdownMenuItem(
-                                            text = { Text("Delete", color = StatusError) },
-                                            leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = StatusError) },
-                                            onClick = {
-                                                showItemMenu = false
-                                                onDelete(task)
-                                            }
-                                        )
-                                    }
+                                DropdownMenu(
+                                    expanded = showItemMenu,
+                                    onDismissRequest = { showItemMenu = false },
+                                    modifier = Modifier.background(SurfaceElevated)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Play Media", color = TextCrisp) },
+                                        leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = TextCrisp) },
+                                        onClick = {
+                                            showItemMenu = false
+                                            onPlay(task)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Share", color = TextCrisp) },
+                                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = TextCrisp) },
+                                        onClick = {
+                                            showItemMenu = false
+                                            onShare(task)
+                                        }
+                                    )
+                                    HorizontalDivider(color = BorderHairline)
+                                    DropdownMenuItem(
+                                        text = { Text("Delete", color = StatusError) },
+                                        leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = StatusError) },
+                                        onClick = {
+                                            showItemMenu = false
+                                            onDelete(task)
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -3383,7 +3328,8 @@ private fun SettingsTab(
                             .clip(RoundedCornerShape(12.dp))
                             .background(SurfaceElevated)
                             .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
-                            .bouncyClick(enabled = !isCheckingUpdate) {
+                            .clickable(enabled = !isCheckingUpdate) {
+                                HapticUtil.lightClick(context)
                                 isCheckingUpdate = true
                                 coroutineScope.launch {
                                     val update = UpdateManager.checkForUpdates(BuildConfig.VERSION_CODE)

@@ -1,10 +1,9 @@
 package com.raoprime.downloadivo.ui.dialog
 
 import android.content.Context
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -26,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.raoprime.downloadivo.BuildConfig
 import com.raoprime.downloadivo.model.AppUpdateInfo
 import com.raoprime.downloadivo.network.UpdateManager
 import com.raoprime.downloadivo.network.UpdateState
@@ -43,8 +41,6 @@ fun UpdateDialog(
     val coroutineScope = rememberCoroutineScope()
     val updateState by UpdateManager.updateState.collectAsState()
 
-    var downloadedApk by remember { mutableStateOf<File?>(null) }
-
     Dialog(
         onDismissRequest = {
             if (!updateInfo.forceUpdate && updateState !is UpdateState.Downloading) {
@@ -57,7 +53,7 @@ fun UpdateDialog(
         )
     ) {
         Surface(
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(22.dp),
             color = SurfaceDark,
             border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
             shadowElevation = 20.dp,
@@ -75,7 +71,7 @@ fun UpdateDialog(
                 // Rocket / Sparkle Icon Header
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(54.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.linearGradient(
@@ -88,7 +84,7 @@ fun UpdateDialog(
                         imageVector = Icons.Default.SystemUpdate,
                         contentDescription = null,
                         tint = CanvasDark,
-                        modifier = Modifier.size(30.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 }
 
@@ -97,7 +93,7 @@ fun UpdateDialog(
                 // Title & Version Pill
                 Text(
                     text = "New Update Available",
-                    style = Typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = TextCrisp
                 )
 
@@ -107,9 +103,9 @@ fun UpdateDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(SurfaceElevated)
-                        .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+                        .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
                         .padding(horizontal = 12.dp, vertical = 4.dp)
                 ) {
                     Text(
@@ -129,7 +125,7 @@ fun UpdateDialog(
 
                 // Changelog Card
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = SurfaceElevated,
                     border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
                     modifier = Modifier
@@ -208,7 +204,6 @@ fun UpdateDialog(
                         }
                     }
                     is UpdateState.ReadyToInstall -> {
-                        downloadedApk = state.apkFile
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
@@ -220,27 +215,18 @@ fun UpdateDialog(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(12.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(TextCrisp)
-                                    .bouncyClick {
-                                        UpdateManager.promptInstall(context, state.apkFile)
-                                    },
-                                contentAlignment = Alignment.Center
+                            Button(
+                                onClick = {
+                                    HapticUtil.mediumClick(context)
+                                    UpdateManager.promptInstall(context, state.apkFile)
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = TextCrisp, contentColor = CanvasDark),
+                                modifier = Modifier.fillMaxWidth().height(48.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.DownloadDone, contentDescription = null, tint = CanvasDark)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Install Update Now",
-                                        fontWeight = FontWeight.Bold,
-                                        color = CanvasDark,
-                                        fontSize = 14.sp
-                                    )
-                                }
+                                Icon(Icons.Default.DownloadDone, contentDescription = null, tint = CanvasDark)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Install Update Now", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
                         }
                     }
@@ -256,21 +242,17 @@ fun UpdateDialog(
                                 textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(10.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(44.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(SurfaceElevated)
-                                    .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
-                                    .bouncyClick {
-                                        coroutineScope.launch {
-                                            UpdateManager.downloadUpdate(context, updateInfo)
-                                        }
-                                    },
-                                contentAlignment = Alignment.Center
+                            Button(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        UpdateManager.downloadUpdate(context, updateInfo)
+                                    }
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = SurfaceElevated, contentColor = TextCrisp),
+                                modifier = Modifier.fillMaxWidth().height(44.dp)
                             ) {
-                                Text("Retry Download", color = TextCrisp, fontWeight = FontWeight.Bold)
+                                Text("Retry Download", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -281,51 +263,34 @@ fun UpdateDialog(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             if (!updateInfo.forceUpdate) {
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(46.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(SurfaceElevated)
-                                        .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
-                                        .bouncyClick { onDismiss() },
-                                    contentAlignment = Alignment.Center
+                                OutlinedButton(
+                                    onClick = onDismiss,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                                    modifier = Modifier.weight(1f).height(46.dp)
                                 ) {
-                                    Text(
-                                        text = "Later",
-                                        style = Typography.labelMedium,
-                                        color = TextSecondary,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
+                                    Text("Later", style = Typography.labelMedium, fontWeight = FontWeight.SemiBold)
                                 }
                             }
 
-                            Box(
-                                modifier = Modifier
-                                    .weight(1.5f)
-                                    .height(46.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(TextCrisp)
-                                    .bouncyClick {
-                                        coroutineScope.launch {
-                                            val apk = UpdateManager.downloadUpdate(context, updateInfo)
-                                            if (apk != null) {
-                                                UpdateManager.promptInstall(context, apk)
-                                            }
+                            Button(
+                                onClick = {
+                                    HapticUtil.heavyClick(context)
+                                    coroutineScope.launch {
+                                        val apk = UpdateManager.downloadUpdate(context, updateInfo)
+                                        if (apk != null) {
+                                            UpdateManager.promptInstall(context, apk)
                                         }
-                                    },
-                                contentAlignment = Alignment.Center
+                                    }
+                                },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = TextCrisp, contentColor = CanvasDark),
+                                modifier = Modifier.weight(1.5f).height(46.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Update Now",
-                                        style = Typography.labelMedium,
-                                        color = CanvasDark,
-                                        fontWeight = FontWeight.ExtraBold
-                                    )
-                                }
+                                Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Update Now", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

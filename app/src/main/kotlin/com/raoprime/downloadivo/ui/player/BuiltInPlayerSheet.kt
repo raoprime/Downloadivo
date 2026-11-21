@@ -177,17 +177,21 @@ fun BuiltInPlayerSheet(
         }
     }
 
-    // Ticker for currentPosition with seek-debounce to prevent jumping back
+    // Ticker for currentPosition with seek-debounce and crash protection
     LaunchedEffect(exoPlayer) {
         while (true) {
             val now = System.currentTimeMillis()
             if (!isScrubbing && (now - lastSeekTimestamp > 650L)) {
-                currentPositionMs = exoPlayer.currentPosition
-                if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) {
-                    durationMs = exoPlayer.duration
-                }
+                try {
+                    currentPositionMs = exoPlayer.currentPosition
+                    if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) {
+                        durationMs = exoPlayer.duration
+                    }
+                } catch (_: Exception) {}
             }
-            isPlaying = exoPlayer.isPlaying
+            try {
+                isPlaying = exoPlayer.isPlaying
+            } catch (_: Exception) {}
             delay(250)
         }
     }
@@ -720,84 +724,90 @@ fun BuiltInPlayerSheet(
 
                     if (!isAudio) {
                         IconButton(
-                            onClick = { onFullscreenChange?.invoke(!isFullscreen) },
-                            modifier = Modifier
-                                .size(28.dp)
-                                .bouncyClick { onFullscreenChange?.invoke(!isFullscreen) }
+                            onClick = {
+                                HapticUtil.lightClick(context)
+                                onFullscreenChange?.invoke(!isFullscreen)
+                            },
+                            modifier = Modifier.size(28.dp)
                         ) {
                             Icon(Icons.Default.Fullscreen, contentDescription = "Fullscreen", tint = TextCrisp, modifier = Modifier.size(22.dp))
                         }
                     }
                 }
 
-                // Dedicated Playback Control Row (-10s, Play/Pause, +10s) with Spring Tactile Physics
+                // Dedicated Playback Control Row (-10s, Play/Pause, +10s)
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .bouncyClick {
+                    IconButton(
+                        onClick = {
+                            HapticUtil.lightClick(context)
+                            try {
                                 val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
                                 exoPlayer.seekTo(target)
                                 currentPositionMs = target
                                 lastSeekTimestamp = System.currentTimeMillis()
-                            },
-                        contentAlignment = Alignment.Center
+                            } catch (_: Exception) {}
+                        },
+                        modifier = Modifier.size(46.dp)
                     ) {
                         Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s", tint = TextCrisp, modifier = Modifier.size(30.dp))
                     }
 
                     Spacer(modifier = Modifier.width(22.dp))
 
-                    Box(
+                    Surface(
+                        shape = CircleShape,
+                        color = TextCrisp,
+                        shadowElevation = 6.dp,
                         modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(TextCrisp)
-                            .bouncyClick(scaleDown = 0.90f) {
-                                if (isPlaying) {
-                                    exoPlayer.pause()
-                                    isPlaying = false
-                                } else {
-                                    exoPlayer.play()
-                                    isPlaying = true
-                                }
-                            },
-                        contentAlignment = Alignment.Center
+                            .size(54.dp)
+                            .clickable {
+                                HapticUtil.mediumClick(context)
+                                try {
+                                    if (isPlaying) {
+                                        exoPlayer.pause()
+                                        isPlaying = false
+                                    } else {
+                                        exoPlayer.play()
+                                        isPlaying = true
+                                    }
+                                } catch (_: Exception) {}
+                            }
                     ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = CanvasDark,
-                            modifier = Modifier.size(32.dp)
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play",
+                                tint = CanvasDark,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(22.dp))
 
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .bouncyClick {
+                    IconButton(
+                        onClick = {
+                            HapticUtil.lightClick(context)
+                            try {
                                 val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
                                 val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
                                 exoPlayer.seekTo(target)
                                 currentPositionMs = target
                                 lastSeekTimestamp = System.currentTimeMillis()
-                            },
-                        contentAlignment = Alignment.Center
+                            } catch (_: Exception) {}
+                        },
+                        modifier = Modifier.size(46.dp)
                     ) {
                         Icon(Icons.Default.Forward10, contentDescription = "Forward 10s", tint = TextCrisp, modifier = Modifier.size(30.dp))
                     }
                 }
 
-                // Quick Controls Row: Speed, Quality, Audio Track (All 3 clearly visible side-by-side & balanced)
+                // Quick Controls Row: Speed, Quality, Audio Track (Balanced & Highly Visible)
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier
@@ -814,7 +824,10 @@ fun BuiltInPlayerSheet(
                             .clip(RoundedCornerShape(10.dp))
                             .background(SurfaceElevated)
                             .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
-                            .bouncyClick { showSpeedSheet = true },
+                            .clickable {
+                                HapticUtil.lightClick(context)
+                                showSpeedSheet = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
@@ -851,7 +864,10 @@ fun BuiltInPlayerSheet(
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(SurfaceElevated)
                                 .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
-                                .bouncyClick { showQualitySheet = true },
+                                .clickable {
+                                    HapticUtil.lightClick(context)
+                                    showQualitySheet = true
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Row(
@@ -889,7 +905,10 @@ fun BuiltInPlayerSheet(
                             .clip(RoundedCornerShape(10.dp))
                             .background(SurfaceElevated)
                             .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
-                            .bouncyClick { showAudioTrackSheet = true },
+                            .clickable {
+                                HapticUtil.lightClick(context)
+                                showAudioTrackSheet = true
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Row(
