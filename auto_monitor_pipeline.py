@@ -22,7 +22,7 @@ BACKEND_DIR = Path(__file__).parent.resolve()
 PORT = 8899
 LOCAL_HEALTH = f"http://127.0.0.1:{PORT}/health"
 LOCAL_VERSION = f"http://127.0.0.1:{PORT}/version"
-PUBLIC_TUNNEL = "https://police-urge-prefix-journal.trycloudflare.com"
+PUBLIC_TUNNEL = "https://mazda-prints-equity-albuquerque.trycloudflare.com"
 REPORT_FILE = BACKEND_DIR / "monitor_report.json"
 
 PLATFORM_TEST_URLS = {
