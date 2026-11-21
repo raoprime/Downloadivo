@@ -1846,11 +1846,11 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 16,
-        "version_name": "5.1.0",
+        "version_code": 17,
+        "version_name": "5.2.0",
         "min_version_code": 10,
         "apk_url": apk_url,
-        "changelog": "✨ All video (4K, 1440p, 1080p, 720p, 480p, 360p, 240p, 144p) & audio (320k, 256k, 192k, 128k, M4A, WAV) qualities\n✨ Left-aligned brand logo in TopAppBar\n✨ Butter-smooth lazy scroll layout without lockups\n✨ 1-tap instant download actions under preview\n✨ In-app seamless auto-updates\n✨ Multi-platform ultra-fast streaming engine",
+        "changelog": "✨ Accurate Video Resolutions (no fake 4K/8K on 720p/1080p videos)\n✨ Fixed Video Freeze on Playback Start (Zero lag & audio sync)\n✨ Fixed Scrubbing & Seeking (Forward/Backward without resetting)\n✨ Visible Speed, Quality & Audio Controls Grid\n✨ Bottom Navigation auto-hides when Player expands",
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
     }
@@ -2202,20 +2202,22 @@ async def get_info(request: Request, url: Optional[str] = None):
                             lbl = f"{sz / 1024:.0f} KB"
                         format_sizes[str(h)] = {"bytes": sz, "label": lbl}
 
-            # Guarantee sensible size labels for standard resolutions if missing
+            # Only populate standard resolution size estimates up to the actual max available height
+            max_avail_h = max(heights) if heights else 720
             for std_h, std_kbps in standard_bitrates.items():
-                if str(std_h) not in format_sizes:
-                    if duration and duration > 0:
-                        calc_sz = int(std_kbps * 1000 * duration / 8)
-                    else:
-                        calc_sz = standard_default_mb.get(std_h, 45) * 1024 * 1024
-                    if calc_sz >= 1024 * 1024 * 1024:
-                        calc_lbl = f"{calc_sz / (1024 * 1024 * 1024):.2f} GB"
-                    elif calc_sz >= 1024 * 1024:
-                        calc_lbl = f"{calc_sz / (1024 * 1024):.1f} MB"
-                    else:
-                        calc_lbl = f"{calc_sz / 1024:.0f} KB"
-                    format_sizes[str(std_h)] = {"bytes": calc_sz, "label": calc_lbl}
+                if std_h <= max_avail_h:
+                    if str(std_h) not in format_sizes:
+                        if duration and duration > 0:
+                            calc_sz = int(std_kbps * 1000 * duration / 8)
+                        else:
+                            calc_sz = standard_default_mb.get(std_h, 45) * 1024 * 1024
+                        if calc_sz >= 1024 * 1024 * 1024:
+                            calc_lbl = f"{calc_sz / (1024 * 1024 * 1024):.2f} GB"
+                        elif calc_sz >= 1024 * 1024:
+                            calc_lbl = f"{calc_sz / (1024 * 1024):.1f} MB"
+                        else:
+                            calc_lbl = f"{calc_sz / 1024:.0f} KB"
+                        format_sizes[str(std_h)] = {"bytes": calc_sz, "label": calc_lbl}
 
             sorted_resolutions = sorted(list(heights), reverse=True)
             extractor = (info.get("extractor_key") or "Web").capitalize()
@@ -2594,9 +2596,14 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
         elif fmt_lower in ["144p", "144"]:
             matches_144 = [f for f in prog if (f.get("height") or 0) <= 144]
             if matches_144: chosen_prog_fmt = matches_144[-1]
-        elif fmt_lower in ["stream"]:
-            # Rapid inline mobile stream preview
-            chosen_prog_fmt = prog[-1]
+        elif fmt_lower in ["stream", "auto", "default"]:
+            # Rapid inline mobile stream preview with native seeking
+            chosen_prog_fmt = prog[-1] if prog else None
+
+    # Online player stream mode: if progressive stream exists, prioritize it for instant seeking & zero lag
+    is_online_play = bool(request and request.query_params.get("online") == "true")
+    if is_online_play and prog and fmt_lower in ["best", "stream", "auto", "default", ""]:
+        chosen_prog_fmt = prog[-1]
 
     use_ffmpeg_mux = False
     chosen_v_fmt = None
@@ -2686,30 +2693,44 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
         a_ua = chosen_a_fmt.get("http_headers", {}).get("User-Agent") or v_ua
         can_copy_audio = bool("mp4a" in (chosen_a_fmt.get("acodec") or "") or chosen_a_fmt.get("ext") == "m4a")
 
+        ss_seek = None
+        if request:
+            ss_seek = request.query_params.get("ss") or request.query_params.get("start_time")
+        if not ss_seek:
+            ss_seek = start_time
+
         def iter_ffmpeg_pipe():
+            v_input_args = ["-ss", str(ss_seek)] if ss_seek else []
+            a_input_args = ["-ss", str(ss_seek)] if ss_seek else []
             cmd = [
                 _FFMPEG_PATH,
                 "-y",
                 "-loglevel", "error",
                 "-probesize", "65536",
                 "-analyzeduration", "500000",
-                "-fflags", "+nobuffer+fastseek",
+                "-fflags", "+nobuffer+fastseek+genpts",
                 "-flags", "low_delay",
+                "-avoid_negative_ts", "make_zero",
+                "-max_interleave_delta", "100000",
                 "-reconnect", "1",
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
                 "-headers", f"User-Agent: {v_ua}\r\n",
+            ] + v_input_args + [
                 "-i", chosen_v,
                 "-probesize", "65536",
                 "-analyzeduration", "500000",
-                "-fflags", "+nobuffer+fastseek",
+                "-fflags", "+nobuffer+fastseek+genpts",
                 "-flags", "low_delay",
+                "-avoid_negative_ts", "make_zero",
+                "-max_interleave_delta", "100000",
                 "-reconnect", "1",
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
                 "-reconnect_delay_max", "5",
                 "-headers", f"User-Agent: {a_ua}\r\n",
+            ] + a_input_args + [
                 "-i", chosen_a,
                 "-c:v", "copy",
                 "-c:a", "copy" if can_copy_audio else "aac",
