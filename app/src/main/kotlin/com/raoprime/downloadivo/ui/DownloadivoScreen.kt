@@ -29,6 +29,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -59,7 +60,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -2938,6 +2942,137 @@ private fun formatSimpleBadge(task: DownloadTask): String {
     }
 }
 
+// ── APPROVED GRAPHITE SEGMENTED SELECTOR ──
+@Composable
+private fun GraphiteSegmentedSelector(
+    selectedFilter: String,
+    allCount: Int,
+    videoCount: Int,
+    audioCount: Int,
+    onFilterSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val segments = listOf(
+        Triple("All", "All", allCount),
+        Triple("Videos", "Videos", videoCount),
+        Triple("Audio", "Audio", audioCount)
+    )
+    val selectedIndex = when (selectedFilter) {
+        "Videos" -> 1
+        "Audio" -> 2
+        else -> 0
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(13.dp))
+            .background(Color(0xFF1E1E22))
+            .border(1.dp, Color(0xFF28282E), RoundedCornerShape(13.dp))
+            .padding(3.dp)
+    ) {
+        val segmentWidth = maxWidth / segments.size
+        val indicatorOffset by animateDpAsState(
+            targetValue = segmentWidth * selectedIndex,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            ),
+            label = "selector_indicator"
+        )
+
+        // ── SATIN-SILVER SLIDING SELECTION SURFACE ──
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorOffset)
+                .width(segmentWidth)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(10.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFEDEDF2), // Fine top highlight
+                            Color(0xFFD4D4DC), // Satin silver body
+                            Color(0xFFBCBCC6)  // Base silver tone
+                        )
+                    )
+                )
+                .border(
+                    width = 0.5.dp,
+                    color = Color.White.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(10.dp)
+                )
+        )
+
+        // ── SEGMENT LABELS & INACTIVE DIVIDERS ──
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            segments.forEachIndexed { index, (key, label, count) ->
+                val isSelected = index == selectedIndex
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            if (selectedFilter != key) {
+                                HapticUtil.lightClick(context)
+                                onFilterSelected(key)
+                            }
+                        }
+                        .semantics {
+                            role = Role.Tab
+                            this.selected = isSelected
+                            contentDescription = "$label, $count items, ${if (isSelected) "selected" else "not selected"}"
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = label,
+                            style = Typography.titleSmall.copy(
+                                fontSize = 13.5.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
+                            ),
+                            color = if (isSelected) Color(0xFF111114) else Color(0xFFA2A2AA)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "$count",
+                            style = Typography.bodyMedium.copy(
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            ),
+                            color = if (isSelected) Color(0xFF1E1E24) else Color(0xFF787882)
+                        )
+                    }
+
+                    // Subtle hairline divider between adjacent inactive segments
+                    if (index < segments.size - 1 && index != selectedIndex && index + 1 != selectedIndex) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .width(1.dp)
+                                .height(16.dp)
+                                .background(Color(0xFF33333A))
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun LibraryTab(
     history: List<DownloadTask>,
@@ -3197,528 +3332,491 @@ private fun LibraryTab(
         )
     }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .background(CanvasDark),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 8.dp,
+            bottom = if (hasMiniPlayer) 140.dp else 80.dp
+        )
     ) {
-        // ── 1. SINGLE UNIFIED HEADER ROW ──
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp, bottom = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Library",
-                style = Typography.headlineMedium.copy(
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                color = TextCrisp
-            )
+        // ── 1. HEADER, SEARCH & APPROVED SEGMENTED SELECTOR ──
+        item(key = "library_top_controls") {
+            // Header Row (Library title + Sort + 3-dots Menu)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Library",
+                    style = Typography.headlineMedium.copy(
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = TextCrisp
+                )
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Sort Dropdown Button
-                Box {
-                    IconButton(
-                        onClick = {
-                            HapticUtil.lightClick(context)
-                            showSortMenu = true
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Sort,
-                            contentDescription = "Sort",
-                            tint = TextCrisp,
-                            modifier = Modifier.size(20.dp)
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Sort Dropdown Button
+                    Box {
+                        IconButton(
+                            onClick = {
+                                HapticUtil.lightClick(context)
+                                showSortMenu = true
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sort,
+                                contentDescription = "Sort",
+                                tint = TextCrisp,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            modifier = Modifier.background(SurfaceElevated)
+                        ) {
+                            LibrarySort.values().forEach { sort ->
+                                val isSelected = sort == sortOrder
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = sort.label,
+                                            color = if (isSelected) TextCrisp else TextSecondary,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = sort.icon,
+                                            contentDescription = null,
+                                            tint = if (isSelected) TextCrisp else TextSecondary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    trailingIcon = if (isSelected) {
+                                        { Icon(Icons.Default.Check, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp)) }
+                                    } else null,
+                                    onClick = {
+                                        HapticUtil.lightClick(context)
+                                        sortOrder = sort
+                                        showSortMenu = false
+                                    }
+                                )
+                            }
+                        }
                     }
 
-                    DropdownMenu(
-                        expanded = showSortMenu,
-                        onDismissRequest = { showSortMenu = false },
-                        modifier = Modifier.background(SurfaceElevated)
-                    ) {
-                        LibrarySort.values().forEach { sort ->
-                            val isSelected = sort == sortOrder
+                    // Secondary Menu (3-dots overflow) with Clear History
+                    Box {
+                        IconButton(
+                            onClick = {
+                                HapticUtil.lightClick(context)
+                                showTopOverflowMenu = true
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More actions",
+                                tint = TextCrisp,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showTopOverflowMenu,
+                            onDismissRequest = { showTopOverflowMenu = false },
+                            modifier = Modifier.background(SurfaceElevated)
+                        ) {
                             DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = sort.label,
-                                        color = if (isSelected) TextCrisp else TextSecondary,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                },
+                                text = { Text("Clear History", color = StatusError) },
                                 leadingIcon = {
                                     Icon(
-                                        imageVector = sort.icon,
+                                        imageVector = Icons.Default.DeleteOutline,
                                         contentDescription = null,
-                                        tint = if (isSelected) TextCrisp else TextSecondary,
+                                        tint = StatusError,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 },
-                                trailingIcon = if (isSelected) {
-                                    { Icon(Icons.Default.Check, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(16.dp)) }
-                                } else null,
                                 onClick = {
-                                    HapticUtil.lightClick(context)
-                                    sortOrder = sort
-                                    showSortMenu = false
+                                    showTopOverflowMenu = false
+                                    HapticUtil.mediumClick(context)
+                                    showClearConfirmDialog = true
                                 }
                             )
                         }
                     }
                 }
-
-                // Secondary Menu (3-dots overflow) with Clear History
-                Box {
-                    IconButton(
-                        onClick = {
-                            HapticUtil.lightClick(context)
-                            showTopOverflowMenu = true
-                        },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More actions",
-                            tint = TextCrisp,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    DropdownMenu(
-                        expanded = showTopOverflowMenu,
-                        onDismissRequest = { showTopOverflowMenu = false },
-                        modifier = Modifier.background(SurfaceElevated)
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Clear History", color = StatusError) },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.DeleteOutline,
-                                    contentDescription = null,
-                                    tint = StatusError,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            },
-                            onClick = {
-                                showTopOverflowMenu = false
-                                HapticUtil.mediumClick(context)
-                                showClearConfirmDialog = true
-                            }
-                        )
-                    }
-                }
             }
-        }
 
-        // ── 2. QUIET SUMMARY UNDERNEATH ──
-        Text(
-            text = "${completedHistory.size} items · ${formatByteSize(totalBytes)}",
-            style = Typography.bodySmall.copy(fontSize = 12.5.sp),
-            color = TextSecondary,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
+            // ── 2. QUIET SUMMARY UNDERNEATH ──
+            Text(
+                text = "${completedHistory.size} items · ${formatByteSize(totalBytes)}",
+                style = Typography.bodySmall.copy(fontSize = 12.5.sp),
+                color = TextSecondary,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
 
-        // ── 3. SEARCH FIELD ("Search downloads") ──
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = SurfaceElevated,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // ── 3. SEARCH FIELD ("Search downloads") ──
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF131316),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E1E22)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(
-                    Icons.Default.Search,
-                    contentDescription = null,
-                    tint = TextTertiary,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                BasicTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
+                Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(vertical = 10.dp),
-                    textStyle = Typography.bodyMedium.copy(color = TextCrisp),
-                    singleLine = true,
-                    decorationBox = { innerTextField ->
-                        if (searchQuery.isEmpty()) {
-                            Text(
-                                "Search downloads",
-                                style = Typography.bodyMedium,
-                                color = TextQuaternary
-                            )
-                        }
-                        innerTextField()
-                    }
-                )
-                if (searchQuery.isNotEmpty()) {
-                    IconButton(
-                        onClick = {
-                            HapticUtil.lightClick(context)
-                            searchQuery = ""
-                        },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = "Clear search", tint = TextTertiary, modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // ── 4. FILTER CHIPS (All, Videos, Audio) ──
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            listOf(
-                Triple("All", "All (${completedHistory.size})", Icons.Default.Layers),
-                Triple("Videos", "Videos ($videoCount)", Icons.Default.SmartDisplay),
-                Triple("Audio", "Audio ($audioCount)", Icons.Default.GraphicEq)
-            ).forEach { (key, label, icon) ->
-                val isSelected = filterType == key
-                Surface(
-                    onClick = {
-                        HapticUtil.lightClick(context)
-                        filterType = key
-                    },
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (isSelected) TextCrisp else SurfaceElevated,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (isSelected) TextCrisp else CardBorderDark
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        tint = Color(0xFF6E6E76),
+                        modifier = Modifier.size(18.dp)
                     )
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = null,
-                            tint = if (isSelected) CanvasDark else TextSecondary,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = label,
-                            style = Typography.labelSmall,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) CanvasDark else TextSecondary
-                        )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(vertical = 11.dp),
+                        textStyle = Typography.bodyMedium.copy(color = TextCrisp),
+                        singleLine = true,
+                        decorationBox = { innerTextField ->
+                            if (searchQuery.isEmpty()) {
+                                Text(
+                                    "Search downloads",
+                                    style = Typography.bodyMedium,
+                                    color = Color(0xFF5E5E66)
+                                )
+                            }
+                            innerTextField()
+                        }
+                    )
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = {
+                                HapticUtil.lightClick(context)
+                                searchQuery = ""
+                            },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear search", tint = Color(0xFF888890), modifier = Modifier.size(16.dp))
+                        }
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // ── 4. APPROVED GRAPHITE SEGMENTED SELECTOR ──
+            GraphiteSegmentedSelector(
+                selectedFilter = filterType,
+                allCount = completedHistory.size,
+                videoCount = videoCount,
+                audioCount = audioCount,
+                onFilterSelected = { filterType = it }
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // ── 5. MEDIA FILE LIST OR EMPTY STATE ──
+        // ── 5. GROUPED MEDIA LIST PANEL OR EMPTY STATE ──
         if (filteredHistory.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = SurfaceDark,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+            item(key = "library_empty_state") {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.92f)
-                        .padding(16.dp)
+                        .fillMaxWidth()
+                        .padding(top = 28.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(24.dp)
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFF141416),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF222226)),
+                        modifier = Modifier
+                            .fillMaxWidth(0.92f)
+                            .padding(16.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(SurfaceElevated)
-                                .border(1.dp, BorderSubtle, RoundedCornerShape(18.dp)),
-                            contentAlignment = Alignment.Center
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
                         ) {
-                            Icon(
-                                imageVector = if (completedHistory.isEmpty()) Icons.Default.VideoLibrary else Icons.Default.SearchOff,
-                                contentDescription = null,
-                                tint = TextCrisp,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = if (completedHistory.isEmpty()) "Library is empty" else "No matching downloads",
-                            style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 17.sp),
-                            color = TextCrisp,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = if (completedHistory.isEmpty())
-                                "Downloaded videos and audio will appear here for offline playback anytime."
-                            else
-                                "No downloads match \"$searchQuery\". Try checking the spelling or resetting the filters.",
-                            style = Typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 17.sp),
-                            color = TextSecondary,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Spacer(modifier = Modifier.height(18.dp))
-                        if (completedHistory.isEmpty()) {
-                            Button(
-                                onClick = {
-                                    HapticUtil.mediumClick(context)
-                                    onNavigateHome()
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = TextCrisp, contentColor = CanvasDark),
-                                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 11.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(SurfaceElevated)
+                                    .border(1.dp, BorderSubtle, RoundedCornerShape(18.dp)),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(17.dp))
-                                Spacer(modifier = Modifier.width(7.dp))
-                                Text("Start a download", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                Icon(
+                                    imageVector = if (completedHistory.isEmpty()) Icons.Default.VideoLibrary else Icons.Default.SearchOff,
+                                    contentDescription = null,
+                                    tint = TextCrisp,
+                                    modifier = Modifier.size(32.dp)
+                                )
                             }
-                        } else {
-                            OutlinedButton(
-                                onClick = {
-                                    HapticUtil.lightClick(context)
-                                    searchQuery = ""
-                                    filterType = "All"
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextCrisp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
-                                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp)
-                            ) {
-                                Icon(Icons.Default.Refresh, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Reset filters", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = if (completedHistory.isEmpty()) "Library is empty" else "No matching downloads",
+                                style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 17.sp),
+                                color = TextCrisp,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = if (completedHistory.isEmpty())
+                                    "Downloaded videos and audio will appear here for offline playback anytime."
+                                else
+                                    "No downloads match \"$searchQuery\". Try checking the spelling or resetting the filters.",
+                                style = Typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 17.sp),
+                                color = TextSecondary,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(modifier = Modifier.height(18.dp))
+                            if (completedHistory.isEmpty()) {
+                                Button(
+                                    onClick = {
+                                        HapticUtil.mediumClick(context)
+                                        onNavigateHome()
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = TextCrisp, contentColor = CanvasDark),
+                                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 11.dp)
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(17.dp))
+                                    Spacer(modifier = Modifier.width(7.dp))
+                                    Text("Start a download", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        HapticUtil.lightClick(context)
+                                        searchQuery = ""
+                                        filterType = "All"
+                                    },
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextCrisp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle),
+                                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Reset filters", fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                                }
                             }
                         }
                     }
                 }
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = if (hasMiniPlayer) 140.dp else 80.dp)
-            ) {
-                items(filteredHistory, key = { it.id }) { task ->
-                    var showItemMenu by remember { mutableStateOf(false) }
+            item(key = "grouped_media_panel") {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF141416),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF222226)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        filteredHistory.forEachIndexed { index, task ->
+                            var showItemMenu by remember { mutableStateOf(false) }
 
-                    val localFile = remember(task.filePath) { task.filePath?.let { File(it) } }
-                    val hasLocalFile = remember(localFile) { localFile != null && localFile.exists() }
-                    val imageModel = remember(task.thumbnail, hasLocalFile, task.filePath) {
-                        when {
-                            !task.isAudio && hasLocalFile -> localFile
-                            task.thumbnail.isNotBlank() -> task.thumbnail
-                            hasLocalFile -> localFile
-                            else -> null
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = SurfaceDark,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                HapticUtil.lightClick(context)
-                                onPlay(task)
+                            val localFile = remember(task.filePath) { task.filePath?.let { File(it) } }
+                            val hasLocalFile = remember(localFile) { localFile != null && localFile.exists() }
+                            val imageModel = remember(task.thumbnail, hasLocalFile, task.filePath) {
+                                when {
+                                    !task.isAudio && hasLocalFile -> localFile
+                                    task.thumbnail.isNotBlank() -> task.thumbnail
+                                    hasLocalFile -> localFile
+                                    else -> null
+                                }
                             }
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // ── AREA 1: ARTWORK (16:9, 84.dp x 48.dp, Unblocked, No Duration Overlay) ──
-                            Box(
+
+                            Row(
                                 modifier = Modifier
-                                    .width(84.dp)
-                                    .height(48.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(SurfaceElevated)
-                                    .border(0.5.dp, BorderHairline, RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        HapticUtil.lightClick(context)
+                                        onPlay(task)
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (imageModel != null) {
-                                    AsyncImage(
-                                        model = imageModel,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
+                                // ── AREA 1: THUMBNAIL (86.dp x 49.dp, 16:9, softly rounded) ──
+                                Box(
+                                    modifier = Modifier
+                                        .width(86.dp)
+                                        .height(49.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFF1E1E22))
+                                        .border(0.5.dp, Color(0xFF28282E), RoundedCornerShape(8.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (imageModel != null) {
+                                        AsyncImage(
+                                            model = imageModel,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(
+                                                    Brush.linearGradient(
+                                                        if (task.isAudio)
+                                                            listOf(Color(0xFF2E2214), Color(0xFF141210))
+                                                        else
+                                                            listOf(Color(0xFF1E2028), Color(0xFF0C0C0F))
+                                                    )
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = if (task.isAudio) Icons.Default.GraphicEq else Icons.Default.SmartDisplay,
+                                                contentDescription = null,
+                                                tint = if (task.isAudio) Color(0xFFFFB74D) else TextTertiary,
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(12.dp))
+
+                                // ── AREA 2: FILE INFORMATION (Title + Plain Quiet Metadata) ──
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    // Title: up to 2 lines, clean spacing
+                                    Text(
+                                        text = task.title.replace(Regex("\\s+"), " ").trim(),
+                                        style = Typography.titleSmall.copy(
+                                            fontSize = 13.5.sp,
+                                            lineHeight = 18.5.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        ),
+                                        color = TextCrisp,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                Brush.linearGradient(
-                                                    if (task.isAudio)
-                                                        listOf(Color(0xFF2E2214), Color(0xFF141210))
-                                                    else
-                                                        listOf(Color(0xFF1E2028), Color(0xFF0C0C0F))
-                                                )
-                                            ),
-                                        contentAlignment = Alignment.Center
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    // Plain metadata: "MP3 · 06:43 · 15.4 MB" (No colored badge box!)
+                                    val formatStr = formatSimpleBadge(task)
+                                    val metaParts = buildList {
+                                        if (formatStr.isNotBlank()) add(formatStr)
+                                        if (task.duration.isNotBlank()) add(task.duration)
+                                        if (task.totalBytes > 0L) add(formatByteSize(task.totalBytes))
+                                    }
+                                    if (metaParts.isNotEmpty()) {
+                                        Text(
+                                            text = metaParts.joinToString(" · "),
+                                            style = Typography.bodySmall.copy(fontSize = 11.5.sp),
+                                            color = TextSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                // ── AREA 3: SEPARATE OVERFLOW BUTTON (3-dots ⋮) ──
+                                Box {
+                                    IconButton(
+                                        onClick = {
+                                            HapticUtil.lightClick(context)
+                                            showItemMenu = true
+                                        },
+                                        modifier = Modifier.size(36.dp)
                                     ) {
                                         Icon(
-                                            imageVector = if (task.isAudio) Icons.Default.GraphicEq else Icons.Default.SmartDisplay,
-                                            contentDescription = null,
-                                            tint = if (task.isAudio) Color(0xFFFFB74D) else TextTertiary,
-                                            modifier = Modifier.size(24.dp)
+                                            Icons.Default.MoreVert,
+                                            contentDescription = "Options",
+                                            tint = TextSecondary,
+                                            modifier = Modifier.size(19.dp)
                                         )
                                     }
-                                }
-                            }
 
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            // ── AREA 2: FILE INFORMATION (Title + Single Metadata Line) ──
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                // Tier 1: Title (up to 2 readable lines)
-                                Text(
-                                    text = task.title,
-                                    style = Typography.titleSmall.copy(
-                                        fontSize = 13.5.sp,
-                                        lineHeight = 18.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = TextCrisp,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-
-                                Spacer(modifier = Modifier.height(5.dp))
-
-                                // Tier 2: Metadata Line (Format · Duration · File size)
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    // High-Contrast Format Badge (MP3 / MP4)
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = if (task.isAudio) Color(0xFF2A2012) else SurfaceHighlight,
-                                        border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline)
+                                    DropdownMenu(
+                                        expanded = showItemMenu,
+                                        onDismissRequest = { showItemMenu = false },
+                                        modifier = Modifier.background(SurfaceElevated)
                                     ) {
-                                        Text(
-                                            text = formatSimpleBadge(task),
-                                            color = if (task.isAudio) Color(0xFFFFB74D) else TextCrisp,
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                        DropdownMenuItem(
+                                            text = { Text("Play Media", color = TextCrisp, fontWeight = FontWeight.SemiBold) },
+                                            leadingIcon = { Icon(Icons.Default.PlayCircle, contentDescription = null, tint = TextCrisp) },
+                                            onClick = {
+                                                showItemMenu = false
+                                                HapticUtil.lightClick(context)
+                                                onPlay(task)
+                                            }
                                         )
-                                    }
-
-                                    // Duration and File Size without dangling separators
-                                    val metadataSubList = buildList {
-                                        if (task.duration.isNotBlank()) add(task.duration)
-                                        if (task.totalBytes > 0) add(formatByteSize(task.totalBytes))
-                                    }
-                                    if (metadataSubList.isNotEmpty()) {
-                                        Text(
-                                            text = metadataSubList.joinToString(" · "),
-                                            style = Typography.bodySmall,
-                                            fontSize = 11.5.sp,
-                                            color = TextSecondary
+                                        DropdownMenuItem(
+                                            text = { Text("Play Externally", color = TextCrisp) },
+                                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, tint = TextCrisp) },
+                                            onClick = {
+                                                showItemMenu = false
+                                                HapticUtil.lightClick(context)
+                                                onOpenExternal(task)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Share File", color = TextCrisp) },
+                                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = TextCrisp) },
+                                            onClick = {
+                                                showItemMenu = false
+                                                HapticUtil.lightClick(context)
+                                                onShare(task)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("File Details", color = TextCrisp) },
+                                            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = TextCrisp) },
+                                            onClick = {
+                                                showItemMenu = false
+                                                HapticUtil.lightClick(context)
+                                                selectedTaskForDetails = task
+                                            }
+                                        )
+                                        HorizontalDivider(color = BorderHairline)
+                                        DropdownMenuItem(
+                                            text = { Text("Delete from Device", color = StatusError) },
+                                            leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = StatusError) },
+                                            onClick = {
+                                                showItemMenu = false
+                                                HapticUtil.mediumClick(context)
+                                                taskToDelete = task
+                                            }
                                         )
                                     }
                                 }
                             }
 
-                            // ── AREA 3: SEPARATE OVERFLOW BUTTON (3-dots ⋮) ──
-                            Box {
-                                IconButton(
-                                    onClick = {
-                                        HapticUtil.lightClick(context)
-                                        showItemMenu = true
-                                    },
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.MoreVert,
-                                        contentDescription = "Options",
-                                        tint = TextSecondary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-
-                                DropdownMenu(
-                                    expanded = showItemMenu,
-                                    onDismissRequest = { showItemMenu = false },
-                                    modifier = Modifier.background(SurfaceElevated)
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Play Media", color = TextCrisp, fontWeight = FontWeight.SemiBold) },
-                                        leadingIcon = { Icon(Icons.Default.PlayCircle, contentDescription = null, tint = TextCrisp) },
-                                        onClick = {
-                                            showItemMenu = false
-                                            HapticUtil.lightClick(context)
-                                            onPlay(task)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Play Externally", color = TextCrisp) },
-                                        leadingIcon = { Icon(Icons.Default.OpenInNew, contentDescription = null, tint = TextCrisp) },
-                                        onClick = {
-                                            showItemMenu = false
-                                            HapticUtil.lightClick(context)
-                                            onOpenExternal(task)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Share File", color = TextCrisp) },
-                                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = TextCrisp) },
-                                        onClick = {
-                                            showItemMenu = false
-                                            HapticUtil.lightClick(context)
-                                            onShare(task)
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("File Details", color = TextCrisp) },
-                                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = TextCrisp) },
-                                        onClick = {
-                                            showItemMenu = false
-                                            HapticUtil.lightClick(context)
-                                            selectedTaskForDetails = task
-                                        }
-                                    )
-                                    HorizontalDivider(color = BorderHairline)
-                                    DropdownMenuItem(
-                                        text = { Text("Delete from Device", color = StatusError) },
-                                        leadingIcon = { Icon(Icons.Default.DeleteOutline, contentDescription = null, tint = StatusError) },
-                                        onClick = {
-                                            showItemMenu = false
-                                            HapticUtil.mediumClick(context)
-                                            taskToDelete = task
-                                        }
-                                    )
-                                }
+                            // Subtle Inset Divider between rows (not after final row!)
+                            if (index < filteredHistory.lastIndex) {
+                                HorizontalDivider(
+                                    color = Color(0xFF222227),
+                                    thickness = 0.5.dp,
+                                    modifier = Modifier.padding(horizontal = 14.dp)
+                                )
                             }
                         }
                     }
