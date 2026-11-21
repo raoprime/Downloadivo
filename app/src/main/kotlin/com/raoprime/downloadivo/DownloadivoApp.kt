@@ -13,6 +13,9 @@ class DownloadivoApp : Application() {
 
         const val CHANNEL_COMPLETED_ID = "downloadivo_completed_channel"
         const val CHANNEL_COMPLETED_NAME = "Completed Downloads"
+
+        const val CHANNEL_MEDIA_ID = "downloadivo_media_channel"
+        const val CHANNEL_MEDIA_NAME = "Media Playback Controls"
     }
 
     override fun onCreate() {
@@ -46,8 +49,20 @@ class DownloadivoApp : Application() {
                 setShowBadge(true)
             }
 
+            // Media Playback channel (persistent lock screen & notification shade controls)
+            val mediaChannel = NotificationChannel(
+                CHANNEL_MEDIA_ID,
+                CHANNEL_MEDIA_NAME,
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Shows lock screen and notification shade playback controls"
+                setShowBadge(false)
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+            }
+
             manager?.createNotificationChannel(progressChannel)
             manager?.createNotificationChannel(completedChannel)
+            manager?.createNotificationChannel(mediaChannel)
         }
     }
 }

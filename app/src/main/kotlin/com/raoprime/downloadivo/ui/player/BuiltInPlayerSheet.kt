@@ -53,6 +53,8 @@ import androidx.media3.ui.PlayerView
 import com.raoprime.downloadivo.MainActivity
 import com.raoprime.downloadivo.network.DownloadEngine
 import com.raoprime.downloadivo.ui.theme.*
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.delay
 
 @kotlin.OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
@@ -62,6 +64,7 @@ fun BuiltInPlayerSheet(
     mediaUri: String,
     title: String,
     author: String = "",
+    thumbnail: String = "",
     isAudio: Boolean,
     duration: String = "",
     availableQualities: List<String> = emptyList(),
@@ -88,6 +91,22 @@ fun BuiltInPlayerSheet(
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
     var isZoomToFill by remember { mutableStateOf(false) }
     var autoRetryCount by remember { mutableIntStateOf(0) }
+    var videoAspectRatio by remember { mutableFloatStateOf(16f / 9f) }
+
+    val mediaNotificationManager = remember(context, exoPlayer) {
+        com.raoprime.downloadivo.service.DownloadivoMediaNotificationManager(context, exoPlayer)
+    }
+
+    DisposableEffect(mediaNotificationManager) {
+        mediaNotificationManager.register()
+        onDispose {
+            mediaNotificationManager.unregister()
+        }
+    }
+
+    LaunchedEffect(title, author, thumbnail, isPlaying) {
+        mediaNotificationManager.updateNotification(title, author, thumbnail, isPlaying)
+    }
 
     // Double tap feedback
     var showDoubleTapRewind by remember { mutableStateOf(false) }
@@ -253,6 +272,12 @@ fun BuiltInPlayerSheet(
             }
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
+            }
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    val aspect = videoSize.width.toFloat() / videoSize.height.toFloat()
+                    videoAspectRatio = aspect
+                }
             }
             override fun onPlayerError(error: PlaybackException) {
                 isBuffering = false
@@ -515,34 +540,80 @@ fun BuiltInPlayerSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(
-                        if (isFullscreen) Modifier.fillMaxSize()
-                        else if (isAudio) Modifier.height(180.dp)
-                        else Modifier.aspectRatio(16f / 9f)
+                        if (isFullscreen) {
+                            Modifier.fillMaxSize()
+                        } else if (isAudio) {
+                            Modifier.height(240.dp)
+                        } else {
+                            // Dynamic aspect ratio sync (syncs to vertical 9:16 reels/shorts, 1:1, or 16:9)
+                            Modifier
+                                .heightIn(min = 180.dp, max = 380.dp)
+                                .aspectRatio(videoAspectRatio.coerceIn(0.55f, 2.4f))
+                        }
                     )
                     .clip(if (isFullscreen) RoundedCornerShape(0.dp) else RoundedCornerShape(14.dp))
                     .background(Color.Black)
             ) {
                 if (isAudio) {
-                    // Audio Mode Stage
+                    // Audio Mode Stage: Real Album Artwork / Thumbnail with Animated Spinning Music Badge
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
+                        // Circular Vinyl / Artwork Container
                         Box(
                             modifier = Modifier
-                                .size(90.dp)
-                                .rotate(if (isPlaying) rotation else 0f)
+                                .size(170.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF141418))
-                                .border(3.dp, TextCrisp, CircleShape),
+                                .border(2.5.dp, BorderSubtle, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = TextCrisp,
-                                modifier = Modifier.size(38.dp)
-                            )
+                            if (thumbnail.isNotBlank()) {
+                                AsyncImage(
+                                    model = thumbnail,
+                                    contentDescription = title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape)
+                                )
+                                // Subtle vinyl sheen overlay
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.2f))
+                                )
+                            } else {
+                                // Sleek vinyl groove gradient when no thumbnail is available
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.radialGradient(
+                                                colors = listOf(Color(0xFF282832), Color(0xFF16161B), Color(0xFF0D0D10))
+                                            )
+                                        )
+                                )
+                            }
+
+                            // Spinning Music Icon Badge over the Thumbnail (rotates smoothly during playback!)
+                            Box(
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .rotate(if (isPlaying) rotation else 0f)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF16161B).copy(alpha = 0.94f))
+                                    .border(2.dp, TextCrisp, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MusicNote,
+                                    contentDescription = "Music Playing",
+                                    tint = TextCrisp,
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
                         }
                     }
                 } else {

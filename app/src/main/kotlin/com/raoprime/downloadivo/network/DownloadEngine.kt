@@ -131,10 +131,38 @@ object DownloadEngine {
         } catch (_: Exception) {}
     }
 
+    fun isSupportedMediaUrl(rawUrl: String): Boolean {
+        val clean = sanitizeUrl(rawUrl).lowercase()
+        if (clean.isBlank() || (!clean.startsWith("http://") && !clean.startsWith("https://"))) {
+            return false
+        }
+        val supportedDomains = listOf(
+            "youtube.com", "youtu.be",
+            "instagram.com",
+            "tiktok.com",
+            "facebook.com", "fb.watch", "fb.com",
+            "twitter.com", "x.com",
+            "spotify.com",
+            "reddit.com", "redd.it",
+            "pinterest.com", "pin.it",
+            "threads.net",
+            "soundcloud.com",
+            "vimeo.com",
+            "dailymotion.com",
+            "twitch.tv"
+        )
+        val hasSupportedDomain = supportedDomains.any { clean.contains(it) }
+        val hasDirectMediaExtension = listOf(".mp4", ".mp3", ".m4a", ".webm", ".mkv", ".wav", ".aac", ".flac", ".ogg").any { clean.contains(it) }
+        return hasSupportedDomain || hasDirectMediaExtension
+    }
+
     suspend fun fetchMediaInfo(targetUrl: String): Result<MediaInfo> = withContext(Dispatchers.IO) {
         val cleanUrl = sanitizeUrl(targetUrl)
         if (cleanUrl.isBlank()) {
             return@withContext Result.failure(Exception("Please provide a valid URL"))
+        }
+        if (!isSupportedMediaUrl(cleanUrl)) {
+            return@withContext Result.failure(Exception("Unsupported media link. Please paste a valid link from YouTube, Instagram, Facebook, TikTok, Twitter/X, Spotify, Reddit, Pinterest, etc."))
         }
 
         val candidates = getCandidateBaseUrls()

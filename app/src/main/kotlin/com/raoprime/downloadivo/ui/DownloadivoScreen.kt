@@ -74,6 +74,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.Player
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -229,6 +231,48 @@ fun DownloadivoScreen(
             .build()
     }
 
+    fun playMedia(
+        uriStr: String,
+        title: String,
+        isAudio: Boolean,
+        duration: String,
+        thumbnail: String = "",
+        author: String = "",
+        originalUrl: String = "",
+        qualities: List<String> = emptyList(),
+        initialQuality: String = ""
+    ) {
+        try {
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
+            val uri = if (uriStr.startsWith("http://") || uriStr.startsWith("https://") || uriStr.startsWith("content://")) {
+                Uri.parse(uriStr)
+            } else {
+                Uri.fromFile(File(uriStr))
+            }
+            val item = if (isAudio) {
+                MediaItem.Builder().setUri(uri).setMimeType(MimeTypes.AUDIO_MPEG).build()
+            } else {
+                MediaItem.Builder().setUri(uri).build()
+            }
+            exoPlayer.setMediaItem(item)
+            exoPlayer.prepare()
+            exoPlayer.playWhenReady = true
+        } catch (_: Exception) {}
+
+        activePlaybackUri = uriStr
+        activePlaybackOriginalUrl = originalUrl
+        activePlaybackTitle = title
+        activePlaybackThumbnail = thumbnail
+        activePlaybackAuthor = author
+        activePlaybackIsAudio = isAudio
+        activePlaybackDuration = duration
+        activePlaybackQualities = qualities
+        activePlaybackCurrentQuality = initialQuality
+        isPlayerMinimized = false
+        isPlayerFullscreen = false
+    }
+
     var isExoPlaying by remember { mutableStateOf(false) }
 
     DisposableEffect(exoPlayer) {
@@ -260,6 +304,7 @@ fun DownloadivoScreen(
             mediaUri = activePlaybackUri!!,
             title = activePlaybackTitle,
             author = activePlaybackAuthor,
+            thumbnail = activePlaybackThumbnail,
             isAudio = activePlaybackIsAudio,
             duration = activePlaybackDuration,
             availableQualities = activePlaybackQualities,
@@ -306,6 +351,8 @@ fun DownloadivoScreen(
     var lastCompletedFilePath by remember { mutableStateOf<String?>(null) }
     var lastCompletedIsAudio by remember { mutableStateOf(false) }
     var lastCompletedDuration by remember { mutableStateOf("") }
+    var lastCompletedThumbnail by remember { mutableStateOf("") }
+    var lastCompletedAuthor by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         DownloadService.currentTask.collect { task ->
@@ -314,6 +361,7 @@ fun DownloadivoScreen(
                 lastCompletedFilePath = task.filePath
                 lastCompletedIsAudio = task.isAudio
                 lastCompletedDuration = task.duration
+                lastCompletedThumbnail = task.thumbnail
                 showCompletionPill = true
                 delay(5000)
                 showCompletionPill = false
@@ -581,18 +629,17 @@ fun DownloadivoScreen(
                         isResolving = isResolving,
                         errorMessage = errorMessage,
                         onStreamPlay = { streamUrl, originalUrl, title, isAudio, qualities, initialQuality, duration ->
-                            activePlaybackUri = streamUrl
-                            activePlaybackOriginalUrl = originalUrl
-                            activePlaybackTitle = title
-                            activePlaybackIsAudio = isAudio
-                            activePlaybackQualities = qualities
-                            activePlaybackCurrentQuality = initialQuality
-                            activePlaybackDuration = duration
-                            activePlaybackThumbnail = resolvedInfo?.thumbnail ?: ""
-                            activePlaybackAuthor = resolvedInfo?.author ?: ""
-                            activePlaybackAudioTracks = if (resolvedInfo?.audioTracks?.isNotEmpty() == true) resolvedInfo!!.audioTracks else listOf("Original Audio", "Hindi (हिन्दी)", "English")
-                            activePlaybackCurrentAudioTrack = activePlaybackAudioTracks.firstOrNull() ?: "Original Audio"
-                            isPlayerMinimized = false
+                            playMedia(
+                                uriStr = streamUrl,
+                                title = title,
+                                isAudio = isAudio,
+                                duration = duration,
+                                thumbnail = resolvedInfo?.thumbnail ?: "",
+                                author = resolvedInfo?.author ?: "",
+                                originalUrl = originalUrl,
+                                qualities = qualities,
+                                initialQuality = initialQuality
+                            )
                         },
                         onInspect = { targetUrl ->
                             val urlToInspect = (targetUrl ?: inputUrl).trim()
@@ -697,12 +744,15 @@ fun DownloadivoScreen(
                         onPlay = { task ->
                             HapticUtil.mediumClick(context)
                             task.filePath?.let { uriStr ->
-                                activePlaybackUri = uriStr
-                                activePlaybackTitle = task.title
-                                activePlaybackIsAudio = task.isAudio
-                                activePlaybackDuration = task.duration
-                                activePlaybackQualities = emptyList()
-                                activePlaybackCurrentQuality = ""
+                                playMedia(
+                                    uriStr = uriStr,
+                                    title = task.title,
+                                    isAudio = task.isAudio,
+                                    duration = task.duration,
+                                    thumbnail = task.thumbnail,
+                                    author = "",
+                                    originalUrl = task.url
+                                )
                             }
                         },
                         onShare = { task ->
@@ -791,12 +841,14 @@ fun DownloadivoScreen(
                     onPlay = {
                         HapticUtil.mediumClick(context)
                         lastCompletedFilePath?.let { filePath ->
-                            activePlaybackUri = filePath
-                            activePlaybackTitle = lastCompletedTitle
-                            activePlaybackIsAudio = lastCompletedIsAudio
-                            activePlaybackDuration = lastCompletedDuration
-                            activePlaybackQualities = emptyList()
-                            activePlaybackCurrentQuality = ""
+                            playMedia(
+                                uriStr = filePath,
+                                title = lastCompletedTitle,
+                                isAudio = lastCompletedIsAudio,
+                                duration = lastCompletedDuration,
+                                thumbnail = lastCompletedThumbnail,
+                                author = lastCompletedAuthor
+                            )
                         }
                     },
                     onDismiss = {
@@ -890,6 +942,7 @@ fun DownloadivoScreen(
                         mediaUri = activePlaybackUri!!,
                         title = activePlaybackTitle,
                         author = activePlaybackAuthor,
+                        thumbnail = activePlaybackThumbnail,
                         isAudio = activePlaybackIsAudio,
                         duration = activePlaybackDuration,
                         availableQualities = activePlaybackQualities,

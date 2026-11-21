@@ -200,10 +200,22 @@ class MainActivity : ComponentActivity() {
                 }
             }
             Intent.ACTION_VIEW -> {
-                val data = intent.dataString ?: ""
-                val extracted = extractUrl(data)
-                if (extracted.isNotBlank()) {
-                    sharedUrl = extracted
+                val dataUri = intent.data
+                val mime = intent.type ?: ""
+                if (mime.startsWith("video/") || mime.startsWith("audio/") ||
+                    (dataUri != null && (dataUri.scheme == "content" || dataUri.scheme == "file"))) {
+                    dataUri?.toString()?.let { uriStr ->
+                        playbackUri = uriStr
+                        playbackIsAudio = mime.startsWith("audio/")
+                        playbackTitle = dataUri.lastPathSegment ?: "Media File"
+                        playbackDuration = ""
+                    }
+                } else {
+                    val data = intent.dataString ?: ""
+                    val extracted = extractUrl(data)
+                    if (extracted.isNotBlank()) {
+                        sharedUrl = extracted
+                    }
                 }
             }
         }
