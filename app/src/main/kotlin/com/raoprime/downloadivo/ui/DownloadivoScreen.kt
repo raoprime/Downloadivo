@@ -624,6 +624,24 @@ fun DownloadivoScreen(
                         onRemoveQueued = { taskId ->
                             DownloadService.removeQueuedTask(context, taskId)
                         },
+                        onRetry = { task ->
+                            triggerDownload(
+                                url = task.url,
+                                title = task.title,
+                                format = task.format,
+                                thumbnail = task.thumbnail,
+                                duration = task.duration,
+                                expectedBytes = task.totalBytes,
+                                startTime = task.startTime,
+                                endTime = task.endTime
+                            )
+                        },
+                        onDismissError = {
+                            val cancelIntent = Intent(context, DownloadService::class.java).apply {
+                                action = DownloadService.ACTION_CANCEL_DOWNLOAD
+                            }
+                            context.startService(cancelIntent)
+                        },
                         onNavigateHome = { currentTab = AppTab.HOME }
                     )
 
@@ -2336,8 +2354,25 @@ private fun HomeDownloaderTab(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAB 2: ACTIVE QUEUE TAB (STUDIO-GRADE DOWNLOAD MANAGER)
+// TAB 2: POLISHED MONOCHROME DOWNLOAD QUEUE
 // ═══════════════════════════════════════════════════════════════════════
+
+private fun sanitizeQueueErrorMessage(raw: String?): String {
+    if (raw.isNullOrBlank()) return "Download interrupted"
+    val lower = raw.lowercase()
+    return when {
+        "timeout" in lower || "timed out" in lower -> "Connection timed out"
+        "network" in lower || "unable to resolve host" in lower || "no address associated" in lower -> "Network connection lost"
+        "space" in lower || "enospc" in lower -> "Insufficient storage space"
+        "403" in lower || "forbidden" in lower -> "Access forbidden by server"
+        "404" in lower || "not found" in lower -> "Media file not found"
+        "mediastore" in lower || "destination" in lower -> "Could not save to storage"
+        "aborted" in lower || "cancelled" in lower -> "Download cancelled"
+        raw.length > 55 -> raw.take(52) + "..."
+        else -> raw
+    }
+}
+
 @Composable
 private fun QueueTab(
     currentTask: DownloadTask,
@@ -2345,421 +2380,62 @@ private fun QueueTab(
     onCancelCurrent: () -> Unit,
     onCancelAll: () -> Unit = {},
     onRemoveQueued: (String) -> Unit,
+    onRetry: (DownloadTask) -> Unit = {},
+    onDismissError: () -> Unit = {},
     onNavigateHome: () -> Unit
 ) {
-    val scrollState = rememberScrollState()
     val context = LocalContext.current
-    val isAnyActive = currentTask.status == DownloadStatus.DOWNLOADING || queuedTasks.isNotEmpty()
+    var isInitialSyncComplete by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        // Prevents flashing "Queue is empty" during initial StateFlow synchronization
+        kotlinx.coroutines.delay(80)
+        isInitialSyncComplete = true
+    }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // ── TOP DASHBOARD STATUS SUMMARY CARD (Only when active) ──
-        if (isAnyActive) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = SurfaceElevated,
-                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .clip(CircleShape)
-                                .background(if (currentTask.status == DownloadStatus.DOWNLOADING) StatusSuccess else TextTertiary)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = if (currentTask.status == DownloadStatus.DOWNLOADING) {
-                                    "Downloading Active (${currentTask.progress}%)"
-                                } else if (queuedTasks.isNotEmpty()) {
-                                    "${queuedTasks.size} Tasks in Queue"
-                                } else {
-                                    "Engine Idle • All Clear"
-                                },
-                                style = Typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = TextCrisp
-                            )
-                            Text(
-                                text = "${queuedTasks.size} queued • Turbo Multi-Thread",
-                                style = Typography.bodySmall,
-                                color = TextTertiary
-                            )
-                        }
-                    }
+    // Active or actionable tasks: downloading, resolving, or failed current task + queued tasks
+    val isCurrentActionable = currentTask.id.isNotBlank() && (
+        currentTask.status == DownloadStatus.DOWNLOADING ||
+        currentTask.status == DownloadStatus.RESOLVING ||
+        currentTask.status == DownloadStatus.ERROR
+    )
 
-                    Button(
-                        onClick = {
-                            HapticUtil.mediumClick(context)
-                            onCancelAll()
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = StatusError.copy(alpha = 0.15f),
-                            contentColor = StatusError
-                        ),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, StatusError.copy(alpha = 0.4f)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp)
-                    ) {
-                        Icon(Icons.Default.ClearAll, contentDescription = null, tint = StatusError, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Cancel All", style = Typography.labelSmall, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
+    val activeJobs = remember(currentTask, queuedTasks, isCurrentActionable) {
+        val list = mutableListOf<DownloadTask>()
+        if (isCurrentActionable) {
+            list.add(currentTask)
         }
+        list.addAll(queuedTasks)
+        list
+    }
 
-        // ── FAILED TASK RETRY ALERT ──
-        if (currentTask.status == DownloadStatus.ERROR) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = SurfaceDark,
-                border = androidx.compose.foundation.BorderStroke(1.dp, StatusError.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.ErrorOutline,
-                        contentDescription = null,
-                        tint = StatusError,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Download Interrupted",
-                            style = Typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = StatusError
-                        )
-                        Text(
-                            text = currentTask.title.ifBlank { "Media Stream" },
-                            style = Typography.bodySmall,
-                            color = TextSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        currentTask.error?.let {
-                            Text(
-                                text = it,
-                                style = Typography.bodySmall,
-                                color = TextTertiary,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    FilledTonalButton(
-                        onClick = onNavigateHome,
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Retry", style = Typography.labelSmall)
-                    }
-                }
-            }
-        }
+    // Rapid action debounce to avoid multiple triggers on fast taps
+    var pendingActionTaskId by remember { mutableStateOf<String?>(null) }
+    var isNewDownloadTriggered by remember { mutableStateOf(false) }
 
-        // ── ACTIVE DOWNLOADING HERO CARD ──
-        if (currentTask.status == DownloadStatus.DOWNLOADING) {
-            val animatedTaskProgress by animateFloatAsState(
-                targetValue = if (currentTask.progress >= 0) currentTask.progress / 100f else 0f,
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
-                label = "hero_progress"
-            )
+    LaunchedEffect(currentTask.id, queuedTasks.size) {
+        pendingActionTaskId = null
+    }
 
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = SurfaceDark,
-                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-                shadowElevation = 18.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    // Header Row with Thumbnail
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        // 16:9 Thumbnail Image
-                        Box(
-                            modifier = Modifier
-                                .size(88.dp, 54.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color.Black),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (currentTask.thumbnail.isNotBlank()) {
-                                AsyncImage(
-                                    model = currentTask.thumbnail,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Icon(
-                                    if (currentTask.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
-                                    contentDescription = null,
-                                    tint = TextCrisp,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = RoundedCornerShape(5.dp),
-                                    color = SurfaceHighlight,
-                                    modifier = Modifier.padding(end = 6.dp)
-                                ) {
-                                    Text(
-                                        text = if (currentTask.isAudio) "MP3 320k" else (if (currentTask.format.contains("1080")) "1080p FHD" else (if (currentTask.format.contains("720")) "720p HD" else currentTask.format.uppercase())),
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextCrisp,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                    )
-                                }
-                                if (currentTask.duration.isNotBlank()) {
-                                    Text(
-                                        text = currentTask.duration,
-                                        style = Typography.bodySmall,
-                                        color = TextTertiary
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = currentTask.title.ifBlank { "Downloading stream..." },
-                                style = Typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = TextCrisp,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        IconButton(
-                            onClick = {
-                                HapticUtil.lightClick(context)
-                                onCancelCurrent()
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel", tint = StatusError, modifier = Modifier.size(20.dp))
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Progress Stats Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        Text(
-                            text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
-                            fontSize = 26.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = TextCrisp
-                        )
-
-                        Column(
-                            modifier = Modifier.weight(1f, fill = false).padding(start = 12.dp),
-                            horizontalAlignment = Alignment.End
-                        ) {
-                            if (currentTask.speed.isNotBlank()) {
-                                Text(
-                                    text = "⚡ ${currentTask.speed}",
-                                    style = Typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextCrisp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Text(
-                                text = buildString {
-                                    append(formatByteSize(currentTask.bytesDownloaded))
-                                    if (currentTask.totalBytes > 0) {
-                                        append(" / ")
-                                        append(formatByteSize(currentTask.totalBytes))
-                                    }
-                                    if (currentTask.eta.isNotBlank()) {
-                                        append(" • ")
-                                        append(currentTask.eta)
-                                    }
-                                },
-                                style = Typography.bodySmall,
-                                color = TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Studio Smooth Progress Indicator
-                    LinearProgressIndicator(
-                        progress = { animatedTaskProgress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                        color = TextCrisp,
-                        trackColor = SurfaceHighlight
-                    )
-                }
-            }
-        }
-
-        // ── QUEUED TASKS SECTION ──
-        if (queuedTasks.isNotEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "Up Next in Queue (${queuedTasks.size})",
-                    style = Typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextSecondary
-                )
-
-                queuedTasks.forEachIndexed { index, task ->
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = SurfaceDark,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = SurfaceElevated,
-                                modifier = Modifier.size(26.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = "${index + 1}",
-                                        style = Typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextCrisp
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(10.dp))
-
-                            // Thumbnail
-                            Box(
-                                modifier = Modifier
-                                    .size(50.dp, 32.dp)
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color.Black),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (task.thumbnail.isNotBlank()) {
-                                    AsyncImage(
-                                        model = task.thumbnail,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Icon(
-                                        if (task.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
-                                        contentDescription = null,
-                                        tint = TextCrisp,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(10.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = task.title,
-                                    style = Typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = TextCrisp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = buildString {
-                                        append(if (task.isAudio) "MP3 320k" else "MP4 ${task.format.uppercase()}")
-                                        if (task.totalBytes > 0) {
-                                            append(" • ~")
-                                            append(formatByteSize(task.totalBytes))
-                                        }
-                                        if (task.duration.isNotBlank()) {
-                                            append(" • ")
-                                            append(task.duration)
-                                        }
-                                    },
-                                    style = Typography.bodySmall,
-                                    color = TextTertiary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            IconButton(
-                                onClick = {
-                                    HapticUtil.lightClick(context)
-                                    onRemoveQueued(task.id)
-                                },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(Icons.Default.Close, contentDescription = "Remove", tint = TextTertiary, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ── CLEAN POLISHED EMPTY STATE ──
-        if (currentTask.status != DownloadStatus.DOWNLOADING && queuedTasks.isEmpty()) {
+    if (activeJobs.isEmpty()) {
+        if (!isInitialSyncComplete) {
+            // Neutral empty canvas during initial frame load
+            Box(modifier = Modifier.fillMaxSize())
+        } else {
+            // ── COMPACT MONOCHROME EMPTY STATE (CENTERED IN USABLE SPACE) ──
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 48.dp),
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // 1. List glyph inside circular charcoal surface
                     Box(
                         modifier = Modifier
                             .size(64.dp)
@@ -2768,49 +2444,434 @@ private fun QueueTab(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Default.FormatListBulleted,
+                            imageVector = Icons.Default.FormatListBulleted,
                             contentDescription = null,
                             tint = TextCrisp,
-                            modifier = Modifier.size(30.dp)
+                            modifier = Modifier.size(28.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // 2. Title "Queue is empty"
                     Text(
                         text = "Queue is empty",
-                        style = Typography.titleMedium,
+                        style = Typography.titleMedium.copy(fontSize = 18.sp),
                         fontWeight = FontWeight.Bold,
-                        color = TextCrisp
+                        color = TextCrisp,
+                        textAlign = TextAlign.Center
                     )
+
                     Spacer(modifier = Modifier.height(6.dp))
+
+                    // 3. Supporting line "Active and waiting downloads appear here."
                     Text(
-                        text = "Downloads in progress or pending will appear here.",
-                        style = Typography.bodySmall,
+                        text = "Active and waiting downloads appear here.",
+                        style = Typography.bodyMedium.copy(fontSize = 14.sp),
                         color = TextSecondary,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 32.dp)
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
-                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Spacer(modifier = Modifier.height(22.dp))
+
+                    // 4. White "New download" button with black plus and label
                     Button(
                         onClick = {
-                            HapticUtil.mediumClick(context)
-                            onNavigateHome()
+                            if (!isNewDownloadTriggered) {
+                                isNewDownloadTriggered = true
+                                HapticUtil.mediumClick(context)
+                                onNavigateHome()
+                            }
                         },
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = TextCrisp,
                             contentColor = CanvasDark
                         ),
-                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 11.dp),
+                        modifier = Modifier.defaultMinSize(minHeight = 44.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(16.dp))
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = CanvasDark,
+                            modifier = Modifier.size(16.dp)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("New download", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = CanvasDark)
+                        Text(
+                            text = "New download",
+                            style = Typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = CanvasDark
+                        )
                     }
                 }
             }
         }
+    } else {
+        // ── POPULATED MONOCHROME QUEUE LIST ──
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Subtle Queue Header
+            item(key = "queue_header_section") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp, bottom = 4.dp, start = 2.dp, end = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${activeJobs.size} ${if (activeJobs.size == 1) "download" else "downloads"}",
+                        style = Typography.bodySmall.copy(fontSize = 13.sp),
+                        color = TextSecondary
+                    )
 
-        Spacer(modifier = Modifier.height(76.dp))
+                    if (activeJobs.size > 1 || currentTask.status == DownloadStatus.DOWNLOADING) {
+                        TextButton(
+                            onClick = {
+                                HapticUtil.mediumClick(context)
+                                onCancelAll()
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "Cancel all",
+                                style = Typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = TextTertiary
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Populated Jobs with Stable IDs
+            itemsIndexed(
+                items = activeJobs,
+                key = { _, task -> task.id.ifBlank { "task_${task.url.hashCode()}" } }
+            ) { index, task ->
+                val queuePosition = if (isCurrentActionable) index else (index + 1)
+
+                QueueJobRow(
+                    task = task,
+                    queuePosition = queuePosition,
+                    onCancel = {
+                        if (pendingActionTaskId != task.id) {
+                            pendingActionTaskId = task.id
+                            HapticUtil.lightClick(context)
+                            if (task.id == currentTask.id) {
+                                onCancelCurrent()
+                            } else {
+                                onRemoveQueued(task.id)
+                            }
+                        }
+                    },
+                    onRetry = {
+                        if (pendingActionTaskId != task.id) {
+                            pendingActionTaskId = task.id
+                            HapticUtil.mediumClick(context)
+                            onRetry(task)
+                        }
+                    },
+                    onDismiss = {
+                        if (pendingActionTaskId != task.id) {
+                            pendingActionTaskId = task.id
+                            HapticUtil.lightClick(context)
+                            onDismissError()
+                        }
+                    }
+                )
+            }
+
+            // Bottom Spacing for Bottom Bar clearance
+            item(key = "queue_bottom_spacer") {
+                Spacer(modifier = Modifier.height(84.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun QueueJobRow(
+    task: DownloadTask,
+    queuePosition: Int,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = SurfaceDark,
+        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 1. Artwork Thumbnail (16:9 ratio, 76dp x 44dp)
+            Box(
+                modifier = Modifier
+                    .size(76.dp, 44.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(SurfaceElevated),
+                contentAlignment = Alignment.Center
+            ) {
+                if (task.thumbnail.isNotBlank()) {
+                    AsyncImage(
+                        model = task.thumbnail,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (task.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
+                        contentDescription = null,
+                        tint = TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // Format or duration pill badge overlay
+                val badgeText = if (task.isAudio) "MP3" else if (task.format.contains("1080")) "1080p" else if (task.format.contains("720")) "720p" else if (task.duration.isNotBlank()) task.duration else ""
+                if (badgeText.isNotBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(2.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color.Black.copy(alpha = 0.75f))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = badgeText,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextCrisp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // 2. Info Column (weight = 1f ensures fixed bounds without shifting adjacent controls)
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                // Media Title (strongest emphasis, max 2 lines)
+                Text(
+                    text = task.title.ifBlank { "Media Download" },
+                    style = Typography.titleSmall.copy(fontSize = 14.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextCrisp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Real state in plain language
+                when (task.status) {
+                    DownloadStatus.DOWNLOADING -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = if (task.progress >= 0 && task.totalBytes > 0) {
+                                    "${task.progress}% • ${formatByteSize(task.bytesDownloaded)} / ${formatByteSize(task.totalBytes)}"
+                                } else if (task.bytesDownloaded > 0) {
+                                    "${formatByteSize(task.bytesDownloaded)} transferred"
+                                } else {
+                                    "Downloading..."
+                                },
+                                style = Typography.bodySmall.copy(fontSize = 12.sp),
+                                color = TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            if (task.speed.isNotBlank()) {
+                                Text(
+                                    text = " • ${task.speed}",
+                                    style = Typography.bodySmall.copy(fontSize = 12.sp),
+                                    color = TextTertiary,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Progress indicator (steady 4dp height)
+                        val animatedProgress by animateFloatAsState(
+                            targetValue = if (task.progress >= 0) task.progress / 100f else 0f,
+                            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                            label = "queue_progress"
+                        )
+                        LinearProgressIndicator(
+                            progress = { animatedProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = TextCrisp,
+                            trackColor = SurfaceHighlight
+                        )
+                    }
+
+                    DownloadStatus.RESOLVING -> {
+                        Text(
+                            text = "Preparing download...",
+                            style = Typography.bodySmall.copy(fontSize = 12.sp),
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                            color = TextCrisp,
+                            trackColor = SurfaceHighlight
+                        )
+                    }
+
+                    DownloadStatus.ERROR -> {
+                        Text(
+                            text = sanitizeQueueErrorMessage(task.error),
+                            style = Typography.bodySmall.copy(fontSize = 12.sp),
+                            color = StatusError,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    DownloadStatus.QUEUED -> {
+                        val subText = buildString {
+                            append("Waiting")
+                            if (queuePosition > 0) {
+                                append(" • #$queuePosition in queue")
+                            }
+                            if (task.totalBytes > 0) {
+                                append(" • ~${formatByteSize(task.totalBytes)}")
+                            }
+                        }
+                        Text(
+                            text = subText,
+                            style = Typography.bodySmall.copy(fontSize = 12.sp),
+                            color = TextTertiary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    else -> {
+                        Text(
+                            text = "Waiting",
+                            style = Typography.bodySmall.copy(fontSize = 12.sp),
+                            color = TextTertiary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // 3. Action Slot
+            when (task.status) {
+                DownloadStatus.ERROR -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Surface(
+                            onClick = {
+                                HapticUtil.mediumClick(context)
+                                onRetry()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            color = SurfaceElevated,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                            modifier = Modifier.defaultMinSize(minHeight = 32.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Retry download ${task.title}",
+                                    tint = TextCrisp,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Retry",
+                                    style = Typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = TextCrisp
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                HapticUtil.lightClick(context)
+                                onDismiss()
+                            },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Dismiss error for ${task.title}",
+                                tint = TextTertiary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
+                DownloadStatus.DOWNLOADING, DownloadStatus.RESOLVING -> {
+                    IconButton(
+                        onClick = onCancel,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cancel download ${task.title}",
+                            tint = TextTertiary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                DownloadStatus.QUEUED -> {
+                    IconButton(
+                        onClick = onCancel,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove ${task.title} from queue",
+                            tint = TextTertiary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                else -> {}
+            }
+        }
     }
 }
 
