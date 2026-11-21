@@ -337,7 +337,7 @@ fun DownloadivoScreen(
             }
         },
         topBar = {
-            if ((currentTab != AppTab.HOME && currentTab != AppTab.LIBRARY) || (currentTab == AppTab.HOME && (resolvedInfo != null || isResolving))) {
+            if ((activePlaybackUri == null || isPlayerMinimized) && ((currentTab != AppTab.HOME && currentTab != AppTab.LIBRARY) || (currentTab == AppTab.HOME && (resolvedInfo != null || isResolving)))) {
                 TopAppBar(
                     title = {
                         when (currentTab) {

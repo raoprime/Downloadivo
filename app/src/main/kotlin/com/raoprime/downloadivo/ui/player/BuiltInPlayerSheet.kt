@@ -1,3 +1,8 @@
+@file:kotlin.OptIn(
+    androidx.media3.common.util.UnstableApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class
+)
+
 package com.raoprime.downloadivo.ui.player
 
 import android.app.Activity
@@ -5,7 +10,7 @@ import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import androidx.annotation.OptIn
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -50,7 +55,7 @@ import com.raoprime.downloadivo.network.DownloadEngine
 import com.raoprime.downloadivo.ui.theme.*
 import kotlinx.coroutines.delay
 
-@OptIn(UnstableApi::class)
+@kotlin.OptIn(UnstableApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun BuiltInPlayerSheet(
     exoPlayer: ExoPlayer,
@@ -88,10 +93,19 @@ fun BuiltInPlayerSheet(
     var showDoubleTapRewind by remember { mutableStateOf(false) }
     var showDoubleTapForward by remember { mutableStateOf(false) }
 
-    // Sub-dialogs
+    // Sub-dialogs & Menus
     var showAudioTrackSheet by remember { mutableStateOf(false) }
     var showQualitySheet by remember { mutableStateOf(false) }
     var showSpeedSheet by remember { mutableStateOf(false) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
+
+    // Intercept Back press to dismiss subdialogs or menus first
+    BackHandler(enabled = showSpeedSheet || showQualitySheet || showAudioTrackSheet || showOverflowMenu) {
+        showOverflowMenu = false
+        showSpeedSheet = false
+        showQualitySheet = false
+        showAudioTrackSheet = false
+    }
 
     // Playback Progress & Duration
     var currentPositionMs by remember { mutableLongStateOf(exoPlayer.currentPosition) }
@@ -292,6 +306,24 @@ fun BuiltInPlayerSheet(
                         .background(BorderSubtle)
                 )
 
+                // Subtitle metadata computation: accurate file info
+                val formatLabel = if (isAudio) "MP3 Audio" else "MP4 Video"
+                val cleanDuration = when {
+                    duration.isNotBlank() -> duration
+                    durationMs > 0L -> formatMsToTime(durationMs)
+                    else -> ""
+                }
+                val subtitleParts = buildList {
+                    if (author.isNotBlank() && author != "Unknown" && !author.equals("Downloadivo", ignoreCase = true)) {
+                        add(author)
+                    }
+                    add(formatLabel)
+                    if (cleanDuration.isNotBlank()) {
+                        add(cleanDuration)
+                    }
+                }
+                val subtitleText = subtitleParts.joinToString(" · ")
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -299,6 +331,7 @@ fun BuiltInPlayerSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Left: Media icon + Title & Subtitle with flexible room (up to 2 lines)
                     Row(
                         modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically
@@ -318,50 +351,133 @@ fun BuiltInPlayerSheet(
                             )
                         }
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
                             Text(
                                 text = title.ifBlank { "Now Playing" },
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
+                                lineHeight = 18.sp,
                                 color = TextCrisp,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Text(
-                                text = if (author.isNotBlank()) author else (if (isAudio) "Live Audio Stream • Studio 320k" else "HD Video Stream • Ad-Free"),
-                                fontSize = 11.sp,
-                                color = TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Aspect Ratio Toggle (Fit vs Zoom/Crop)
-                        if (!isAudio) {
-                            IconButton(
-                                onClick = { isZoomToFill = !isZoomToFill },
-                                modifier = Modifier.size(34.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isZoomToFill) Icons.Default.FitScreen else Icons.Default.CropFree,
-                                    contentDescription = if (isZoomToFill) "Fit to Screen" else "Zoom to Fill",
-                                    tint = if (isZoomToFill) TextCrisp else TextTertiary,
-                                    modifier = Modifier.size(19.dp)
+                            if (subtitleText.isNotBlank()) {
+                                Text(
+                                    text = subtitleText,
+                                    fontSize = 11.5.sp,
+                                    color = TextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
-                        // Minimize Button (dock to bottom floating miniplayer)
-                        IconButton(onClick = onMinimize, modifier = Modifier.size(34.dp)) {
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Minimize", tint = TextCrisp, modifier = Modifier.size(24.dp))
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // Right action buttons: Collapse, More Options (Overflow), Close
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Collapse / Minimize Button (dock to bottom floating miniplayer)
+                        IconButton(
+                            onClick = onMinimize,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Minimize",
+                                tint = TextCrisp,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
-                        // PiP Button
-                        if (!isAudio && onEnterPip != null) {
-                            IconButton(onClick = onEnterPip, modifier = Modifier.size(34.dp)) {
-                                Icon(Icons.Default.PictureInPicture, contentDescription = "PiP", tint = TextCrisp, modifier = Modifier.size(20.dp))
+
+                        // Labeled Overflow Menu for Secondary Actions
+                        Box {
+                            IconButton(
+                                onClick = { showOverflowMenu = true },
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More Options",
+                                    tint = TextCrisp,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showOverflowMenu,
+                                onDismissRequest = { showOverflowMenu = false },
+                                modifier = Modifier.background(SurfaceElevated)
+                            ) {
+                                if (!isAudio && onEnterPip != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Picture in Picture", color = TextCrisp, fontSize = 13.5.sp) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.PictureInPicture, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                                        },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            onEnterPip.invoke()
+                                        }
+                                    )
+                                }
+                                if (!isAudio) {
+                                    DropdownMenuItem(
+                                        text = { Text(if (isZoomToFill) "Fit to Screen" else "Zoom to Fill", color = TextCrisp, fontSize = 13.5.sp) },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = if (isZoomToFill) Icons.Default.FitScreen else Icons.Default.CropFree,
+                                                contentDescription = null,
+                                                tint = TextCrisp,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            isZoomToFill = !isZoomToFill
+                                        }
+                                    )
+                                }
+                                DropdownMenuItem(
+                                    text = { Text("Playback Speed (${currentSpeed}x)", color = TextCrisp, fontSize = 13.5.sp) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Speed, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                                    },
+                                    onClick = {
+                                        showOverflowMenu = false
+                                        showSpeedSheet = true
+                                    }
+                                )
+                                if (!isAudio && availableQualities.size > 1 && onQualitySelected != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Video Quality", color = TextCrisp, fontSize = 13.5.sp) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Settings, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                                        },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            showQualitySheet = true
+                                        }
+                                    )
+                                }
+                                if (availableAudioTracks.size > 1 && onAudioTrackSelected != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Audio Track", color = TextCrisp, fontSize = 13.5.sp) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Audiotrack, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(18.dp))
+                                        },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            showAudioTrackSheet = true
+                                        }
+                                    )
+                                }
                             }
                         }
+
                         // Close Button
                         IconButton(
                             onClick = {
@@ -374,7 +490,12 @@ fun BuiltInPlayerSheet(
                             },
                             modifier = Modifier.size(34.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextTertiary, modifier = Modifier.size(20.dp))
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = TextTertiary,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
@@ -737,10 +858,19 @@ fun BuiltInPlayerSheet(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(22.dp),
+                        .height(26.dp),
+                    thumb = {
+                        SliderDefaults.Thumb(
+                            interactionSource = remember { MutableInteractionSource() },
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color.White
+                            ),
+                            thumbSize = androidx.compose.ui.unit.DpSize(14.dp, 14.dp)
+                        )
+                    },
                     colors = SliderDefaults.colors(
-                        thumbColor = TextCrisp,
-                        activeTrackColor = TextCrisp,
+                        thumbColor = Color.White,
+                        activeTrackColor = Color.White,
                         inactiveTrackColor = CardBorderDark
                     )
                 )
@@ -832,7 +962,7 @@ fun BuiltInPlayerSheet(
                         onClick = {
                             HapticUtil.lightClick(context)
                             try {
-                                val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
+                                val maxDur = if (durationMs > 0) durationMs else if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) exoPlayer.duration else Long.MAX_VALUE
                                 val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
                                 exoPlayer.seekTo(target)
                                 currentPositionMs = target
@@ -845,19 +975,22 @@ fun BuiltInPlayerSheet(
                     }
                 }
 
-                // Quick Controls Row: Speed, Quality, Audio Track (Balanced & Highly Visible)
+                // Quick Controls Row: Speed, Quality, Audio Track (Filtered strictly by availability)
+                val showQualitySelector = !isAudio && availableQualities.size > 1 && onQualitySelected != null
+                val showAudioSelector = availableAudioTracks.size > 1 && onAudioTrackSelected != null
+                val activeSelectorsCount = 1 + (if (showQualitySelector) 1 else 0) + (if (showAudioSelector) 1 else 0)
+
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = if (activeSelectorsCount == 1) Arrangement.Center else Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 1. Speed Selector Button
+                    // 1. Speed Selector Button (Always available)
                     Box(
-                        modifier = Modifier
-                            .weight(1f)
+                        modifier = (if (activeSelectorsCount == 1) Modifier.width(136.dp) else Modifier.weight(1f))
                             .height(42.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(SurfaceElevated)
@@ -884,8 +1017,8 @@ fun BuiltInPlayerSheet(
                         }
                     }
 
-                    // 2. Video Quality Button
-                    if (!isAudio) {
+                    // 2. Video Quality Button (Only when source provides multiple qualities!)
+                    if (showQualitySelector) {
                         val activeQualLabel = when {
                             currentQuality.contains("4k", ignoreCase = true) || currentQuality.contains("2160") -> "4K"
                             currentQuality.contains("1440") -> "2K"
@@ -897,7 +1030,7 @@ fun BuiltInPlayerSheet(
                         }
                         Box(
                             modifier = Modifier
-                                .weight(1.1f)
+                                .weight(1f)
                                 .height(42.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(SurfaceElevated)
@@ -927,43 +1060,45 @@ fun BuiltInPlayerSheet(
                         }
                     }
 
-                    // 3. Audio Track Button
-                    val activeAudioLabel = if (currentAudioTrack.isNotBlank()) {
-                        when {
-                            currentAudioTrack.contains("Hindi", ignoreCase = true) -> "Hindi"
-                            currentAudioTrack.contains("English", ignoreCase = true) -> "English"
-                            currentAudioTrack.contains("Original", ignoreCase = true) -> "Original"
-                            else -> currentAudioTrack.take(8)
-                        }
-                    } else "Audio"
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(42.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(SurfaceElevated)
-                            .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
-                            .clickable {
-                                HapticUtil.lightClick(context)
-                                showAudioTrackSheet = true
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
+                    // 3. Audio Track Button (Only when media has multiple audio tracks!)
+                    if (showAudioSelector) {
+                        val activeAudioLabel = if (currentAudioTrack.isNotBlank()) {
+                            when {
+                                currentAudioTrack.contains("Hindi", ignoreCase = true) -> "Hindi"
+                                currentAudioTrack.contains("English", ignoreCase = true) -> "English"
+                                currentAudioTrack.contains("Original", ignoreCase = true) -> "Original"
+                                else -> currentAudioTrack.take(8)
+                            }
+                        } else "Audio"
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(SurfaceElevated)
+                                .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
+                                .clickable {
+                                    HapticUtil.lightClick(context)
+                                    showAudioTrackSheet = true
+                                },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.Audiotrack, contentDescription = "Audio", tint = TextCrisp, modifier = Modifier.size(15.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = activeAudioLabel,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextCrisp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp)
+                            ) {
+                                Icon(Icons.Default.Audiotrack, contentDescription = "Audio", tint = TextCrisp, modifier = Modifier.size(15.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = activeAudioLabel,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
