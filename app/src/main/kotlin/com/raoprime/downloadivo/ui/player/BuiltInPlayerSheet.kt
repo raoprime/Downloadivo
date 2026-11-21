@@ -111,19 +111,33 @@ fun BuiltInPlayerSheet(
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
-                        player = exoPlayer
-                        useController = false
-                        keepScreenOn = true
-                        layoutParams = FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
+                        try {
+                            player = exoPlayer
+                            useController = false
+                            keepScreenOn = true
+                            layoutParams = FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        } catch (_: Exception) {}
                     }
                 },
                 update = { pv ->
-                    if (pv.player != exoPlayer) {
-                        pv.player = exoPlayer
-                    }
+                    try {
+                        if (pv.player != exoPlayer) {
+                            pv.player = exoPlayer
+                        }
+                    } catch (_: Exception) {}
+                },
+                onReset = { pv ->
+                    try {
+                        pv.player = null
+                    } catch (_: Exception) {}
+                },
+                onRelease = { pv ->
+                    try {
+                        pv.player = null
+                    } catch (_: Exception) {}
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -349,7 +363,17 @@ fun BuiltInPlayerSheet(
                             }
                         }
                         // Close Button
-                        IconButton(onClick = onDismiss, modifier = Modifier.size(34.dp)) {
+                        IconButton(
+                            onClick = {
+                                try {
+                                    if (isFullscreen) {
+                                        onFullscreenChange?.invoke(false)
+                                    }
+                                    onDismiss()
+                                } catch (_: Exception) {}
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
                             Icon(Icons.Default.Close, contentDescription = "Close", tint = TextTertiary, modifier = Modifier.size(20.dp))
                         }
                     }
@@ -394,25 +418,39 @@ fun BuiltInPlayerSheet(
                         }
                     }
                 } else {
-                    // Video Mode Stage: Native ExoPlayer view
+                    // Video Mode Stage: Native ExoPlayer view with safe lifecycle detachment
                     AndroidView(
                         factory = { ctx ->
                             PlayerView(ctx).apply {
-                                player = exoPlayer
-                                useController = false
-                                keepScreenOn = true
-                                resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                layoutParams = FrameLayout.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
+                                try {
+                                    player = exoPlayer
+                                    useController = false
+                                    keepScreenOn = true
+                                    resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                    layoutParams = FrameLayout.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT
+                                    )
+                                } catch (_: Exception) {}
                             }
                         },
                         update = { pv ->
-                            if (pv.player != exoPlayer) {
-                                pv.player = exoPlayer
-                            }
-                            pv.resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            try {
+                                if (pv.player != exoPlayer) {
+                                    pv.player = exoPlayer
+                                }
+                                pv.resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            } catch (_: Exception) {}
+                        },
+                        onReset = { pv ->
+                            try {
+                                pv.player = null
+                            } catch (_: Exception) {}
+                        },
+                        onRelease = { pv ->
+                            try {
+                                pv.player = null
+                            } catch (_: Exception) {}
                         },
                         modifier = Modifier.fillMaxSize()
                     )

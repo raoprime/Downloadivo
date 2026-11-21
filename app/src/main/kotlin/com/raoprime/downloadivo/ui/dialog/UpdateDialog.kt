@@ -53,61 +53,74 @@ fun UpdateDialog(
         )
     ) {
         Surface(
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(24.dp),
             color = SurfaceDark,
-            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-            shadowElevation = 20.dp,
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF2E2E2E)),
+            shadowElevation = 24.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
-                .padding(horizontal = 8.dp)
+                .padding(horizontal = 6.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(22.dp),
+                    .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Rocket / Sparkle Icon Header
+                // Sleek Studio Sparkle Icon Header
                 Box(
                     modifier = Modifier
-                        .size(54.dp)
+                        .size(52.dp)
                         .clip(CircleShape)
                         .background(
-                            Brush.linearGradient(
-                                colors = listOf(TextCrisp, SurfaceElevated)
+                            Brush.verticalGradient(
+                                colors = listOf(SurfaceElevated, Color(0xFF181818))
                             )
-                        ),
+                        )
+                        .border(1.dp, Color(0xFF333333), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.SystemUpdate,
+                        imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        tint = CanvasDark,
-                        modifier = Modifier.size(28.dp)
+                        tint = TextCrisp,
+                        modifier = Modifier.size(26.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Title & Version Pill
+                // Title
                 Text(
-                    text = "New Update Available",
-                    style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    text = "Downloadivo Update",
+                    style = Typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        letterSpacing = 0.2.sp
+                    ),
                     color = TextCrisp
                 )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
+                // Version Tag Pill
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(SurfaceElevated)
-                        .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp))
+                        .border(0.5.dp, Color(0xFF2C2C2C), RoundedCornerShape(12.dp))
                         .padding(horizontal = 12.dp, vertical = 4.dp)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF4CAF50))
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "v${updateInfo.versionName}",
                         color = TextCrisp,
@@ -121,48 +134,76 @@ fun UpdateDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Changelog Card
+                // Premium Changelog Details Card
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = SurfaceElevated,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF262626)),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 160.dp)
+                        .heightIn(max = 190.dp)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .padding(12.dp)
+                            .padding(14.dp)
                     ) {
-                        Text(
-                            text = "What's New:",
-                            style = Typography.labelMedium,
-                            color = TextCrisp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        val lines = updateInfo.changelog.split("\n")
-                        lines.forEach { line ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Checklist,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "RELEASE HIGHLIGHTS",
+                                style = Typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.5.sp,
+                                    letterSpacing = 1.sp
+                                ),
+                                color = TextSecondary
+                            )
+                        }
+
+                        val rawLines = updateInfo.changelog.split("\n")
+                        rawLines.forEach { line ->
+                            // Clean up any garbled UTF-8 artifacts or raw prefixes
                             val cleanLine = line.trim()
+                                .removePrefix("✨")
+                                .removePrefix("âœ¨")
+                                .removePrefix("•")
+                                .removePrefix("-")
+                                .trim()
+
                             if (cleanLine.isNotBlank()) {
                                 Row(
-                                    modifier = Modifier.padding(vertical = 2.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp),
                                     verticalAlignment = Alignment.Top
                                 ) {
-                                    Text(
-                                        text = if (cleanLine.startsWith("✨") || cleanLine.startsWith("•") || cleanLine.startsWith("-")) "" else "• ",
-                                        color = TextCrisp,
-                                        fontSize = 12.sp
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(top = 6.dp, end = 8.dp)
+                                            .size(4.dp)
+                                            .clip(CircleShape)
+                                            .background(TextCrisp)
                                     )
                                     Text(
                                         text = cleanLine,
-                                        style = Typography.bodySmall,
-                                        color = TextSecondary,
-                                        lineHeight = 16.sp
+                                        style = Typography.bodySmall.copy(
+                                            fontSize = 12.sp,
+                                            lineHeight = 17.sp
+                                        ),
+                                        color = Color(0xFFD4D4D4)
                                     )
                                 }
                             }
@@ -170,7 +211,7 @@ fun UpdateDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
                 // Dynamic Action / Download Progress Section
                 when (val state = updateState) {
@@ -183,13 +224,13 @@ fun UpdateDialog(
                                 progress = { state.progress },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
                                 color = TextCrisp,
-                                trackColor = CardBorderDark
+                                trackColor = Color(0xFF282828)
                             )
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
                             val curMb = String.format("%.1f", state.currentBytes / (1024.0 * 1024.0))
                             val totMb = String.format("%.1f", state.totalBytes / (1024.0 * 1024.0))
@@ -221,12 +262,17 @@ fun UpdateDialog(
                                     UpdateManager.promptInstall(context, state.apkFile)
                                 },
                                 shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = TextCrisp, contentColor = CanvasDark),
-                                modifier = Modifier.fillMaxWidth().height(48.dp)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TextCrisp,
+                                    contentColor = CanvasDark
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
                             ) {
                                 Icon(Icons.Default.DownloadDone, contentDescription = null, tint = CanvasDark)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Install Update Now", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("Install Update Now", fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
                             }
                         }
                     }
@@ -249,15 +295,20 @@ fun UpdateDialog(
                                     }
                                 },
                                 shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = SurfaceElevated, contentColor = TextCrisp),
-                                modifier = Modifier.fillMaxWidth().height(44.dp)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceElevated,
+                                    contentColor = TextCrisp
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
                             ) {
                                 Text("Retry Download", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                     else -> {
-                        // Initial State: "Update Now" & "Later" buttons
+                        // Initial State: "Later" & "Update Now" buttons
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -266,9 +317,13 @@ fun UpdateDialog(
                                 OutlinedButton(
                                     onClick = onDismiss,
                                     shape = RoundedCornerShape(12.dp),
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-                                    modifier = Modifier.weight(1f).height(46.dp)
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = TextSecondary
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF282828)),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
                                 ) {
                                     Text("Later", style = Typography.labelMedium, fontWeight = FontWeight.SemiBold)
                                 }
@@ -285,10 +340,20 @@ fun UpdateDialog(
                                     }
                                 },
                                 shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = TextCrisp, contentColor = CanvasDark),
-                                modifier = Modifier.weight(1.5f).height(46.dp)
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = TextCrisp,
+                                    contentColor = CanvasDark
+                                ),
+                                modifier = Modifier
+                                    .weight(1.4f)
+                                    .height(44.dp)
                             ) {
-                                Icon(Icons.Default.Download, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(18.dp))
+                                Icon(
+                                    Icons.Default.Download,
+                                    contentDescription = null,
+                                    tint = CanvasDark,
+                                    modifier = Modifier.size(16.dp)
+                                )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Update Now", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
                             }

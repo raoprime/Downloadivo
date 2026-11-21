@@ -216,8 +216,13 @@ fun DownloadivoScreen(
             isFullscreen = true,
             onMinimize = { isPlayerMinimized = true },
             onDismiss = {
+                try {
+                    isPlayerFullscreen = false
+                    isPlayerMinimized = false
+                    exoPlayer.stop()
+                    exoPlayer.clearMediaItems()
+                } catch (_: Exception) {}
                 activePlaybackUri = null
-                exoPlayer.stop()
             }
         )
         return
@@ -225,12 +230,17 @@ fun DownloadivoScreen(
 
     // Back handler: minimize full player first, dismiss miniplayer if already minimized
     BackHandler(enabled = activePlaybackUri != null) {
-        if (!isPlayerMinimized) {
-            isPlayerMinimized = true
-        } else {
-            activePlaybackUri = null
-            exoPlayer.stop()
-        }
+        try {
+            if (isPlayerFullscreen) {
+                isPlayerFullscreen = false
+            } else if (!isPlayerMinimized) {
+                isPlayerMinimized = true
+            } else {
+                exoPlayer.stop()
+                exoPlayer.clearMediaItems()
+                activePlaybackUri = null
+            }
+        } catch (_: Exception) {}
     }
 
     val currentTask by DownloadService.currentTask.collectAsState()
@@ -423,108 +433,67 @@ fun DownloadivoScreen(
         bottomBar = {
             if (activePlaybackUri == null || isPlayerMinimized) {
                 Surface(
-                    color = SurfaceDark,
-                    tonalElevation = 8.dp,
-                    border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline),
+                    color = CanvasDark,
+                    tonalElevation = 0.dp,
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF222222)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                            .height(50.dp),
                         horizontalArrangement = Arrangement.SpaceAround,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AppTab.values().forEach { tab ->
                             val isSelected = currentTab == tab
-                            val activeScale by animateFloatAsState(
-                                targetValue = if (isSelected) 1.05f else 1.0f,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-                                label = "tab_scale_${tab.name}"
-                            )
-                            val iconColor by animateColorAsState(
-                                targetValue = if (isSelected) TextCrisp else TextTertiary,
-                                animationSpec = tween(180),
-                                label = "tab_color_${tab.name}"
-                            )
-                            val pillBgColor by animateColorAsState(
-                                targetValue = if (isSelected) SurfaceElevated else Color.Transparent,
-                                animationSpec = tween(180),
-                                label = "tab_bg_${tab.name}"
-                            )
+                            val iconColor = if (isSelected) TextCrisp else Color(0xFF8E8E8E)
 
-                            Column(
+                            Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .fillMaxHeight()
                                     .clickable(
                                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                                         indication = null
                                     ) {
-                                        HapticUtil.lightClick(context)
                                         currentTab = tab
-                                    }
-                                    .padding(vertical = 4.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
+                                    },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            scaleX = activeScale
-                                            scaleY = activeScale
-                                        }
-                                        .clip(RoundedCornerShape(16.dp))
-                                        .background(pillBgColor)
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Box(contentAlignment = Alignment.TopEnd) {
-                                        Icon(
-                                            imageVector = when (tab) {
-                                                AppTab.HOME -> Icons.Default.Download
-                                                AppTab.QUEUE -> Icons.Default.Sync
-                                                AppTab.LIBRARY -> Icons.Default.VideoLibrary
-                                                AppTab.SETTINGS -> Icons.Default.Tune
-                                            },
-                                            contentDescription = tab.name,
-                                            tint = iconColor,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                        if (tab == AppTab.QUEUE) {
-                                            val activeCount = (if (currentTask.status == DownloadStatus.DOWNLOADING) 1 else 0) + queuedTasks.size
-                                            if (activeCount > 0) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .offset(x = 6.dp, y = (-4).dp)
-                                                        .size(15.dp)
-                                                        .background(TextCrisp, CircleShape),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = "$activeCount",
-                                                        color = CanvasDark,
-                                                        fontSize = 9.sp,
-                                                        fontWeight = FontWeight.ExtraBold
-                                                    )
-                                                }
+                                Box(contentAlignment = Alignment.TopEnd) {
+                                    Icon(
+                                        imageVector = when (tab) {
+                                            AppTab.HOME -> Icons.Default.Download
+                                            AppTab.QUEUE -> Icons.Default.FormatListBulleted
+                                            AppTab.LIBRARY -> Icons.Default.VideoLibrary
+                                            AppTab.SETTINGS -> Icons.Default.Tune
+                                        },
+                                        contentDescription = tab.name,
+                                        tint = iconColor,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    if (tab == AppTab.QUEUE) {
+                                        val activeCount = (if (currentTask.status == DownloadStatus.DOWNLOADING) 1 else 0) + queuedTasks.size
+                                        if (activeCount > 0) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .offset(x = 6.dp, y = (-4).dp)
+                                                    .size(15.dp)
+                                                    .background(TextCrisp, CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "$activeCount",
+                                                    color = CanvasDark,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.ExtraBold
+                                                )
                                             }
                                         }
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = when (tab) {
-                                        AppTab.HOME -> "Download"
-                                        AppTab.QUEUE -> "Queue"
-                                        AppTab.LIBRARY -> "Library"
-                                        AppTab.SETTINGS -> "Settings"
-                                    },
-                                    fontSize = 10.sp,
-                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = iconColor
-                                )
                             }
                         }
                     }
@@ -969,8 +938,11 @@ fun DownloadivoScreen(
                         },
                         onExpand = { isPlayerMinimized = false },
                         onClose = {
+                            try {
+                                exoPlayer.stop()
+                                exoPlayer.clearMediaItems()
+                            } catch (_: Exception) {}
                             activePlaybackUri = null
-                            exoPlayer.stop()
                         }
                     )
                 }
@@ -1055,8 +1027,14 @@ fun DownloadivoScreen(
                         onEnterPip = onEnterPip,
                         onMinimize = { isPlayerMinimized = true },
                         onDismiss = {
+                            try {
+                                if (isPlayerFullscreen) {
+                                    isPlayerFullscreen = false
+                                }
+                                exoPlayer.stop()
+                                exoPlayer.clearMediaItems()
+                            } catch (_: Exception) {}
                             activePlaybackUri = null
-                            exoPlayer.stop()
                         }
                     )
                 }
@@ -1284,9 +1262,9 @@ private fun HomeDownloaderTab(
                             decorationBox = { innerTextField ->
                                 if (inputUrl.isEmpty()) {
                                     Text(
-                                        "Paste video or audio link...",
+                                        "Video or audio link",
                                         style = Typography.bodyLarge,
-                                        color = TextQuaternary
+                                        color = TextSecondary
                                     )
                                 }
                                 innerTextField()
@@ -2281,50 +2259,50 @@ private fun QueueTab(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // ── TOP DASHBOARD STATUS SUMMARY CARD ──
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = SurfaceElevated,
-            border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        // ── TOP DASHBOARD STATUS SUMMARY CARD (Only when active) ──
+        if (isAnyActive) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = SurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, BorderHairline),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(if (currentTask.status == DownloadStatus.DOWNLOADING) StatusSuccess else TextTertiary)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = if (currentTask.status == DownloadStatus.DOWNLOADING) {
-                                "Downloading Active (${currentTask.progress}%)"
-                            } else if (queuedTasks.isNotEmpty()) {
-                                "${queuedTasks.size} Tasks in Queue"
-                            } else {
-                                "Engine Idle • All Clear"
-                            },
-                            style = Typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = TextCrisp
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(if (currentTask.status == DownloadStatus.DOWNLOADING) StatusSuccess else TextTertiary)
                         )
-                        Text(
-                            text = if (isAnyActive) "${queuedTasks.size} queued • Turbo Multi-Thread" else "Ready for next download",
-                            style = Typography.bodySmall,
-                            color = TextTertiary
-                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = if (currentTask.status == DownloadStatus.DOWNLOADING) {
+                                    "Downloading Active (${currentTask.progress}%)"
+                                } else if (queuedTasks.isNotEmpty()) {
+                                    "${queuedTasks.size} Tasks in Queue"
+                                } else {
+                                    "Engine Idle • All Clear"
+                                },
+                                style = Typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp
+                            )
+                            Text(
+                                text = "${queuedTasks.size} queued • Turbo Multi-Thread",
+                                style = Typography.bodySmall,
+                                color = TextTertiary
+                            )
+                        }
                     }
-                }
 
-                if (isAnyActive) {
                     Button(
                         onClick = {
                             HapticUtil.mediumClick(context)
@@ -2675,28 +2653,28 @@ private fun QueueTab(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         modifier = Modifier
-                            .size(68.dp)
+                            .size(64.dp)
                             .clip(CircleShape)
                             .background(SurfaceElevated),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Default.DownloadDone,
+                            Icons.Default.FormatListBulleted,
                             contentDescription = null,
                             tint = TextCrisp,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(30.dp)
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Your Download Queue is Empty",
+                        text = "Queue is empty",
                         style = Typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextCrisp
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Add any video or audio link to start fast background downloading.",
+                        text = "Downloads in progress or pending will appear here.",
                         style = Typography.bodySmall,
                         color = TextSecondary,
                         textAlign = TextAlign.Center,
@@ -2713,11 +2691,11 @@ private fun QueueTab(
                             containerColor = TextCrisp,
                             contentColor = CanvasDark
                         ),
-                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
+                        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, tint = CanvasDark, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("New Download", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text("New download", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = CanvasDark)
                     }
                 }
             }
@@ -2834,28 +2812,17 @@ private fun LibraryTab(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+                Column {
                     Text(
                         text = "Library",
-                        style = Typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        style = Typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontSize = 22.sp),
                         color = TextCrisp
                     )
-
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = SurfaceElevated,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark)
-                    ) {
-                        Text(
-                            text = "${completedHistory.size} items • ${formatByteSize(totalBytes)}",
-                            style = Typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = TextSecondary,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                        )
-                    }
+                    Text(
+                        text = "${completedHistory.size} items · ${formatByteSize(totalBytes)}",
+                        style = Typography.bodySmall,
+                        color = TextSecondary
+                    )
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -3152,7 +3119,7 @@ private fun LibraryTab(
                                 .padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // 16:9 Cinema Thumbnail (124dp x 70dp - YouTube Standard, 100% crystal-clear)
+                            // 16:9 Cinema Thumbnail (124dp x 70dp - YouTube Standard with Duration Badge)
                             Box(
                                 modifier = Modifier
                                     .width(124.dp)
@@ -3191,11 +3158,30 @@ private fun LibraryTab(
                                         )
                                     }
                                 }
+
+                                // YouTube-Style Duration Pill on Thumbnail
+                                if (task.duration.isNotBlank()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(4.dp)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(Color(0xE6000000))
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = task.duration,
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            // Metadata Column (Title 2 lines + Format Tag + Size + Duration + Offline status)
+                            // Metadata Column (Title 2 lines + Format Tag + Size)
                             Column(
                                 modifier = Modifier.weight(1f),
                                 verticalArrangement = Arrangement.Center
@@ -3241,35 +3227,6 @@ private fun LibraryTab(
                                             color = TextSecondary
                                         )
                                     }
-
-                                    if (task.duration.isNotBlank()) {
-                                        Text(
-                                            text = "• ${task.duration}",
-                                            style = Typography.bodySmall,
-                                            fontSize = 11.5.sp,
-                                            color = TextSecondary
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                // Offline Status Indicator (YouTube-style checkmark badge)
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.CheckCircle,
-                                        contentDescription = null,
-                                        tint = TextCrisp,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Text(
-                                        text = "Downloaded • Offline ready",
-                                        style = Typography.labelSmall.copy(fontSize = 10.5.sp),
-                                        color = TextSecondary
-                                    )
                                 }
                             }
 
