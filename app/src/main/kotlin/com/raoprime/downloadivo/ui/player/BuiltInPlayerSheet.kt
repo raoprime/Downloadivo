@@ -786,89 +786,106 @@ fun BuiltInPlayerSheet(
                     }
                 }
 
-                // Quick Controls Chips Row: Audio Track, Quality, Speed
-                Spacer(modifier = Modifier.height(10.dp))
+                // Quick Controls Row: Speed, Quality, Audio Track (All 3 clearly visible side-by-side & balanced)
+                Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
+                        .padding(bottom = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Audio Track / Multi-Language Button
-                    val activeAudioLabel = if (currentAudioTrack.isNotBlank()) currentAudioTrack else "Default Audio"
+                    // 1. Speed Selector Button
                     Surface(
-                        onClick = { showAudioTrackSheet = true },
-                        shape = RoundedCornerShape(8.dp),
+                        onClick = { showSpeedSheet = true },
+                        shape = RoundedCornerShape(10.dp),
                         color = SurfaceElevated,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark)
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                        modifier = Modifier.weight(1f).height(42.dp)
                     ) {
                         Row(
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp)
                         ) {
-                            Icon(Icons.Default.Audiotrack, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Icon(Icons.Default.Speed, contentDescription = "Speed", tint = TextCrisp, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Audio: $activeAudioLabel",
+                                text = "Speed: ${currentSpeed}x",
                                 fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = TextCrisp
                             )
                         }
                     }
 
-                    // Video Quality Button
+                    // 2. Video Quality Button
                     if (!isAudio) {
                         val activeQualLabel = when {
-                            currentQuality.contains("4k", ignoreCase = true) || currentQuality.contains("2160") -> "4K UHD"
-                            currentQuality.contains("1440") -> "2K QHD"
-                            currentQuality.contains("1080") -> "1080p FHD"
-                            currentQuality.contains("720") -> "720p HD"
-                            currentQuality.contains("480") -> "480p SD"
+                            currentQuality.contains("4k", ignoreCase = true) || currentQuality.contains("2160") -> "4K"
+                            currentQuality.contains("1440") -> "2K"
+                            currentQuality.contains("1080") -> "1080p"
+                            currentQuality.contains("720") -> "720p"
+                            currentQuality.contains("480") -> "480p"
                             currentQuality.contains("360") -> "360p"
-                            else -> currentQuality.ifBlank { "Auto / 1080p" }
+                            else -> if (currentQuality.isNotBlank()) currentQuality else "Auto"
                         }
                         Surface(
                             onClick = { showQualitySheet = true },
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(10.dp),
                             color = SurfaceElevated,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark)
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                            modifier = Modifier.weight(1.15f).height(42.dp)
                         ) {
                             Row(
+                                horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp)
                             ) {
-                                Icon(Icons.Default.Settings, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(5.dp))
+                                Icon(Icons.Default.Settings, contentDescription = "Quality", tint = TextCrisp, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Quality: $activeQualLabel",
+                                    text = "Qual: $activeQualLabel",
                                     fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = TextCrisp
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextCrisp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
                     }
 
-                    // Speed Selector Button
+                    // 3. Audio Track Button
+                    val activeAudioLabel = if (currentAudioTrack.isNotBlank()) {
+                        when {
+                            currentAudioTrack.contains("Hindi", ignoreCase = true) -> "Hindi"
+                            currentAudioTrack.contains("English", ignoreCase = true) -> "English"
+                            currentAudioTrack.contains("Original", ignoreCase = true) -> "Original"
+                            else -> currentAudioTrack.take(8)
+                        }
+                    } else "Audio"
                     Surface(
-                        onClick = { showSpeedSheet = true },
-                        shape = RoundedCornerShape(8.dp),
+                        onClick = { showAudioTrackSheet = true },
+                        shape = RoundedCornerShape(10.dp),
                         color = SurfaceElevated,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark)
+                        border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                        modifier = Modifier.weight(1f).height(42.dp)
                     ) {
                         Row(
+                            horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp)
                         ) {
-                            Icon(Icons.Default.Speed, contentDescription = null, tint = TextCrisp, modifier = Modifier.size(15.dp))
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Icon(Icons.Default.Audiotrack, contentDescription = "Audio", tint = TextCrisp, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Speed: ${currentSpeed}x",
+                                text = activeAudioLabel,
                                 fontSize = 11.5.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextCrisp
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }

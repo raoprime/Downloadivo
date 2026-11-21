@@ -138,10 +138,10 @@ fun DownloadivoScreen(
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                1200,  // minBufferMs (1.2s start)
-                25000, // maxBufferMs
-                400,   // bufferForPlaybackMs (0.4s instant start)
-                800    // bufferForPlaybackAfterRebufferMs (0.8s)
+                2500,  // minBufferMs (2.5s)
+                35000, // maxBufferMs (35s)
+                1500,  // bufferForPlaybackMs (1.5s - guarantees video keyframe is ready)
+                2000   // bufferForPlaybackAfterRebufferMs (2.0s)
             )
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
@@ -400,109 +400,111 @@ fun DownloadivoScreen(
             }
         },
         bottomBar = {
-            Surface(
-                color = SurfaceDark,
-                tonalElevation = 8.dp,
-                border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
+            if (activePlaybackUri == null || isPlayerMinimized) {
+                Surface(
+                    color = SurfaceDark,
+                    tonalElevation = 8.dp,
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderHairline),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    AppTab.values().forEach { tab ->
-                        val isSelected = currentTab == tab
-                        val activeScale by animateFloatAsState(
-                            targetValue = if (isSelected) 1.05f else 1.0f,
-                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-                            label = "tab_scale_${tab.name}"
-                        )
-                        val iconColor by animateColorAsState(
-                            targetValue = if (isSelected) TextCrisp else TextTertiary,
-                            animationSpec = tween(180),
-                            label = "tab_color_${tab.name}"
-                        )
-                        val pillBgColor by animateColorAsState(
-                            targetValue = if (isSelected) SurfaceElevated else Color.Transparent,
-                            animationSpec = tween(180),
-                            label = "tab_bg_${tab.name}"
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AppTab.values().forEach { tab ->
+                            val isSelected = currentTab == tab
+                            val activeScale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.05f else 1.0f,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                                label = "tab_scale_${tab.name}"
+                            )
+                            val iconColor by animateColorAsState(
+                                targetValue = if (isSelected) TextCrisp else TextTertiary,
+                                animationSpec = tween(180),
+                                label = "tab_color_${tab.name}"
+                            )
+                            val pillBgColor by animateColorAsState(
+                                targetValue = if (isSelected) SurfaceElevated else Color.Transparent,
+                                animationSpec = tween(180),
+                                label = "tab_bg_${tab.name}"
+                            )
 
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(
-                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                                    indication = null
-                                ) {
-                                    HapticUtil.lightClick(context)
-                                    currentTab = tab
-                                }
-                                .padding(vertical = 4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Box(
+                            Column(
                                 modifier = Modifier
-                                    .graphicsLayer {
-                                        scaleX = activeScale
-                                        scaleY = activeScale
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable(
+                                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        HapticUtil.lightClick(context)
+                                        currentTab = tab
                                     }
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(pillBgColor)
-                                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                                contentAlignment = Alignment.Center
+                                    .padding(vertical = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
                             ) {
-                                Box(contentAlignment = Alignment.TopEnd) {
-                                    Icon(
-                                        imageVector = when (tab) {
-                                            AppTab.HOME -> Icons.Default.Download
-                                            AppTab.QUEUE -> Icons.Default.Sync
-                                            AppTab.LIBRARY -> Icons.Default.VideoLibrary
-                                            AppTab.SETTINGS -> Icons.Default.Tune
-                                        },
-                                        contentDescription = tab.name,
-                                        tint = iconColor,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                    if (tab == AppTab.QUEUE) {
-                                        val activeCount = (if (currentTask.status == DownloadStatus.DOWNLOADING) 1 else 0) + queuedTasks.size
-                                        if (activeCount > 0) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .offset(x = 6.dp, y = (-4).dp)
-                                                    .size(15.dp)
-                                                    .background(TextCrisp, CircleShape),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = "$activeCount",
-                                                    color = CanvasDark,
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.ExtraBold
-                                                )
+                                Box(
+                                    modifier = Modifier
+                                        .graphicsLayer {
+                                            scaleX = activeScale
+                                            scaleY = activeScale
+                                        }
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(pillBgColor)
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(contentAlignment = Alignment.TopEnd) {
+                                        Icon(
+                                            imageVector = when (tab) {
+                                                AppTab.HOME -> Icons.Default.Download
+                                                AppTab.QUEUE -> Icons.Default.Sync
+                                                AppTab.LIBRARY -> Icons.Default.VideoLibrary
+                                                AppTab.SETTINGS -> Icons.Default.Tune
+                                            },
+                                            contentDescription = tab.name,
+                                            tint = iconColor,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                        if (tab == AppTab.QUEUE) {
+                                            val activeCount = (if (currentTask.status == DownloadStatus.DOWNLOADING) 1 else 0) + queuedTasks.size
+                                            if (activeCount > 0) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .offset(x = 6.dp, y = (-4).dp)
+                                                        .size(15.dp)
+                                                        .background(TextCrisp, CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = "$activeCount",
+                                                        color = CanvasDark,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.ExtraBold
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = when (tab) {
+                                        AppTab.HOME -> "Download"
+                                        AppTab.QUEUE -> "Queue"
+                                        AppTab.LIBRARY -> "Library"
+                                        AppTab.SETTINGS -> "Settings"
+                                    },
+                                    fontSize = 10.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = iconColor
+                                )
                             }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = when (tab) {
-                                    AppTab.HOME -> "Download"
-                                    AppTab.QUEUE -> "Queue"
-                                    AppTab.LIBRARY -> "Library"
-                                    AppTab.SETTINGS -> "Settings"
-                                },
-                                fontSize = 10.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                color = iconColor
-                            )
                         }
                     }
                 }
@@ -952,8 +954,8 @@ fun DownloadivoScreen(
                     } else {
                         Modifier
                             .fillMaxWidth()
-                            .padding(start = 12.dp, end = 12.dp, bottom = 54.dp) // Generously lifted above navigation bar
                             .navigationBarsPadding()
+                            .padding(start = 12.dp, end = 12.dp, bottom = 16.dp)
                     }
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },

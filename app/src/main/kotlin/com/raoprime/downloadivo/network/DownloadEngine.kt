@@ -210,46 +210,56 @@ object DownloadEngine {
             // Build comprehensive format matrix with exact or estimated file sizes
             val formats = mutableListOf<FormatOption>()
             val maxRes = if (resolutions.isNotEmpty()) (resolutions.maxOrNull() ?: 1080) else 1080
-            val bestSize = (sizeMap["best"] ?: sizeMap["4k"] ?: sizeMap["2160"] ?: sizeMap["1080p"] ?: sizeMap["1080"] ?: "").ifBlank {
-                com.raoprime.downloadivo.model.estimateFormatSize(1080, false, "best", duration)
+            val bestSize = (sizeMap["best"] ?: sizeMap[maxRes.toString()] ?: sizeMap["${maxRes}p"] ?: sizeMap["1080p"] ?: "").ifBlank {
+                com.raoprime.downloadivo.model.estimateFormatSize(maxRes, false, "best", duration)
             }
-            val bestBytes = bytesMap["best"] ?: bytesMap["4k"] ?: bytesMap["2160"] ?: bytesMap["1080p"] ?: bytesMap["1080"] ?: 0L
-            formats.add(FormatOption("best", "Best Video (Max Quality)", "mp4", false, bestSize, 0, bestSize, bestBytes))
+            val bestBytes = bytesMap["best"] ?: bytesMap[maxRes.toString()] ?: bytesMap["${maxRes}p"] ?: 0L
+            formats.add(FormatOption("best", "Best Video (${maxRes}p Max)", "mp4", false, bestSize, maxRes, bestSize, bestBytes))
 
-            // 4K UHD (2160p)
-            val sz4k = (sizeMap["4k"] ?: sizeMap["2160"] ?: sizeMap["2160p"] ?: "").ifBlank {
-                com.raoprime.downloadivo.model.estimateFormatSize(2160, false, "4k", duration)
+            // 4K UHD (2160p) - Only if video actually supports 4K!
+            if (maxRes >= 2160 || is4k) {
+                val sz4k = (sizeMap["4k"] ?: sizeMap["2160"] ?: sizeMap["2160p"] ?: "").ifBlank {
+                    com.raoprime.downloadivo.model.estimateFormatSize(2160, false, "4k", duration)
+                }
+                val b4k = bytesMap["4k"] ?: bytesMap["2160"] ?: bytesMap["2160p"] ?: 0L
+                formats.add(FormatOption("4k", "4K UHD (2160p)", "mp4", false, sz4k, 2160, sz4k, b4k))
             }
-            val b4k = bytesMap["4k"] ?: bytesMap["2160"] ?: bytesMap["2160p"] ?: 0L
-            formats.add(FormatOption("4k", "4K UHD (2160p)", "mp4", false, sz4k, 2160, sz4k, b4k))
 
-            // 2K QHD (1440p)
-            val sz1440 = (sizeMap["1440p"] ?: sizeMap["1440"] ?: sizeMap["2k"] ?: "").ifBlank {
-                com.raoprime.downloadivo.model.estimateFormatSize(1440, false, "1440p", duration)
+            // 2K QHD (1440p) - Only if video actually supports 1440p!
+            if (maxRes >= 1440) {
+                val sz1440 = (sizeMap["1440p"] ?: sizeMap["1440"] ?: sizeMap["2k"] ?: "").ifBlank {
+                    com.raoprime.downloadivo.model.estimateFormatSize(1440, false, "1440p", duration)
+                }
+                val b1440 = bytesMap["1440p"] ?: bytesMap["1440"] ?: bytesMap["2k"] ?: 0L
+                formats.add(FormatOption("1440p", "2K QHD (1440p)", "mp4", false, sz1440, 1440, sz1440, b1440))
             }
-            val b1440 = bytesMap["1440p"] ?: bytesMap["1440"] ?: bytesMap["2k"] ?: 0L
-            formats.add(FormatOption("1440p", "2K QHD (1440p)", "mp4", false, sz1440, 1440, sz1440, b1440))
 
-            // 1080p Full HD
-            val sz1080 = (sizeMap["1080p"] ?: sizeMap["1080"] ?: "").ifBlank {
-                com.raoprime.downloadivo.model.estimateFormatSize(1080, false, "1080p", duration)
+            // 1080p Full HD - Only if video actually supports 1080p!
+            if (maxRes >= 1080) {
+                val sz1080 = (sizeMap["1080p"] ?: sizeMap["1080"] ?: "").ifBlank {
+                    com.raoprime.downloadivo.model.estimateFormatSize(1080, false, "1080p", duration)
+                }
+                val b1080 = bytesMap["1080p"] ?: bytesMap["1080"] ?: 0L
+                formats.add(FormatOption("1080p", "1080p Full HD", "mp4", false, sz1080, 1080, sz1080, b1080))
             }
-            val b1080 = bytesMap["1080p"] ?: bytesMap["1080"] ?: 0L
-            formats.add(FormatOption("1080p", "1080p Full HD", "mp4", false, sz1080, 1080, sz1080, b1080))
 
-            // 720p HD
-            val sz720 = (sizeMap["720p"] ?: sizeMap["720"] ?: "").ifBlank {
-                com.raoprime.downloadivo.model.estimateFormatSize(720, false, "720p", duration)
+            // 720p HD - Only if video actually supports 720p!
+            if (maxRes >= 720) {
+                val sz720 = (sizeMap["720p"] ?: sizeMap["720"] ?: "").ifBlank {
+                    com.raoprime.downloadivo.model.estimateFormatSize(720, false, "720p", duration)
+                }
+                val b720 = bytesMap["720p"] ?: bytesMap["720"] ?: 0L
+                formats.add(FormatOption("720p", "720p HD", "mp4", false, sz720, 720, sz720, b720))
             }
-            val b720 = bytesMap["720p"] ?: bytesMap["720"] ?: 0L
-            formats.add(FormatOption("720p", "720p HD", "mp4", false, sz720, 720, sz720, b720))
 
             // 480p Standard
-            val sz480 = (sizeMap["480p"] ?: sizeMap["480"] ?: "").ifBlank {
-                com.raoprime.downloadivo.model.estimateFormatSize(480, false, "480p", duration)
+            if (maxRes >= 480) {
+                val sz480 = (sizeMap["480p"] ?: sizeMap["480"] ?: "").ifBlank {
+                    com.raoprime.downloadivo.model.estimateFormatSize(480, false, "480p", duration)
+                }
+                val b480 = bytesMap["480p"] ?: bytesMap["480"] ?: 0L
+                formats.add(FormatOption("480p", "480p Standard", "mp4", false, sz480, 480, sz480, b480))
             }
-            val b480 = bytesMap["480p"] ?: bytesMap["480"] ?: 0L
-            formats.add(FormatOption("480p", "480p Standard", "mp4", false, sz480, 480, sz480, b480))
 
             // 360p Medium
             val sz360 = (sizeMap["360p"] ?: sizeMap["360"] ?: "").ifBlank {
@@ -372,14 +382,15 @@ object DownloadEngine {
         return@withContext Result.failure(Exception(lastErrorMsg))
     }
 
-    fun getStreamUrl(targetUrl: String, format: String = "best", audioLang: String? = null): String {
+    fun getStreamUrl(targetUrl: String, format: String = "best", audioLang: String? = null, online: Boolean = true): String {
         val cleanUrl = sanitizeUrl(targetUrl)
         val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
         val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
-        val endpoint = if (format.trim().lowercase() in listOf("mp3", "m4a", "audio")) "stream.mp3" else "stream.mp4"
+        val endpoint = if (format.trim().lowercase() in listOf("mp3", "m4a", "audio", "wav", "320k", "256k", "192k", "128k")) "stream.mp3" else "stream.mp4"
         val audioQuery = if (!audioLang.isNullOrBlank()) "&audio_lang=" + URLEncoder.encode(audioLang.trim(), "UTF-8") else ""
+        val onlineQuery = if (online) "&online=true" else ""
         val baseUrl = if (directStreamBaseUrl.isNotBlank()) directStreamBaseUrl else activeBaseUrl
-        return "$baseUrl/$endpoint?url=$encodedUrl&format=$encodedFmt$audioQuery"
+        return "$baseUrl/$endpoint?url=$encodedUrl&format=$encodedFmt$audioQuery$onlineQuery"
     }
 
     fun parseDurationToMillis(durationStr: String?): Long {
