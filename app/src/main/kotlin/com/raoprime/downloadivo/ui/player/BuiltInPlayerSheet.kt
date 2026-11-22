@@ -191,47 +191,59 @@ fun BuiltInPlayerSheet(
             WindowCompat.getInsetsController(window, window.decorView)
         } else null
 
-        if (isFullscreen) {
-            if (!isAudio) {
-                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        try {
+            if (isFullscreen) {
+                if (!isAudio) {
+                    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                }
+                // Hide Status Bar (time, battery) and Navigation Bar for clean edge-to-edge view
+                insetsController?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                insetsController?.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                insetsController?.show(WindowInsetsCompat.Type.systemBars())
             }
-            // Hide Status Bar (time, battery) and Navigation Bar for clean edge-to-edge view
-            insetsController?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            insetsController?.hide(WindowInsetsCompat.Type.systemBars())
-        } else {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            insetsController?.show(WindowInsetsCompat.Type.systemBars())
-        }
+        } catch (_: Throwable) {}
+
         onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            insetsController?.show(WindowInsetsCompat.Type.systemBars())
+            try {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                insetsController?.show(WindowInsetsCompat.Type.systemBars())
+            } catch (_: Throwable) {}
         }
     }
 
     // Auto PiP capability
     DisposableEffect(isAudio) {
-        mainActivity?.pipEnabled = !isAudio
+        try {
+            mainActivity?.pipEnabled = !isAudio
+        } catch (_: Throwable) {}
         onDispose {
-            mainActivity?.pipEnabled = false
+            try {
+                mainActivity?.pipEnabled = false
+            } catch (_: Throwable) {}
         }
     }
 
     // Load or switch media URL only if not already loaded to prevent minimize resets
     LaunchedEffect(mediaUri) {
-        val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
-        if (currentUri != mediaUri) {
-            playerError = null
-            isBuffering = true
-            val uri = Uri.parse(mediaUri)
-            val item = if (isAudio) {
-                MediaItem.Builder().setUri(uri).setMimeType(MimeTypes.AUDIO_MPEG).build()
-            } else {
-                MediaItem.Builder().setUri(uri).build()
+        if (mediaUri.isBlank()) return@LaunchedEffect
+        try {
+            val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
+            if (currentUri != mediaUri) {
+                playerError = null
+                isBuffering = true
+                val uri = Uri.parse(mediaUri)
+                val item = if (isAudio) {
+                    MediaItem.Builder().setUri(uri).setMimeType(MimeTypes.AUDIO_MPEG).build()
+                } else {
+                    MediaItem.Builder().setUri(uri).build()
+                }
+                exoPlayer.setMediaItem(item)
+                exoPlayer.prepare()
+                exoPlayer.playWhenReady = true
             }
-            exoPlayer.setMediaItem(item)
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
-        }
+        } catch (_: Throwable) {}
     }
 
     // Dynamic duration update if parsed from stream
@@ -532,11 +544,12 @@ fun BuiltInPlayerSheet(
                         IconButton(
                             onClick = {
                                 try {
+                                    HapticUtil.lightClick(context)
                                     if (isFullscreen) {
                                         onFullscreenChange?.invoke(false)
                                     }
                                     onDismiss()
-                                } catch (_: Exception) {}
+                                } catch (_: Throwable) {}
                             },
                             modifier = Modifier.size(34.dp)
                         ) {
@@ -1455,6 +1468,7 @@ fun YouTubeFloatingMiniplayer(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = SurfaceElevated,
@@ -1526,7 +1540,15 @@ fun YouTubeFloatingMiniplayer(
                 Icon(Icons.Default.Fullscreen, contentDescription = "Expand", tint = TextCrisp)
             }
 
-            IconButton(onClick = onClose, modifier = Modifier.size(32.dp)) {
+            IconButton(
+                onClick = {
+                    try {
+                        HapticUtil.lightClick(context)
+                        onClose()
+                    } catch (_: Throwable) {}
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
                 Icon(Icons.Default.Close, contentDescription = "Close", tint = TextTertiary)
             }
         }

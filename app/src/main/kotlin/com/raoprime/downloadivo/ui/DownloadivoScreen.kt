@@ -180,6 +180,7 @@ fun DownloadivoScreen(
 
     // Built-in Player State (YouTube-Grade Player with Multi-Language Audio & Floating Miniplayer)
     var activePlaybackUri by remember { mutableStateOf<String?>(null) }
+    var lastActivePlaybackUri by remember { mutableStateOf("") }
     var activePlaybackTitle by remember { mutableStateOf("") }
     var activePlaybackAuthor by remember { mutableStateOf("") }
     var activePlaybackThumbnail by remember { mutableStateOf("") }
@@ -192,6 +193,12 @@ fun DownloadivoScreen(
     var activePlaybackCurrentAudioTrack by remember { mutableStateOf("Original Audio") }
     var isPlayerMinimized by remember { mutableStateOf(false) }
     var isPlayerFullscreen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(activePlaybackUri) {
+        if (!activePlaybackUri.isNullOrBlank()) {
+            lastActivePlaybackUri = activePlaybackUri ?: ""
+        }
+    }
 
     LaunchedEffect(initialPlaybackUri) {
         if (!initialPlaybackUri.isNullOrBlank()) {
@@ -283,7 +290,7 @@ fun DownloadivoScreen(
             val currentIndex = list.indexOfFirst {
                 it.filePath == activePlaybackUri ||
                 it.filePath == activePlaybackUri?.removePrefix("file://") ||
-                (activePlaybackUri != null && it.filePath != null && activePlaybackUri!!.contains(it.filePath!!)) ||
+                (activePlaybackUri != null && it.filePath != null && activePlaybackUri?.contains(it.filePath ?: "") == true) ||
                 it.url == activePlaybackOriginalUrl
             }
             val nextIndex = if (currentIndex != -1 && currentIndex + 1 < list.size) currentIndex + 1 else if (currentIndex == -1) 0 else -1
@@ -310,7 +317,7 @@ fun DownloadivoScreen(
             val currentIndex = list.indexOfFirst {
                 it.filePath == activePlaybackUri ||
                 it.filePath == activePlaybackUri?.removePrefix("file://") ||
-                (activePlaybackUri != null && it.filePath != null && activePlaybackUri!!.contains(it.filePath!!)) ||
+                (activePlaybackUri != null && it.filePath != null && activePlaybackUri?.contains(it.filePath ?: "") == true) ||
                 it.url == activePlaybackOriginalUrl
             }
             val prevIndex = if (currentIndex > 0) currentIndex - 1 else if (currentIndex == -1) 0 else -1
@@ -366,10 +373,11 @@ fun DownloadivoScreen(
     }
 
     // Pure Video PiP Mode: When in PiP, display ONLY the video surface edge-to-edge
-    if (inPipMode && activePlaybackUri != null) {
+    if (inPipMode && (activePlaybackUri != null || lastActivePlaybackUri.isNotBlank())) {
+        val pipUri = activePlaybackUri ?: lastActivePlaybackUri
         BuiltInPlayerSheet(
             exoPlayer = exoPlayer,
-            mediaUri = activePlaybackUri!!,
+            mediaUri = pipUri,
             title = activePlaybackTitle,
             author = activePlaybackAuthor,
             thumbnail = activePlaybackThumbnail,
@@ -386,9 +394,10 @@ fun DownloadivoScreen(
                 try {
                     isPlayerFullscreen = false
                     isPlayerMinimized = false
+                    exoPlayer.pause()
                     exoPlayer.stop()
                     exoPlayer.clearMediaItems()
-                } catch (_: Exception) {}
+                } catch (_: Throwable) {}
                 activePlaybackUri = null
             }
         )
@@ -403,11 +412,13 @@ fun DownloadivoScreen(
             } else if (!isPlayerMinimized) {
                 isPlayerMinimized = true
             } else {
+                isPlayerMinimized = false
+                exoPlayer.pause()
                 exoPlayer.stop()
                 exoPlayer.clearMediaItems()
                 activePlaybackUri = null
             }
-        } catch (_: Exception) {}
+        } catch (_: Throwable) {}
     }
 
     val activeTaskCount by DownloadService.activeTaskCount.collectAsState()
@@ -951,9 +962,11 @@ fun DownloadivoScreen(
                         onExpand = { isPlayerMinimized = false },
                         onClose = {
                             try {
+                                isPlayerMinimized = false
+                                exoPlayer.pause()
                                 exoPlayer.stop()
                                 exoPlayer.clearMediaItems()
-                            } catch (_: Exception) {}
+                            } catch (_: Throwable) {}
                             activePlaybackUri = null
                         }
                     )
@@ -1003,9 +1016,10 @@ fun DownloadivoScreen(
                         indication = null
                     ) {}
                 ) {
+                    val currentPlayUri = activePlaybackUri ?: lastActivePlaybackUri
                     BuiltInPlayerSheet(
                         exoPlayer = exoPlayer,
-                        mediaUri = activePlaybackUri!!,
+                        mediaUri = currentPlayUri,
                         title = activePlaybackTitle,
                         author = activePlaybackAuthor,
                         thumbnail = activePlaybackThumbnail,
@@ -1047,9 +1061,11 @@ fun DownloadivoScreen(
                                 if (isPlayerFullscreen) {
                                     isPlayerFullscreen = false
                                 }
+                                isPlayerMinimized = false
+                                exoPlayer.pause()
                                 exoPlayer.stop()
                                 exoPlayer.clearMediaItems()
-                            } catch (_: Exception) {}
+                            } catch (_: Throwable) {}
                             activePlaybackUri = null
                         }
                     )
