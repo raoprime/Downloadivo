@@ -19,10 +19,10 @@ import java.util.concurrent.TimeUnit
 object DownloadEngine {
 
     // Default Edge Cloud Endpoint (Can be overridden in Settings)
-    var activeBaseUrl: String = "https://mazda-prints-equity-albuquerque.trycloudflare.com"
+    var activeBaseUrl: String = "https://kentucky-integrity-employees-newer.trycloudflare.com"
 
     // High-Speed Direct Tunnel Endpoint
-    var directStreamBaseUrl: String = "https://mazda-prints-equity-albuquerque.trycloudflare.com"
+    var directStreamBaseUrl: String = "https://kentucky-integrity-employees-newer.trycloudflare.com"
 
     // Cloud Turbo Acceleration Preference (Persisted in SharedPreferences)
     var isCloudTurboEnabled: Boolean = true
@@ -606,12 +606,15 @@ object DownloadEngine {
     }
 
     suspend fun checkAppUpdate(): AppUpdateInfo? = withContext(Dispatchers.IO) {
+        try {
+            syncLatestTunnelUrl()
+        } catch (_: Exception) {}
         val candidates = getCandidateBaseUrls()
         for (candidate in candidates) {
             try {
                 val req = Request.Builder()
                     .url("$candidate/version")
-                    .header("User-Agent", "Downloadivo-Android/5.1")
+                    .header("User-Agent", "Downloadivo-Android/5.2")
                     .get()
                     .build()
                 val resp = apiClient.newCall(req).execute()
@@ -622,7 +625,7 @@ object DownloadEngine {
                         val json = org.json.JSONObject(body)
                         return@withContext AppUpdateInfo(
                             versionCode = json.optInt("version_code", 0),
-                            versionName = json.optString("version_name", "5.1.0"),
+                            versionName = json.optString("version_name", "5.2"),
                             apkUrl = json.optString("apk_url", ""),
                             changelog = json.optString("changelog", "Performance improvements & bug fixes"),
                             forceUpdate = json.optBoolean("force_update", false)
