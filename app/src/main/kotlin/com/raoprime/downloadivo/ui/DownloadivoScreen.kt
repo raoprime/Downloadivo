@@ -1181,7 +1181,8 @@ private fun ActiveDownloadFloatingBar(
             currentTask.status == DownloadStatus.PAUSED
         ) {
             val displayTitle = currentTask.displayTitle
-            val effectiveProgress = if (currentTask.totalBytes > 0L) {
+            val isTotalReliable = currentTask.totalBytes > 0L && currentTask.bytesDownloaded <= currentTask.totalBytes && currentTask.progress in 0..100
+            val effectiveProgress = if (isTotalReliable) {
                 currentTask.progress / 100f
             } else {
                 -1f
@@ -1290,7 +1291,7 @@ private fun ActiveDownloadFloatingBar(
                                         )
                                     }
                                     else -> {
-                                        if (currentTask.totalBytes > 0L) {
+                                        if (isTotalReliable) {
                                             Text(
                                                 text = "${currentTask.progress}%",
                                                 style = Typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold),
@@ -3296,7 +3297,8 @@ private fun QueueJobRow(
                 DownloadStatus.DOWNLOADING -> {
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    val effectiveProgress = if (task.totalBytes > 0L) {
+                    val isTotalReliable = task.totalBytes > 0L && task.bytesDownloaded <= task.totalBytes && task.progress in 0..100
+                    val effectiveProgress = if (isTotalReliable) {
                         task.progress / 100f
                     } else {
                         -1f
@@ -3328,14 +3330,14 @@ private fun QueueJobRow(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val byteString = if (task.totalBytes > 0L) {
+                            val byteString = if (isTotalReliable) {
                                 "${formatByteSize(task.bytesDownloaded)} / ${formatByteSize(task.totalBytes)}"
                             } else {
                                 "${formatByteSize(task.bytesDownloaded)} transferred"
                             }
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (task.totalBytes > 0L) {
+                                if (isTotalReliable) {
                                     Text(
                                         text = "${task.progress}%",
                                         style = Typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold),

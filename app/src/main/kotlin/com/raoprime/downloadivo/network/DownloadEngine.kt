@@ -656,10 +656,14 @@ object DownloadEngine {
                 var bytesSinceLastTime = 0L
 
                 val currentFileLength = destinationFile.length()
-                if (totalLength > 0L) {
-                    val initialPercent = ((currentFileLength * 100) / totalLength).toInt().coerceIn(0, 99)
-                    onProgress(initialPercent, "", "", currentFileLength, totalLength)
+                val isInitialTotalReliable = totalLength > 0L && currentFileLength <= totalLength
+                val initialPercent = if (isInitialTotalReliable) {
+                    ((currentFileLength * 100) / totalLength).toInt().coerceIn(0, 99)
+                } else {
+                    -1
                 }
+                val initialReportedTotal = if (isInitialTotalReliable) totalLength else -1L
+                onProgress(initialPercent, "", "", currentFileLength, initialReportedTotal)
 
                 while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                     if (isCancelled()) {
@@ -683,19 +687,22 @@ object DownloadEngine {
                         val currentLen = destinationFile.length()
                         val speedBytesPerSec = (bytesSinceLastTime * 1000.0) / timeDiff
                         val speedStr = formatSpeed(speedBytesPerSec)
-                        val percent = if (totalLength > 0L) {
+                        // If total length is unknown, exceeded, or unreliable, show transferred amount without determinate percentage or ETA
+                        val isTotalReliable = totalLength > 0L && currentLen <= totalLength
+                        val percent = if (isTotalReliable) {
                             ((currentLen * 100) / totalLength).toInt().coerceIn(1, 99)
                         } else {
-                            -1
+                            -1 // Indeterminate progress when total is unknown or overrun
                         }
-                        val etaStr = if (totalLength > currentLen && speedBytesPerSec > 1024) {
+                        val etaStr = if (isTotalReliable && speedBytesPerSec > 1024) {
                             val remainingBytes = totalLength - currentLen
                             val secondsLeft = (remainingBytes / speedBytesPerSec).toLong()
                             formatEta(secondsLeft)
                         } else {
                             ""
                         }
-                        onProgress(percent, speedStr, etaStr, currentLen, totalLength)
+                        val reportedTotal = if (isTotalReliable) totalLength else -1L
+                        onProgress(percent, speedStr, etaStr, currentLen, reportedTotal)
                         lastTime = now
                         bytesSinceLastTime = 0L
                     }
