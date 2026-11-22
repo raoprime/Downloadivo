@@ -1969,29 +1969,31 @@ def test_no_resume_file(request: Request):
 @app.api_route("/api/version", methods=["GET", "HEAD"])
 def get_app_version():
     tunnel_url = _get_public_tunnel_url()
-    apk_url = f"{tunnel_url}/Downloadivo_v6.0.2.apk" if tunnel_url else "https://downloadivo.vercel.app/Downloadivo_v6.0.2.apk"
+    apk_url = f"{tunnel_url}/Downloadivo_v6.0.3.apk" if tunnel_url else "https://downloadivo.vercel.app/Downloadivo_v6.0.3.apk"
     return {
-        "version_code": 602,
-        "version_name": "6.0.2",
+        "version_code": 603,
+        "version_name": "6.0.3",
         "min_version_code": 10,
         "apk_url": apk_url,
         "changelog": (
-            "- Downloadivo v6.0.2 Player Stability & Fixes\n"
-            "- Fix Video Player Exit Crash: Eliminated crash when closing/dismissing player\n"
-            "- Safe Lifecycle Cleanup: ExoPlayer state & orientation restored smoothly\n"
-            "- Security Patch: Anti-SSRF Protection & Path Traversal Guards\n"
-            "- HTTP Security Headers: nosniff, SAMEORIGIN, XSS & strict-origin\n"
-            "- Fix Active Download Progress: Eliminated 99% freeze & dynamic stream accounting\n"
+            "- Downloadivo v6.0.3 Video Player & Haptics Polish\n"
+            "- Fix Video Seeking & Scrubbing: Timeline duration sync & seekable URI normalization\n"
+            "- Zero Initial Black Screen: Instant poster frame thumbnail while ExoPlayer decodes\n"
+            "- YouTube-Grade Haptic Alignment: Clean, subtle tactile feedback only on 10s double-tap seek\n"
+            "- Smooth YouTube Exit Physics: Bottom-center scale down + slide down + fade out\n"
+            "- Video Player Exit Crash Guard: Null-safe lifecycle cleanup & safe orientation restore\n"
+            "- Security Patch: Anti-SSRF Protection, Path Traversal Guards, and HTTP Security Headers\n"
+            "- Active Download Progress: Dynamic stream accounting without 99% freeze\n"
             "- Gemini Liquid Glow: Ethereal dynamic fluid ambient background\n"
-            "- In-App Update: Direct reliable package installer & live percentage\n"
-            "- Offline Auto-Sync: 'Waiting for connection' auto-recovery\n"
-            "- Settings: Dedicated 'Download on Wi-Fi only' toggle"
+            "- In-App Update: Direct reliable package installer & live percentage"
         ),
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
     }
 
 
+@app.api_route("/Downloadivo_v6.0.3.apk", methods=["GET", "HEAD"])
+@app.api_route("/downloadivo-v6.0.3.apk", methods=["GET", "HEAD"])
 @app.api_route("/Downloadivo_v6.0.2.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v6.0.2.apk", methods=["GET", "HEAD"])
 @app.api_route("/Downloadivo_v6.0.1.apk", methods=["GET", "HEAD"])
@@ -2012,6 +2014,8 @@ def get_app_version():
 @app.api_route("/downloadivo-v5.0.0.apk", methods=["GET", "HEAD"])
 def download_app_apk():
     apk_paths = [
+        ASSETS_DIR / "Downloadivo_v6.0.3.apk",
+        Path(__file__).parent / "Downloadivo_v6.0.3.apk",
         ASSETS_DIR / "Downloadivo_v6.0.2.apk",
         Path(__file__).parent / "Downloadivo_v6.0.2.apk",
         ASSETS_DIR / "Downloadivo_v6.0.1.apk",
@@ -2034,7 +2038,7 @@ def download_app_apk():
         if p.exists() and p.stat().st_size > 1000000:
             return FileResponse(
                 path=str(p),
-                filename="Downloadivo_v6.0.2.apk",
+                filename="Downloadivo_v6.0.3.apk",
                 media_type="application/vnd.android.package-archive",
                 headers={
                     "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
