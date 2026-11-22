@@ -344,7 +344,17 @@ class DownloadService : Service() {
                     format = item.format,
                     startTime = item.startTime,
                     endTime = item.endTime,
-                    expectedTotalBytes = item.expectedBytes,
+                    expectedTotalBytes = if (item.expectedBytes > 0L) item.expectedBytes else {
+                        val fmtL = item.format.lowercase()
+                        when {
+                            fmtL.contains("mp3") || fmtL.contains("audio") || fmtL.contains("m4a") -> 7 * 1024 * 1024L
+                            fmtL.contains("1080") -> 50 * 1024 * 1024L
+                            fmtL.contains("720") -> 25 * 1024 * 1024L
+                            fmtL.contains("480") -> 15 * 1024 * 1024L
+                            fmtL.contains("4k") || fmtL.contains("2160") -> 200 * 1024 * 1024L
+                            else -> 35 * 1024 * 1024L
+                        }
+                    },
                     outputStream = outStream,
                     onProgress = { percent, speed, eta, current, total ->
                         val updated = _currentTask.value.copy(

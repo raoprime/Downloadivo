@@ -481,6 +481,10 @@ object DownloadEngine {
         outputStream: OutputStream,
         onProgress: (percent: Int, speedStr: String, etaStr: String, currentBytes: Long, totalBytes: Long) -> Unit
     ): Result<Long> = withContext(Dispatchers.IO) {
+        try {
+            syncLatestTunnelUrl()
+        } catch (_: Exception) {}
+
         val bases = (listOfNotNull(
             directStreamBaseUrl.takeIf { it.isNotBlank() },
             activeBaseUrl
@@ -510,7 +514,7 @@ object DownloadEngine {
             try {
                 val reqBuilder = Request.Builder()
                     .url(streamUrl)
-                    .header("User-Agent", "Downloadivo-Android/4.0")
+                    .header("User-Agent", "Downloadivo-Android/5.2")
                     .header("Accept-Encoding", "identity")
 
                 if (totalBytesRead > 0L) {
@@ -535,6 +539,18 @@ object DownloadEngine {
                         ?: body.contentLength()
                     if (headerLength != null && headerLength > 0L) {
                         totalLength = if (isPartial) totalBytesRead + headerLength else headerLength
+                    } else if (expectedTotalBytes > 0L) {
+                        totalLength = expectedTotalBytes
+                    } else {
+                        val fmtL = format.lowercase()
+                        totalLength = when {
+                            fmtL.contains("mp3") || fmtL.contains("audio") || fmtL.contains("m4a") -> 7 * 1024 * 1024L
+                            fmtL.contains("1080") -> 50 * 1024 * 1024L
+                            fmtL.contains("720") -> 25 * 1024 * 1024L
+                            fmtL.contains("480") -> 15 * 1024 * 1024L
+                            fmtL.contains("4k") || fmtL.contains("2160") -> 200 * 1024 * 1024L
+                            else -> 35 * 1024 * 1024L
+                        }
                     }
                 }
 
@@ -557,10 +573,11 @@ object DownloadEngine {
                         val speedBytesPerSec = (bytesSinceLastTime * 1000.0) / timeDiff
                         val speedStr = formatSpeed(speedBytesPerSec)
 
-                        val percent = if (totalLength > 0) {
-                            ((totalBytesRead * 100) / totalLength).toInt().coerceIn(0, 99)
+                        val percent = if (totalLength > 0L) {
+                            ((totalBytesRead * 100) / totalLength).toInt().coerceIn(1, 99)
                         } else {
-                            -1
+                            val est = (totalBytesRead / (30 * 1024 * 1024f) * 100).toInt().coerceIn(1, 95)
+                            est
                         }
 
                         val etaStr = if (totalLength > totalBytesRead && speedBytesPerSec > 1024) {
