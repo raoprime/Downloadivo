@@ -4525,7 +4525,7 @@ private fun SettingsTab(
         // ── 3. ADVANCED SERVER SETTINGS SECTION ──
         val isDefaultActive = remember(backendUrlInput, defaultUrl) {
             val clean = backendUrlInput.trim().trimEnd('/')
-            clean == defaultUrl.trimEnd('/') || clean == "https://mazda-prints-equity-albuquerque.trycloudflare.com"
+            clean == defaultUrl.trimEnd('/') || clean == "https://kentucky-integrity-employees-newer.trycloudflare.com"
         }
 
         Surface(

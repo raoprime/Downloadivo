@@ -96,7 +96,7 @@ object DownloadEngine {
         val list = mutableListOf<String>()
         if (directStreamBaseUrl.isNotBlank()) list.add(directStreamBaseUrl.trim().trimEnd('/'))
         if (activeBaseUrl.isNotBlank()) list.add(activeBaseUrl.trim().trimEnd('/'))
-        list.add("https://mazda-prints-equity-albuquerque.trycloudflare.com")
+        list.add("https://kentucky-integrity-employees-newer.trycloudflare.com")
         list.add("https://downloadivo.vercel.app")
         return list.filter { it.startsWith("http") }.distinct()
     }
