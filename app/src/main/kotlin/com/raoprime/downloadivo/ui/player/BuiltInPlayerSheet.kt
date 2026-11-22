@@ -92,6 +92,7 @@ fun BuiltInPlayerSheet(
 
     var isPlaying by remember { mutableStateOf(exoPlayer.isPlaying) }
     var isBuffering by remember { mutableStateOf(exoPlayer.playbackState == Player.STATE_BUFFERING) }
+    var isFirstFrameRendered by remember(mediaUri) { mutableStateOf(false) }
     var playerError by remember { mutableStateOf<String?>(null) }
     var showFullscreenControls by remember { mutableStateOf(true) }
     var currentSpeed by remember { mutableFloatStateOf(1.0f) }
@@ -229,11 +230,17 @@ fun BuiltInPlayerSheet(
     LaunchedEffect(mediaUri) {
         if (mediaUri.isBlank()) return@LaunchedEffect
         try {
+            val safeUriStr = if (mediaUri.startsWith("http://") || mediaUri.startsWith("https://") || mediaUri.startsWith("content://") || mediaUri.startsWith("file://")) {
+                mediaUri
+            } else {
+                "file://$mediaUri"
+            }
+            val uri = Uri.parse(safeUriStr)
             val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
-            if (currentUri != mediaUri) {
+            if (currentUri != uri.toString()) {
+                isFirstFrameRendered = false
                 playerError = null
                 isBuffering = true
-                val uri = Uri.parse(mediaUri)
                 val item = if (isAudio) {
                     MediaItem.Builder().setUri(uri).setMimeType(MimeTypes.AUDIO_MPEG).build()
                 } else {
@@ -258,10 +265,10 @@ fun BuiltInPlayerSheet(
     LaunchedEffect(exoPlayer) {
         while (true) {
             val now = System.currentTimeMillis()
-            if (!isScrubbing && (now - lastSeekTimestamp > 650L)) {
+            if (!isScrubbing && (now - lastSeekTimestamp > 400L)) {
                 try {
                     val pos = exoPlayer.currentPosition
-                    if (pos != currentPositionMs) {
+                    if (pos != currentPositionMs && pos >= 0L) {
                         currentPositionMs = pos
                     }
                     val d = exoPlayer.duration
@@ -290,6 +297,15 @@ fun BuiltInPlayerSheet(
 
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                isFirstFrameRendered = true
+                isBuffering = false
+            }
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) {
+                    durationMs = exoPlayer.duration
+                }
+            }
             override fun onPlaybackStateChanged(state: Int) {
                 isBuffering = (state == Player.STATE_BUFFERING)
                 if (state == Player.STATE_READY) {
@@ -544,7 +560,6 @@ fun BuiltInPlayerSheet(
                         IconButton(
                             onClick = {
                                 try {
-                                    HapticUtil.lightClick(context)
                                     if (isFullscreen) {
                                         onFullscreenChange?.invoke(false)
                                     }
@@ -648,42 +663,54 @@ fun BuiltInPlayerSheet(
                         }
                     }
                 } else {
-                    // Video Mode Stage: Native ExoPlayer view with safe lifecycle detachment
-                    AndroidView(
-                        factory = { ctx ->
-                            PlayerView(ctx).apply {
-                                try {
-                                    player = exoPlayer
-                                    useController = false
-                                    keepScreenOn = true
-                                    resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                    layoutParams = FrameLayout.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
-                                } catch (_: Exception) {}
-                            }
-                        },
-                        update = { pv ->
-                            try {
-                                if (pv.player != exoPlayer) {
-                                    pv.player = exoPlayer
+                    // Video Mode Stage: Native ExoPlayer view with safe lifecycle detachment & instant poster frame
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AndroidView(
+                            factory = { ctx ->
+                                PlayerView(ctx).apply {
+                                    try {
+                                        player = exoPlayer
+                                        useController = false
+                                        keepScreenOn = true
+                                        resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                        layoutParams = FrameLayout.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
+                                    } catch (_: Exception) {}
                                 }
-                                pv.resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
-                            } catch (_: Exception) {}
-                        },
-                        onReset = { pv ->
-                            try {
-                                pv.player = null
-                            } catch (_: Exception) {}
-                        },
-                        onRelease = { pv ->
-                            try {
-                                pv.player = null
-                            } catch (_: Exception) {}
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                            },
+                            update = { pv ->
+                                try {
+                                    if (pv.player != exoPlayer) {
+                                        pv.player = exoPlayer
+                                    }
+                                    pv.resizeMode = if (isZoomToFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                } catch (_: Exception) {}
+                            },
+                            onReset = { pv ->
+                                try {
+                                    pv.player = null
+                                } catch (_: Exception) {}
+                            },
+                            onRelease = { pv ->
+                                try {
+                                    pv.player = null
+                                } catch (_: Exception) {}
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        // Instant Poster Frame: Shows thumbnail until the first frame renders, eliminating any initial black screen
+                        if (!isFirstFrameRendered && thumbnail.isNotBlank()) {
+                            coil.compose.AsyncImage(
+                                model = thumbnail,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = if (isZoomToFill) androidx.compose.ui.layout.ContentScale.Crop else androidx.compose.ui.layout.ContentScale.Fit
+                            )
+                        }
+                    }
                 }
 
                 // Double Tap Detection Surface (Left = -10s, Right = +10s, Center = toggle play/pause or fullscreen overlay)
@@ -695,16 +722,26 @@ fun BuiltInPlayerSheet(
                                 onDoubleTap = { offset ->
                                     val width = size.width
                                     if (offset.x < width / 2f) {
-                                        val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
-                                        exoPlayer.seekTo(target)
-                                        currentPositionMs = target
-                                        showDoubleTapRewind = true
+                                        try {
+                                            HapticUtil.lightClick(context)
+                                            val current = if (isScrubbing) scrubPositionMs else exoPlayer.currentPosition
+                                            val target = (current - 10000L).coerceAtLeast(0L)
+                                            exoPlayer.seekTo(target)
+                                            currentPositionMs = target
+                                            lastSeekTimestamp = System.currentTimeMillis()
+                                            showDoubleTapRewind = true
+                                        } catch (_: Exception) {}
                                     } else {
-                                        val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
-                                        val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
-                                        exoPlayer.seekTo(target)
-                                        currentPositionMs = target
-                                        showDoubleTapForward = true
+                                        try {
+                                            HapticUtil.lightClick(context)
+                                            val current = if (isScrubbing) scrubPositionMs else exoPlayer.currentPosition
+                                            val maxDur = if (durationMs > 0) durationMs else if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) exoPlayer.duration else Long.MAX_VALUE
+                                            val target = (current + 10000L).coerceAtMost(maxDur)
+                                            exoPlayer.seekTo(target)
+                                            currentPositionMs = target
+                                            lastSeekTimestamp = System.currentTimeMillis()
+                                            showDoubleTapForward = true
+                                        } catch (_: Exception) {}
                                     }
                                 },
                                 onTap = {
@@ -878,7 +915,6 @@ fun BuiltInPlayerSheet(
                                 // Previous Video Button
                                 IconButton(
                                     onClick = {
-                                        HapticUtil.lightClick(context)
                                         onPlayPrevious?.invoke()
                                     },
                                     enabled = onPlayPrevious != null,
@@ -894,9 +930,13 @@ fun BuiltInPlayerSheet(
 
                                 IconButton(
                                     onClick = {
-                                        val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
-                                        exoPlayer.seekTo(target)
-                                        currentPositionMs = target
+                                        try {
+                                            val current = if (isScrubbing) scrubPositionMs else exoPlayer.currentPosition
+                                            val target = (current - 10000L).coerceAtLeast(0L)
+                                            exoPlayer.seekTo(target)
+                                            currentPositionMs = target
+                                            lastSeekTimestamp = System.currentTimeMillis()
+                                        } catch (_: Exception) {}
                                     },
                                     modifier = Modifier.size(46.dp)
                                 ) {
@@ -926,10 +966,14 @@ fun BuiltInPlayerSheet(
 
                                 IconButton(
                                     onClick = {
-                                        val maxDur = if (durationMs > 0) durationMs else Long.MAX_VALUE
-                                        val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
-                                        exoPlayer.seekTo(target)
-                                        currentPositionMs = target
+                                        try {
+                                            val current = if (isScrubbing) scrubPositionMs else exoPlayer.currentPosition
+                                            val maxDur = if (durationMs > 0) durationMs else if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) exoPlayer.duration else Long.MAX_VALUE
+                                            val target = (current + 10000L).coerceAtMost(maxDur)
+                                            exoPlayer.seekTo(target)
+                                            currentPositionMs = target
+                                            lastSeekTimestamp = System.currentTimeMillis()
+                                        } catch (_: Exception) {}
                                     },
                                     modifier = Modifier.size(46.dp)
                                 ) {
@@ -939,7 +983,6 @@ fun BuiltInPlayerSheet(
                                 // Next Video Button
                                 IconButton(
                                     onClick = {
-                                        HapticUtil.lightClick(context)
                                         onPlayNext?.invoke()
                                     },
                                     enabled = onPlayNext != null,
@@ -961,7 +1004,7 @@ fun BuiltInPlayerSheet(
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 12.dp)
                             ) {
-                                val totalDur = if (durationMs > 0) durationMs else 1L
+                                val totalDur = if (durationMs > 0) durationMs else if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) exoPlayer.duration else 1L
                                 val pos = if (isScrubbing) scrubPositionMs else currentPositionMs
                                 val progressFrac = (pos.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f)
                                 Slider(
@@ -971,8 +1014,11 @@ fun BuiltInPlayerSheet(
                                         scrubPositionMs = (frac * totalDur).toLong()
                                     },
                                     onValueChangeFinished = {
-                                        exoPlayer.seekTo(scrubPositionMs)
-                                        currentPositionMs = scrubPositionMs
+                                        try {
+                                            exoPlayer.seekTo(scrubPositionMs)
+                                            currentPositionMs = scrubPositionMs
+                                            lastSeekTimestamp = System.currentTimeMillis()
+                                        } catch (_: Exception) {}
                                         isScrubbing = false
                                     },
                                     modifier = Modifier.fillMaxWidth().height(20.dp),
@@ -994,7 +1040,7 @@ fun BuiltInPlayerSheet(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Progress Slider
-                val totalDur = if (durationMs > 0) durationMs else 1L
+                val totalDur = if (durationMs > 0) durationMs else if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) exoPlayer.duration else 1L
                 val pos = if (isScrubbing) scrubPositionMs else currentPositionMs
                 val progressFrac = (pos.toFloat() / totalDur.toFloat()).coerceIn(0f, 1f)
 
@@ -1005,9 +1051,11 @@ fun BuiltInPlayerSheet(
                         scrubPositionMs = (frac * totalDur).toLong()
                     },
                     onValueChangeFinished = {
-                        exoPlayer.seekTo(scrubPositionMs)
-                        currentPositionMs = scrubPositionMs
-                        lastSeekTimestamp = System.currentTimeMillis()
+                        try {
+                            exoPlayer.seekTo(scrubPositionMs)
+                            currentPositionMs = scrubPositionMs
+                            lastSeekTimestamp = System.currentTimeMillis()
+                        } catch (_: Exception) {}
                         isScrubbing = false
                     },
                     modifier = Modifier
@@ -1047,7 +1095,6 @@ fun BuiltInPlayerSheet(
                     if (!isAudio) {
                         IconButton(
                             onClick = {
-                                HapticUtil.lightClick(context)
                                 onFullscreenChange?.invoke(!isFullscreen)
                             },
                             modifier = Modifier.size(28.dp)
@@ -1067,7 +1114,6 @@ fun BuiltInPlayerSheet(
                     // Previous Video Button
                     IconButton(
                         onClick = {
-                            HapticUtil.lightClick(context)
                             onPlayPrevious?.invoke()
                         },
                         enabled = onPlayPrevious != null,
@@ -1085,9 +1131,9 @@ fun BuiltInPlayerSheet(
 
                     IconButton(
                         onClick = {
-                            HapticUtil.lightClick(context)
                             try {
-                                val target = (exoPlayer.currentPosition - 10000L).coerceAtLeast(0L)
+                                val current = if (isScrubbing) scrubPositionMs else exoPlayer.currentPosition
+                                val target = (current - 10000L).coerceAtLeast(0L)
                                 exoPlayer.seekTo(target)
                                 currentPositionMs = target
                                 lastSeekTimestamp = System.currentTimeMillis()
@@ -1107,7 +1153,6 @@ fun BuiltInPlayerSheet(
                         modifier = Modifier
                             .size(54.dp)
                             .clickable {
-                                HapticUtil.mediumClick(context)
                                 try {
                                     if (isPlaying) {
                                         exoPlayer.pause()
@@ -1133,10 +1178,10 @@ fun BuiltInPlayerSheet(
 
                     IconButton(
                         onClick = {
-                            HapticUtil.lightClick(context)
                             try {
+                                val current = if (isScrubbing) scrubPositionMs else exoPlayer.currentPosition
                                 val maxDur = if (durationMs > 0) durationMs else if (exoPlayer.duration > 0 && exoPlayer.duration != androidx.media3.common.C.TIME_UNSET) exoPlayer.duration else Long.MAX_VALUE
-                                val target = (exoPlayer.currentPosition + 10000L).coerceAtMost(maxDur)
+                                val target = (current + 10000L).coerceAtMost(maxDur)
                                 exoPlayer.seekTo(target)
                                 currentPositionMs = target
                                 lastSeekTimestamp = System.currentTimeMillis()
@@ -1152,7 +1197,6 @@ fun BuiltInPlayerSheet(
                     // Next Video Button
                     IconButton(
                         onClick = {
-                            HapticUtil.lightClick(context)
                             onPlayNext?.invoke()
                         },
                         enabled = onPlayNext != null,

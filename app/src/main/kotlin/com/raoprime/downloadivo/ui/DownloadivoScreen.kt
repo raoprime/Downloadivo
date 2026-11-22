@@ -253,14 +253,15 @@ fun DownloadivoScreen(
         qualities: List<String> = emptyList(),
         initialQuality: String = ""
     ) {
+        val safeUriStr = if (uriStr.startsWith("http://") || uriStr.startsWith("https://") || uriStr.startsWith("content://") || uriStr.startsWith("file://")) {
+            uriStr
+        } else {
+            "file://$uriStr"
+        }
         try {
             exoPlayer.stop()
             exoPlayer.clearMediaItems()
-            val uri = if (uriStr.startsWith("http://") || uriStr.startsWith("https://") || uriStr.startsWith("content://")) {
-                Uri.parse(uriStr)
-            } else {
-                Uri.fromFile(File(uriStr))
-            }
+            val uri = Uri.parse(safeUriStr)
             val item = if (isAudio) {
                 MediaItem.Builder().setUri(uri).setMimeType(MimeTypes.AUDIO_MPEG).build()
             } else {
@@ -271,7 +272,8 @@ fun DownloadivoScreen(
             exoPlayer.playWhenReady = true
         } catch (_: Exception) {}
 
-        activePlaybackUri = uriStr
+        activePlaybackUri = safeUriStr
+        lastActivePlaybackUri = safeUriStr
         activePlaybackOriginalUrl = originalUrl
         activePlaybackTitle = title
         activePlaybackThumbnail = thumbnail
@@ -818,7 +820,6 @@ fun DownloadivoScreen(
                         history = historyList,
                         hasMiniPlayer = (activePlaybackUri != null && isPlayerMinimized),
                         onPlay = { task ->
-                            HapticUtil.mediumClick(context)
                             task.filePath?.let { uriStr ->
                                 playMedia(
                                     uriStr = uriStr,
@@ -832,7 +833,6 @@ fun DownloadivoScreen(
                             }
                         },
                         onShare = { task ->
-                            HapticUtil.lightClick(context)
                             task.filePath?.let { uriStr ->
                                 try {
                                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -847,7 +847,6 @@ fun DownloadivoScreen(
                             }
                         },
                         onOpenExternal = { task ->
-                            HapticUtil.lightClick(context)
                             task.filePath?.let { uriStr ->
                                 try {
                                     val viewIntent = Intent(Intent.ACTION_VIEW).apply {
@@ -938,17 +937,19 @@ fun DownloadivoScreen(
                 androidx.compose.animation.AnimatedVisibility(
                     visible = activePlaybackUri != null && isPlayerMinimized,
                     enter = slideInVertically(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    ) { it } + fadeIn(tween(160)),
+                        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                    ) { it } + scaleIn(
+                        initialScale = 0.93f,
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
+                        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                    ) + fadeIn(tween(200, easing = LinearOutSlowInEasing)),
                     exit = slideOutVertically(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    ) { it } + fadeOut(tween(140))
+                        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                    ) { it } + scaleOut(
+                        targetScale = 0.93f,
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
+                        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                    ) + fadeOut(tween(180, easing = FastOutLinearInEasing))
                 ) {
                     YouTubeFloatingMiniplayer(
                         title = activePlaybackTitle,
@@ -978,17 +979,19 @@ fun DownloadivoScreen(
         androidx.compose.animation.AnimatedVisibility(
             visible = activePlaybackUri != null && !isPlayerMinimized,
             enter = slideInVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) { it } + fadeIn(tween(180)),
+                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+            ) { it } + scaleIn(
+                initialScale = 0.90f,
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
+                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+            ) + fadeIn(tween(220, easing = LinearOutSlowInEasing)),
             exit = slideOutVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) { it } + fadeOut(tween(160))
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+            ) { it } + scaleOut(
+                targetScale = 0.90f,
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+            ) + fadeOut(tween(260, delayMillis = 40, easing = FastOutLinearInEasing))
         ) {
             Box(
                 modifier = Modifier
