@@ -1899,7 +1899,12 @@ def download_app_apk():
             return FileResponse(
                 path=str(p),
                 filename="Downloadivo-v6.0.0.apk",
-                media_type="application/vnd.android.package-archive"
+                media_type="application/vnd.android.package-archive",
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0"
+                }
             )
     raise HTTPException(status_code=404, detail="APK build in progress")
 
