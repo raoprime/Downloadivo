@@ -1850,18 +1850,20 @@ def get_app_version():
     tunnel_url = _get_public_tunnel_url()
     apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
     return {
-        "version_code": 520,
-        "version_name": "5.2",
+        "version_code": 521,
+        "version_name": "5.2.0",
         "min_version_code": 10,
         "apk_url": apk_url,
         "changelog": (
-            "- Downloadivo v5.2 Update\n"
-            "- Gemini Liquid Glow: Ethereal low-opacity liquid ambient gradient on Home screen\n"
-            "- Ultra-Fast Player: Instant playback for short videos/reels & zero-lag buffering\n"
-            "- Seamless Auto-Play: Next video in Library plays automatically on completion\n"
-            "- Spotify Pro Support: Fast track metadata & 320kbps audio pipeline\n"
-            "- Simple Navigation Switch: Clean, lightweight tab transition animation\n"
-            "- Library Empty State Fix: High-contrast legible text & crisp action button"
+            "- Downloadivo v5.2.0 Major Update\n"
+            "- Fix 0% Download Lag: Live dynamic byte progress bar\n"
+            "- Fix Black Frame & Stutter: Direct progressive CDN download with zero latency\n"
+            "- Auto-Sync Cloud Engine: Zero-setup connection recovery\n"
+            "- Gemini Liquid Glow: Ethereal low-opacity ambient gradient\n"
+            "- Ultra-Fast Player: Zero-lag buffering for reels & short videos\n"
+            "- Playlist Auto-Play & Next/Prev playback controls\n"
+            "- Spotify Pro: High-fidelity audio extraction\n"
+            "- Library Contrast Fix: Crisp readable text & buttons"
         ),
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
