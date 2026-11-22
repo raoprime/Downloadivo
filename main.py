@@ -2649,7 +2649,13 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
 
     # Online player stream mode: if progressive stream exists, prioritize it for instant seeking & zero lag
     is_online_play = bool(request and request.query_params.get("online") == "true")
-    if is_online_play and prog and fmt_lower in ["best", "stream", "auto", "default", ""]:
+    is_youtube = ("youtube.com" in (target_url or url).lower() or "youtu.be" in (target_url or url).lower())
+    if not is_youtube and prog:
+        # Non-YouTube platforms (Instagram, TikTok, Twitter/X, Facebook) have complete progressive MP4s with audio
+        chosen_prog_fmt = prog[-1]
+    elif is_online_play and prog and fmt_lower in ["best", "stream", "auto", "default", ""]:
+        chosen_prog_fmt = prog[-1]
+    elif fmt_lower in ["best", "auto", "default", ""] and prog and (prog[-1].get("height") or 0) >= 720:
         chosen_prog_fmt = prog[-1]
 
     use_ffmpeg_mux = False
@@ -2726,6 +2732,15 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
     if not expected_video_bytes and formats:
         expected_video_bytes = int(formats[-1].get("filesize") or formats[-1].get("filesize_approx") or 0)
 
+    # Guaranteed realistic non-zero byte size for progress reporting on Android
+    if not expected_video_bytes or expected_video_bytes <= 0:
+        h = (chosen_v_fmt.get("height") if chosen_v_fmt else 0) or (chosen_prog_fmt.get("height") if chosen_prog_fmt else 0) or 720
+        kbps = standard_bitrates.get(h, 2500)
+        if dur_sec and dur_sec > 0:
+            expected_video_bytes = int((kbps * 1000 * dur_sec) / 8)
+        else:
+            expected_video_bytes = standard_default_mb.get(h, 35) * 1024 * 1024
+
     video_headers = {
         "Content-Disposition": _safe_content_disposition(safe_name, "mp4"),
         "Accept-Ranges": "bytes",
@@ -2753,10 +2768,9 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
                 _FFMPEG_PATH,
                 "-y",
                 "-loglevel", "error",
-                "-probesize", "65536",
-                "-analyzeduration", "500000",
-                "-fflags", "+nobuffer+fastseek+genpts",
-                "-flags", "low_delay",
+                "-probesize", "524288",
+                "-analyzeduration", "1000000",
+                "-fflags", "+nobuffer+genpts+discardcorrupt",
                 "-avoid_negative_ts", "make_zero",
                 "-max_interleave_delta", "100000",
                 "-reconnect", "1",
@@ -2766,12 +2780,6 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
                 "-headers", f"User-Agent: {v_ua}\r\n",
             ] + v_input_args + [
                 "-i", chosen_v,
-                "-probesize", "65536",
-                "-analyzeduration", "500000",
-                "-fflags", "+nobuffer+fastseek+genpts",
-                "-flags", "low_delay",
-                "-avoid_negative_ts", "make_zero",
-                "-max_interleave_delta", "100000",
                 "-reconnect", "1",
                 "-reconnect_at_eof", "1",
                 "-reconnect_streamed", "1",
@@ -2779,9 +2787,11 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
                 "-headers", f"User-Agent: {a_ua}\r\n",
             ] + a_input_args + [
                 "-i", chosen_a,
+                "-map", "0:v:0",
+                "-map", "1:a:0",
                 "-c:v", "copy",
                 "-c:a", "copy" if can_copy_audio else "aac",
-                "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+                "-movflags", "frag_keyframe+empty_moov+default_base_moof+omit_tfhd_offset",
                 "-f", "mp4",
                 "pipe:1"
             ]
