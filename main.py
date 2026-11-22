@@ -1,5 +1,6 @@
 import ipaddress
 import socket
+import hashlib
 """
 FastDownloader Studio Multi-Engine Backend
 Engine 1: Instaloader Pro (Instagram Reels, Photos, Carousels, Stories)
@@ -26,7 +27,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -1834,14 +1835,86 @@ def master_download_worker(task_id: str, url: str, fmt: str, start_time: Optiona
 # ──────────────────────────────────────────────────────────────
 # REST Endpoints
 # ──────────────────────────────────────────────────────────────
+_DISPOSABLE_DATA = b"".join([f"DOWNLOADIVO_TEST_CHUNK_{i:06d}_\n".encode("utf-8") * 64 for i in range(3000)])
+_DISPOSABLE_SHA256 = hashlib.sha256(_DISPOSABLE_DATA).hexdigest()
+_DISPOSABLE_ETAG = '"test-disposable-etag-v1"'
+
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {
         "status": "healthy",
         "service": "Downloadivo",
-        "version": "5.2.0",
+        "version": CURRENT_VERSION_NAME,
         "timestamp": datetime.now().isoformat(),
     }
+
+@app.api_route("/test/disposable-info", methods=["GET", "HEAD"])
+def test_disposable_info():
+    return {
+        "size": len(_DISPOSABLE_DATA),
+        "sha256": _DISPOSABLE_SHA256,
+        "etag": _DISPOSABLE_ETAG
+    }
+
+@app.api_route("/test/disposable-file", methods=["GET", "HEAD"])
+def test_disposable_file(request: Request):
+    total_len = len(_DISPOSABLE_DATA)
+    range_header = request.headers.get("range")
+    if range_header and range_header.startswith("bytes="):
+        val = range_header[6:].strip()
+        if val.endswith("-"):
+            start = int(val[:-1])
+            end = total_len - 1
+        elif "-" in val:
+            p = val.split("-")
+            start = int(p[0])
+            end = int(p[1]) if p[1] else total_len - 1
+        else:
+            start, end = 0, total_len - 1
+        start = max(0, min(start, total_len - 1))
+        end = max(start, min(end, total_len - 1))
+        chunk = _DISPOSABLE_DATA[start:end+1]
+        return Response(
+            content=chunk,
+            status_code=206,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Range": f"bytes {start}-{end}/{total_len}",
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(len(chunk)),
+                "ETag": _DISPOSABLE_ETAG,
+                "Cache-Control": "no-cache",
+                "X-Expected-Total-Bytes": str(total_len),
+            }
+        )
+    return Response(
+        content=_DISPOSABLE_DATA,
+        status_code=200,
+        media_type="application/octet-stream",
+        headers={
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(total_len),
+            "ETag": _DISPOSABLE_ETAG,
+            "Cache-Control": "no-cache",
+            "X-Expected-Total-Bytes": str(total_len),
+        }
+    )
+
+@app.api_route("/test/no-resume-file", methods=["GET", "HEAD"])
+def test_no_resume_file(request: Request):
+    """Source that deliberately does NOT support Range requests and always returns 200 OK with full file."""
+    total_len = len(_DISPOSABLE_DATA)
+    return Response(
+        content=_DISPOSABLE_DATA,
+        status_code=200,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Length": str(total_len),
+            "ETag": _DISPOSABLE_ETAG,
+            "Cache-Control": "no-cache",
+            "X-Expected-Total-Bytes": str(total_len),
+        }
+    )
 
 
 @app.api_route("/version", methods=["GET", "HEAD"])
