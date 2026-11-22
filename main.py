@@ -1885,24 +1885,20 @@ def get_app_version():
 @app.api_route("/downloadivo-v5.0.0.apk", methods=["GET", "HEAD"])
 def download_app_apk():
     apk_paths = [
-        ASSETS_DIR / "downloadivo-v5.2.apk",
+        ASSETS_DIR / "downloadivo-v6.0.0.apk",
+        ASSETS_DIR / "downloadivo-v6.0.apk",
         ASSETS_DIR / "downloadivo.apk",
-        ASSETS_DIR / "downloadivo-v5.1.apk",
-        ASSETS_DIR / "downloadivo-v5.0.apk",
-        ASSETS_DIR / "downloadivo-v4.0.apk",
-        ASSETS_DIR / "downloadivo-v3.0.apk",
-        ASSETS_DIR / "downloadivo-v2.0.apk",
-        ASSETS_DIR / "downloadivo-v1.0.apk",
+        Path(__file__).parent / "assets" / "downloadivo-v6.0.0.apk",
         Path(__file__).parent / "assets" / "downloadivo.apk",
         Path(__file__).parent / "downloadivo.apk",
-        Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\downloadivo-v5.2.apk"),
+        Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\downloadivo-v6.0.0.apk"),
         Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\downloadivo.apk"),
     ]
     for p in apk_paths:
         if p.exists() and p.stat().st_size > 1000000:
             return FileResponse(
                 path=str(p),
-                filename="Downloadivo-v5.2.apk",
+                filename="Downloadivo-v6.0.0.apk",
                 media_type="application/vnd.android.package-archive"
             )
     raise HTTPException(status_code=404, detail="APK build in progress")
