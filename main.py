@@ -334,7 +334,7 @@ def _cleanup_old_files_daemon():
 _cleaner_thread = threading.Thread(target=_cleanup_old_files_daemon, daemon=True, name="storage_cleaner")
 _cleaner_thread.start()
 
-app = FastAPI(title="Downloadivo Multi-Engine", version="5.2.0")
+app = FastAPI(title="Downloadivo Multi-Engine", version="6.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1921,7 +1921,7 @@ def test_no_resume_file(request: Request):
 @app.api_route("/api/version", methods=["GET", "HEAD"])
 def get_app_version():
     tunnel_url = _get_public_tunnel_url()
-    apk_url = f"{tunnel_url}/downloadivo.apk" if tunnel_url else "https://raw.githubusercontent.com/raoprime/Downloadivo/android/downloadivo.apk"
+    apk_url = f"{tunnel_url}/Downloadivo_v6.apk" if tunnel_url else "https://downloadivo.vercel.app/Downloadivo_v6.apk"
     return {
         "version_code": 600,
         "version_name": "6.0.0",
@@ -1944,6 +1944,8 @@ def get_app_version():
     }
 
 
+@app.api_route("/Downloadivo_v6.apk", methods=["GET", "HEAD"])
+@app.api_route("/Downloadivo-v6.0.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo.apk", methods=["GET", "HEAD"])
 @app.api_route("/api/downloadivo.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo-v6.0.apk", methods=["GET", "HEAD"])
@@ -1958,9 +1960,12 @@ def get_app_version():
 @app.api_route("/downloadivo-v5.0.0.apk", methods=["GET", "HEAD"])
 def download_app_apk():
     apk_paths = [
+        ASSETS_DIR / "Downloadivo_v6.apk",
+        Path(__file__).parent / "Downloadivo_v6.apk",
         ASSETS_DIR / "downloadivo-v6.0.0.apk",
         ASSETS_DIR / "downloadivo-v6.0.apk",
         ASSETS_DIR / "downloadivo.apk",
+        Path(__file__).parent / "assets" / "Downloadivo_v6.apk",
         Path(__file__).parent / "assets" / "downloadivo-v6.0.0.apk",
         Path(__file__).parent / "assets" / "downloadivo.apk",
         Path(__file__).parent / "downloadivo.apk",
@@ -1971,7 +1976,7 @@ def download_app_apk():
         if p.exists() and p.stat().st_size > 1000000:
             return FileResponse(
                 path=str(p),
-                filename="Downloadivo-v6.0.0.apk",
+                filename="Downloadivo_v6.apk",
                 media_type="application/vnd.android.package-archive",
                 headers={
                     "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",

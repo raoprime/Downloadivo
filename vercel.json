@@ -5,6 +5,7 @@
   "outputDirectory": ".",
   "cleanUrls": true,
   "rewrites": [
+    { "source": "/Downloadivo_v6.apk", "destination": "https://logging-show-mortality-parameters.trycloudflare.com/Downloadivo_v6.apk" },
     { "source": "/version", "destination": "https://logging-show-mortality-parameters.trycloudflare.com/version" },
     { "source": "/api/version", "destination": "https://logging-show-mortality-parameters.trycloudflare.com/api/version" },
     { "source": "/downloadivo.apk", "destination": "https://logging-show-mortality-parameters.trycloudflare.com/downloadivo.apk" },
