@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-22T11:53:32.255865",
+  "timestamp": "2026-11-22T11:54:42.654302",
   "interior": {
     "backend_port_8899": "HEALTHY",
     "in_app_version_api": "HEALTHY",
@@ -21,11 +21,11 @@
   "speed_benchmark": {
     "concurrent_streams": 3,
     "individual_speeds_mb_s": [
-      0.28,
-      0.27,
-      0.27
+      0.37,
+      0.36,
+      0.33
     ],
-    "aggregate_throughput_mb_s": 0.82,
+    "aggregate_throughput_mb_s": 1.06,
     "status": "PASS"
   },
   "platform_support": {
@@ -36,18 +36,18 @@
     },
     "YouTube_Shorts": {
       "status": "SUCCESS",
-      "latency_sec": 0.0,
+      "latency_sec": 0.03,
       "code": 200
     },
     "TikTok": {
       "status": "FAILED",
-      "latency_sec": 0.88,
+      "latency_sec": 0.89,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "Twitter_X": {
       "status": "FAILED",
-      "latency_sec": 1.2,
+      "latency_sec": 1.11,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
@@ -59,13 +59,13 @@
     },
     "Vimeo": {
       "status": "FAILED",
-      "latency_sec": 1.5,
+      "latency_sec": 1.06,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     },
     "SoundCloud": {
       "status": "FAILED",
-      "latency_sec": 1.03,
+      "latency_sec": 0.85,
       "code": 400,
       "error": "HTTP Error 400: Bad Request"
     }
