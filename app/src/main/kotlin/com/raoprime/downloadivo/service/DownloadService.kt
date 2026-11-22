@@ -75,6 +75,15 @@ class DownloadService : Service() {
         private val _isAnyDownloading = MutableStateFlow(false)
         val isAnyDownloading = _isAnyDownloading.asStateFlow()
 
+        fun sanitizeForFilename(rawTitle: String): String {
+            val safe = rawTitle.replace(Regex("""[/\\:*?"<>|\u0000-\u001F\u007F]"""), "_")
+                .replace(Regex("""\s+"""), " ")
+                .trim()
+                .trimEnd('.')
+                .take(120)
+            return safe.ifBlank { "download" }
+        }
+
         fun startDownload(
             context: Context,
             url: String,
@@ -181,13 +190,17 @@ class DownloadService : Service() {
         endTime: String? = null
     ) {
         val taskId = System.currentTimeMillis().toString()
-        val cleanTitle = title.replace(Regex("[^a-zA-Z0-9._ -]"), "").take(80).ifBlank { "download" }
+        // Retain full human-readable title (preserving currency, punctuation, numeric ranges, Unicode)
+        val displayTitle = title.trim()
+            .replace(Regex("""[\u0000-\u001F\u007F]"""), "")
+            .take(200)
+            .ifBlank { "Media Download" }
         val isAudio = format.lowercase() == "mp3" || format.lowercase() == "m4a"
 
         val item = QueuedDownload(
             id = taskId,
             url = url,
-            title = cleanTitle,
+            title = displayTitle,
             format = format,
             thumbnail = thumbnail,
             duration = duration,
@@ -201,7 +214,7 @@ class DownloadService : Service() {
             updateQueuedState()
             val queuedTask = DownloadTask(
                 id = taskId,
-                title = cleanTitle,
+                title = displayTitle,
                 url = url,
                 format = format,
                 thumbnail = thumbnail,
@@ -221,7 +234,8 @@ class DownloadService : Service() {
     }
 
     private fun refreshActiveMetrics() {
-        val active = if (_currentTask.value.status == DownloadStatus.DOWNLOADING) 1 else 0
+        val s = _currentTask.value.status
+        val active = if (s == DownloadStatus.DOWNLOADING || s == DownloadStatus.RESOLVING || s == DownloadStatus.SAVING || s == DownloadStatus.PROCESSING) 1 else 0
         val totalActive = active + pendingQueue.size
         _activeTaskCount.value = totalActive
         _isAnyDownloading.value = totalActive > 0
@@ -252,7 +266,7 @@ class DownloadService : Service() {
 
         wakeLock?.acquire(15 * 60 * 1000L /* 15 minutes */)
 
-        val cleanTitle = item.title
+        val displayTitle = item.title
         val isAudio = item.format.lowercase() == "mp3" || item.format.lowercase() == "m4a"
         val extension = if (isAudio) (if (item.format.lowercase() == "m4a") "m4a" else "mp3") else "mp4"
         val clipSuffix = if (!item.startTime.isNullOrBlank() && !item.endTime.isNullOrBlank()) {
@@ -260,11 +274,13 @@ class DownloadService : Service() {
         } else {
             ""
         }
-        val fileName = "$cleanTitle$clipSuffix.$extension"
+        // Only sanitize at the filesystem boundary
+        val safeStem = sanitizeForFilename(displayTitle)
+        val fileName = "$safeStem$clipSuffix.$extension"
 
         val initialTask = DownloadTask(
             id = item.id,
-            title = "$cleanTitle$clipSuffix",
+            title = if (clipSuffix.isNotBlank()) "$displayTitle ($clipSuffix)" else displayTitle,
             url = item.url,
             format = item.format,
             thumbnail = item.thumbnail,
@@ -279,7 +295,7 @@ class DownloadService : Service() {
         com.raoprime.downloadivo.data.DownloadRepository.addTask(initialTask)
         refreshActiveMetrics()
 
-        startForegroundNotification(cleanTitle, 0, "Starting download...", "")
+        startForegroundNotification(displayTitle, 0, "Starting download...", "")
 
         // Asynchronously load thumbnail for rich notification shade
         currentThumbnailBitmap = null
@@ -294,7 +310,7 @@ class DownloadService : Service() {
                     val result = loader.execute(req)
                     if (result is SuccessResult) {
                         currentThumbnailBitmap = result.drawable.toBitmap()
-                        updateForegroundNotification(cleanTitle, _currentTask.value.progress, _currentTask.value.speed, _currentTask.value.eta)
+                        updateForegroundNotification(displayTitle, _currentTask.value.progress, _currentTask.value.speed, _currentTask.value.eta)
                     }
                 } catch (_: Exception) {}
             }
@@ -370,12 +386,21 @@ class DownloadService : Service() {
                         val now = System.currentTimeMillis()
                         if (now - lastNotifUpdate >= 1000L || percent == 100) {
                             lastNotifUpdate = now
-                            updateForegroundNotification(cleanTitle, percent, speed, eta)
+                            updateForegroundNotification(displayTitle, percent, speed, eta)
                         }
                     }
                 )
 
                 if (result.isSuccess && (result.getOrNull() ?: 0L) > 0L) {
+                    val savingTask = _currentTask.value.copy(
+                        status = DownloadStatus.SAVING,
+                        speed = "",
+                        eta = ""
+                    )
+                    _currentTask.value = savingTask
+                    com.raoprime.downloadivo.data.DownloadRepository.updateTask(savingTask)
+                    updateForegroundNotification(displayTitle, 100, "Saving to storage...", "")
+
                     try { outStream?.flush() } catch (_: Exception) {}
                     try { outStream?.close() } catch (_: Exception) {}
                     outStream = null
@@ -405,7 +430,7 @@ class DownloadService : Service() {
                     _currentTask.value = completed
                     com.raoprime.downloadivo.data.DownloadRepository.updateTask(completed)
                     refreshActiveMetrics()
-                    showCompletionNotification(cleanTitle, true, mediaUri, isAudio)
+                    showCompletionNotification(displayTitle, true, mediaUri, isAudio)
                     HapticUtil.success(applicationContext)
                 } else {
                     throw result.exceptionOrNull() ?: Exception("Download aborted or zero bytes received")
@@ -423,7 +448,7 @@ class DownloadService : Service() {
                 _currentTask.value = failed
                 com.raoprime.downloadivo.data.DownloadRepository.updateTask(failed)
                 refreshActiveMetrics()
-                showCompletionNotification(cleanTitle, false, null, isAudio)
+                showCompletionNotification(displayTitle, false, null, isAudio)
             } finally {
                 try { outStream?.close() } catch (_: Exception) {}
                 isDownloading = false

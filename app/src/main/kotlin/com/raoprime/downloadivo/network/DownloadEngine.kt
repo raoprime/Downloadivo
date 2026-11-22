@@ -514,7 +514,7 @@ object DownloadEngine {
             try {
                 val reqBuilder = Request.Builder()
                     .url(streamUrl)
-                    .header("User-Agent", "Downloadivo-Android/5.2")
+                    .header("User-Agent", "Downloadivo-Android/6.0.0")
                     .header("Accept-Encoding", "identity")
 
                 if (totalBytesRead > 0L) {
@@ -576,8 +576,7 @@ object DownloadEngine {
                         val percent = if (totalLength > 0L) {
                             ((totalBytesRead * 100) / totalLength).toInt().coerceIn(1, 99)
                         } else {
-                            val est = (totalBytesRead / (30 * 1024 * 1024f) * 100).toInt().coerceIn(1, 95)
-                            est
+                            -1 // Unknown total size -> indeterminate progress
                         }
 
                         val etaStr = if (totalLength > totalBytesRead && speedBytesPerSec > 1024) {
@@ -631,7 +630,7 @@ object DownloadEngine {
             try {
                 val req = Request.Builder()
                     .url("$candidate/version")
-                    .header("User-Agent", "Downloadivo-Android/5.2")
+                    .header("User-Agent", "Downloadivo-Android/6.0.0")
                     .get()
                     .build()
                 val resp = apiClient.newCall(req).execute()

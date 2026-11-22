@@ -67,6 +67,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -434,6 +436,8 @@ fun DownloadivoScreen(
         }
     }
 
+    var scrollToTaskId by remember { mutableStateOf<String?>(null) }
+
     // Auto-fill when link is shared via Intent
     LaunchedEffect(sharedUrl) {
         if (!sharedUrl.isNullOrBlank()) {
@@ -634,16 +638,23 @@ fun DownloadivoScreen(
                                         if (activeCount > 0) {
                                             Box(
                                                 modifier = Modifier
-                                                    .offset(x = 6.dp, y = (-4).dp)
-                                                    .size(15.dp)
-                                                    .background(TextCrisp, CircleShape),
+                                                    .offset(x = 10.dp, y = (-6).dp)
+                                                    .defaultMinSize(minWidth = 18.dp, minHeight = 18.dp)
+                                                    .clip(CircleShape)
+                                                    .background(TextCrisp)
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
-                                                    text = "$activeCount",
+                                                    text = if (activeCount > 99) "99+" else "$activeCount",
                                                     color = CanvasDark,
-                                                    fontSize = 9.sp,
-                                                    fontWeight = FontWeight.ExtraBold
+                                                    style = TextStyle(
+                                                        fontSize = 9.5.sp,
+                                                        fontWeight = FontWeight.Black,
+                                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                                        lineHeight = 11.sp
+                                                    ),
+                                                    textAlign = TextAlign.Center
                                                 )
                                             }
                                         }
@@ -756,6 +767,8 @@ fun DownloadivoScreen(
                         QueueTab(
                             currentTask = currentTask,
                             queuedTasks = queuedTasks,
+                            targetTaskId = scrollToTaskId,
+                            onClearTargetTaskId = { scrollToTaskId = null },
                             onCancelCurrent = {
                                 val cancelIntent = Intent(context, DownloadService::class.java).apply {
                                     action = DownloadService.ACTION_CANCEL_DOWNLOAD
@@ -872,8 +885,9 @@ fun DownloadivoScreen(
                 // Active Download Floating Bar (Professional Studio Pill with Thumbnail & Live Speed)
                 ActiveDownloadFloatingBar(
                     isVisible = isAnyDownloading && currentTab != AppTab.QUEUE,
-                    onNavigateToQueue = {
+                    onNavigateToQueue = { targetTaskId ->
                         HapticUtil.lightClick(context)
+                        scrollToTaskId = targetTaskId
                         currentTab = AppTab.QUEUE
                     },
                     onCancelDownload = {
@@ -1054,13 +1068,92 @@ fun DownloadivoScreen(
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// CONTINUOUS READ-ONLY PROGRESS BAR (ZERO DETACHED DOTS, SOLID UNIFIED TRACK)
+// ═══════════════════════════════════════════════════════════════════════
+@Composable
+fun ContinuousProgressBar(
+    progress: Float, // 0f to 1f, or -1f for indeterminate
+    modifier: Modifier = Modifier,
+    color: Color = TextCrisp,
+    trackColor: Color = SurfaceHighlight,
+    height: androidx.compose.ui.unit.Dp = 4.dp
+) {
+    if (progress < 0f) {
+        val infiniteTransition = rememberInfiniteTransition(label = "indeterminate_bar")
+        val sweepFraction by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1400, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "sweep"
+        )
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(height)
+                .clip(RoundedCornerShape(height / 2))
+                .background(trackColor)
+        ) {
+            val sweepWidth = 0.35f
+            val startX = (sweepFraction * 1.35f) - sweepWidth
+            val endX = startX + sweepWidth
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                val left = (startX.coerceIn(0f, 1f) * w)
+                val right = (endX.coerceIn(0f, 1f) * w)
+                if (right > left) {
+                    drawRoundRect(
+                        color = color,
+                        topLeft = androidx.compose.ui.geometry.Offset(left, 0f),
+                        size = androidx.compose.ui.geometry.Size(right - left, h),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2, h / 2)
+                    )
+                }
+            }
+        }
+    } else {
+        val clamped = progress.coerceIn(0f, 1f)
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(height)
+                .clip(RoundedCornerShape(height / 2))
+                .background(trackColor)
+        ) {
+            if (clamped > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(fraction = clamped)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(height / 2))
+                        .background(color)
+                )
+            }
+        }
+    }
+}
+
+private fun formatShortEta(rawEta: String): String {
+    val trimmed = rawEta.trim()
+    if (trimmed.isBlank() || trimmed == "0s" || trimmed.startsWith("00m 00s")) return ""
+    val cleaned = trimmed.replace(Regex("""^0+([1-9])"""), "$1")
+        .replace(Regex("""\s*remaining$"""), "")
+        .replace(Regex("""\s*left$"""), "")
+        .trim()
+    return if (cleaned.isNotBlank()) "$cleaned left" else ""
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // FLOATING ISOLATED LEAF OVERLAYS (ISOLATED RECOMPOSITION SCOPES)
 // ═══════════════════════════════════════════════════════════════════════
 
 @Composable
 private fun ActiveDownloadFloatingBar(
     isVisible: Boolean,
-    onNavigateToQueue: () -> Unit,
+    onNavigateToQueue: (String) -> Unit,
     onCancelDownload: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1080,9 +1173,19 @@ private fun ActiveDownloadFloatingBar(
         ) { it } + fadeOut(tween(140))
     ) {
         val currentTask by DownloadService.currentTask.collectAsState()
-        if (currentTask.status == DownloadStatus.DOWNLOADING) {
+        if (currentTask.status == DownloadStatus.DOWNLOADING ||
+            currentTask.status == DownloadStatus.RESOLVING ||
+            currentTask.status == DownloadStatus.SAVING ||
+            currentTask.status == DownloadStatus.PROCESSING
+        ) {
+            val displayTitle = currentTask.displayTitle
+            val effectiveProgress = if (currentTask.totalBytes > 0L) {
+                currentTask.progress / 100f
+            } else {
+                -1f
+            }
             val animatedProgress by animateFloatAsState(
-                targetValue = if (currentTask.progress >= 0) currentTask.progress / 100f else 0f,
+                targetValue = if (effectiveProgress >= 0f) effectiveProgress else 0f,
                 animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
                 label = "pill_progress"
             )
@@ -1095,7 +1198,7 @@ private fun ActiveDownloadFloatingBar(
                 modifier = modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .clickable { onNavigateToQueue() }
+                    .clickable { onNavigateToQueue(currentTask.id) }
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
@@ -1132,101 +1235,104 @@ private fun ActiveDownloadFloatingBar(
                         Spacer(modifier = Modifier.width(10.dp))
 
                         Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = SurfaceHighlight,
-                                    modifier = Modifier.padding(end = 6.dp)
-                                ) {
-                                    Text(
-                                        text = if (currentTask.isAudio) "MP3" else (if (currentTask.format.contains("1080")) "1080p" else (if (currentTask.format.contains("720")) "720p" else currentTask.format.uppercase())),
-                                        fontSize = 9.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextCrisp,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                    )
-                                }
-                                Text(
-                                    text = currentTask.title.ifBlank { "Downloading media..." },
-                                    style = Typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = TextCrisp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
+                            // One-line title without quality badge (BEST moved to Queue card)
+                            Text(
+                                text = displayTitle,
+                                style = Typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextCrisp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
 
                             Spacer(modifier = Modifier.height(2.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.weight(1f, fill = false),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = if (currentTask.progress >= 0) "${currentTask.progress}%" else formatByteSize(currentTask.bytesDownloaded),
-                                        style = Typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextCrisp
-                                    )
-                                    if (currentTask.speed.isNotBlank()) {
+                                when (currentTask.status) {
+                                    DownloadStatus.SAVING -> {
                                         Text(
-                                            text = " • ${currentTask.speed}",
-                                            style = Typography.bodySmall,
-                                            color = TextCrisp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            text = "Saving to storage...",
+                                            style = Typography.labelMedium.copy(fontSize = 11.5.sp),
+                                            color = TextSecondary
                                         )
                                     }
-                                    if (currentTask.totalBytes > 0) {
+                                    DownloadStatus.PROCESSING -> {
                                         Text(
-                                            text = " (${formatByteSize(currentTask.bytesDownloaded)} / ${formatByteSize(currentTask.totalBytes)})",
-                                            style = Typography.bodySmall,
-                                            color = TextSecondary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            text = "Processing media...",
+                                            style = Typography.labelMedium.copy(fontSize = 11.5.sp),
+                                            color = TextSecondary
                                         )
                                     }
-                                }
-                                if (currentTask.eta.isNotBlank()) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = currentTask.eta,
-                                        style = Typography.labelSmall,
-                                        color = TextTertiary
-                                    )
+                                    DownloadStatus.RESOLVING -> {
+                                        Text(
+                                            text = "Preparing...",
+                                            style = Typography.labelMedium.copy(fontSize = 11.5.sp),
+                                            color = TextSecondary
+                                        )
+                                    }
+                                    else -> {
+                                        if (currentTask.totalBytes > 0L) {
+                                            Text(
+                                                text = "${currentTask.progress}%",
+                                                style = Typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                                                color = TextCrisp
+                                            )
+                                        } else {
+                                            Text(
+                                                text = "${formatByteSize(currentTask.bytesDownloaded)} transferred",
+                                                style = Typography.labelMedium.copy(fontSize = 11.5.sp),
+                                                color = TextCrisp
+                                            )
+                                        }
+
+                                        val shortEta = formatShortEta(currentTask.eta)
+                                        val secondaryText = if (shortEta.isNotBlank()) {
+                                            shortEta
+                                        } else if (currentTask.speed.isNotBlank()) {
+                                            currentTask.speed
+                                        } else {
+                                            null
+                                        }
+
+                                        if (secondaryText != null) {
+                                            Text(
+                                                text = " • $secondaryText",
+                                                style = Typography.bodySmall.copy(fontSize = 11.5.sp),
+                                                color = TextSecondary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
 
                         Spacer(modifier = Modifier.width(8.dp))
 
+                        // Explicit Cancel Action (clicks do not bubble to onNavigateToQueue)
                         IconButton(
                             onClick = onCancelDownload,
                             modifier = Modifier.size(28.dp)
                         ) {
-                            Icon(Icons.Default.Close, contentDescription = "Cancel", tint = TextTertiary, modifier = Modifier.size(16.dp))
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cancel transfer",
+                                tint = TextTertiary,
+                                modifier = Modifier.size(16.dp)
+                            )
                         }
                     }
 
-                    // High Precision Sleek Linear Progress Bar
+                    // Continuous read-only progress bar across full pill width (NO detached dot)
                     Spacer(modifier = Modifier.height(6.dp))
-                    LinearProgressIndicator(
-                        progress = { animatedProgress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(3.5.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = TextCrisp,
-                        trackColor = SurfaceHighlight
+                    ContinuousProgressBar(
+                        progress = if (effectiveProgress >= 0f) animatedProgress else -1f,
+                        height = 3.5.dp,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -2732,6 +2838,8 @@ private fun sanitizeQueueErrorMessage(raw: String?): String {
 private fun QueueTab(
     currentTask: DownloadTask,
     queuedTasks: List<DownloadTask>,
+    targetTaskId: String? = null,
+    onClearTargetTaskId: () -> Unit = {},
     onCancelCurrent: () -> Unit,
     onCancelAll: () -> Unit = {},
     onRemoveQueued: (String) -> Unit,
@@ -2740,6 +2848,7 @@ private fun QueueTab(
     onNavigateHome: () -> Unit
 ) {
     val context = LocalContext.current
+    val listState = rememberLazyListState()
     var isInitialSyncComplete by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         // Prevents flashing "Queue is empty" during initial StateFlow synchronization
@@ -2747,10 +2856,12 @@ private fun QueueTab(
         isInitialSyncComplete = true
     }
 
-    // Active or actionable tasks: downloading, resolving, or failed current task + queued tasks
+    // Active or actionable tasks: downloading, resolving, saving, processing, or failed current task + queued tasks
     val isCurrentActionable = currentTask.id.isNotBlank() && (
         currentTask.status == DownloadStatus.DOWNLOADING ||
         currentTask.status == DownloadStatus.RESOLVING ||
+        currentTask.status == DownloadStatus.SAVING ||
+        currentTask.status == DownloadStatus.PROCESSING ||
         currentTask.status == DownloadStatus.ERROR
     )
 
@@ -2761,6 +2872,16 @@ private fun QueueTab(
         }
         list.addAll(queuedTasks)
         list
+    }
+
+    LaunchedEffect(targetTaskId, activeJobs) {
+        if (!targetTaskId.isNullOrBlank()) {
+            val idx = activeJobs.indexOfFirst { it.id == targetTaskId }
+            if (idx >= 0) {
+                listState.animateScrollToItem(idx + 1)
+                onClearTargetTaskId()
+            }
+        }
     }
 
     // Rapid action debounce to avoid multiple triggers on fast taps
@@ -2866,6 +2987,7 @@ private fun QueueTab(
     } else {
         // ── POPULATED MONOCHROME QUEUE LIST ──
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
@@ -2873,6 +2995,14 @@ private fun QueueTab(
         ) {
             // Subtle Queue Header
             item(key = "queue_header_section") {
+                val cancellableCount = activeJobs.count {
+                    it.status == DownloadStatus.DOWNLOADING ||
+                    it.status == DownloadStatus.QUEUED ||
+                    it.status == DownloadStatus.RESOLVING ||
+                    it.status == DownloadStatus.SAVING ||
+                    it.status == DownloadStatus.PROCESSING
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2886,7 +3016,8 @@ private fun QueueTab(
                         color = TextSecondary
                     )
 
-                    if (activeJobs.size > 1 || currentTask.status == DownloadStatus.DOWNLOADING) {
+                    // Hide redundant bulk action when only 1 job can be cancelled
+                    if (cancellableCount > 1) {
                         TextButton(
                             onClick = {
                                 HapticUtil.mediumClick(context)
@@ -2895,7 +3026,7 @@ private fun QueueTab(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "Cancel all",
+                                text = "Cancel all ($cancellableCount)",
                                 style = Typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = TextTertiary
                             )
@@ -2960,268 +3091,317 @@ private fun QueueJobRow(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val displayTitle = task.displayTitle
+
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = SurfaceDark,
         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
         modifier = modifier.fillMaxWidth()
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(14.dp)
         ) {
-            // 1. Artwork Thumbnail (16:9 ratio, 76dp x 44dp)
-            Box(
-                modifier = Modifier
-                    .size(76.dp, 44.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(SurfaceElevated),
-                contentAlignment = Alignment.Center
+            // ─────────────────────────────────────────────────────────────
+            // 1. TOP ROW: Thumbnail + Two-line Title + Per-job Action
+            // ─────────────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
             ) {
-                if (task.thumbnail.isNotBlank()) {
-                    AsyncImage(
-                        model = task.thumbnail,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        imageVector = if (task.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
-                        contentDescription = null,
-                        tint = TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                // Format or duration pill badge overlay
-                val badgeText = if (task.isAudio) "MP3" else if (task.format.contains("1080")) "1080p" else if (task.format.contains("720")) "720p" else if (task.duration.isNotBlank()) task.duration else ""
-                if (badgeText.isNotBlank()) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(2.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(Color.Black.copy(alpha = 0.75f))
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                    ) {
-                        Text(
-                            text = badgeText,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextCrisp
+                // 1a. Artwork Thumbnail (16:9 ratio, 80dp x 46dp) with secondary duration
+                Box(
+                    modifier = Modifier
+                        .size(80.dp, 46.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(SurfaceElevated),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (task.thumbnail.isNotBlank()) {
+                        AsyncImage(
+                            model = task.thumbnail,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (task.isAudio) Icons.Default.MusicNote else Icons.Default.Download,
+                            contentDescription = null,
+                            tint = TextSecondary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
-                }
-            }
 
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // 2. Info Column (weight = 1f ensures fixed bounds without shifting adjacent controls)
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                // Media Title (strongest emphasis, max 2 lines)
-                Text(
-                    text = task.title.ifBlank { "Media Download" },
-                    style = Typography.titleSmall.copy(fontSize = 14.sp),
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextCrisp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Real state in plain language
-                when (task.status) {
-                    DownloadStatus.DOWNLOADING -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                    // Secondary media duration badge overlay (bottom-right of thumbnail)
+                    if (task.duration.isNotBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(3.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color.Black.copy(alpha = 0.82f))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
                         ) {
                             Text(
-                                text = if (task.progress >= 0 && task.totalBytes > 0) {
-                                    "${task.progress}% • ${formatByteSize(task.bytesDownloaded)} / ${formatByteSize(task.totalBytes)}"
-                                } else if (task.bytesDownloaded > 0) {
-                                    "${formatByteSize(task.bytesDownloaded)} transferred"
-                                } else {
-                                    "Downloading..."
-                                },
-                                style = Typography.bodySmall.copy(fontSize = 12.sp),
-                                color = TextSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
+                                text = task.duration,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextCrisp
                             )
-                            if (task.speed.isNotBlank()) {
-                                Text(
-                                    text = " • ${task.speed}",
-                                    style = Typography.bodySmall.copy(fontSize = 12.sp),
-                                    color = TextTertiary,
-                                    maxLines = 1
-                                )
-                            }
                         }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        // Progress indicator (steady 4dp height)
-                        val animatedProgress by animateFloatAsState(
-                            targetValue = if (task.progress >= 0) task.progress / 100f else 0f,
-                            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
-                            label = "queue_progress"
-                        )
-                        LinearProgressIndicator(
-                            progress = { animatedProgress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp)),
-                            color = TextCrisp,
-                            trackColor = SurfaceHighlight
-                        )
-                    }
-
-                    DownloadStatus.RESOLVING -> {
-                        Text(
-                            text = "Preparing download...",
-                            style = Typography.bodySmall.copy(fontSize = 12.sp),
-                            color = TextSecondary
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp)),
-                            color = TextCrisp,
-                            trackColor = SurfaceHighlight
-                        )
-                    }
-
-                    DownloadStatus.ERROR -> {
-                        Text(
-                            text = sanitizeQueueErrorMessage(task.error),
-                            style = Typography.bodySmall.copy(fontSize = 12.sp),
-                            color = StatusError,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    DownloadStatus.QUEUED -> {
-                        val subText = buildString {
-                            append("Waiting")
-                            if (queuePosition > 0) {
-                                append(" • #$queuePosition in queue")
-                            }
-                            if (task.totalBytes > 0) {
-                                append(" • ~${formatByteSize(task.totalBytes)}")
-                            }
-                        }
-                        Text(
-                            text = subText,
-                            style = Typography.bodySmall.copy(fontSize = 12.sp),
-                            color = TextTertiary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    else -> {
-                        Text(
-                            text = "Waiting",
-                            style = Typography.bodySmall.copy(fontSize = 12.sp),
-                            color = TextTertiary
-                        )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-            // 3. Action Slot
-            when (task.status) {
-                DownloadStatus.ERROR -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
+                // 1b. Title Column (Two-line title + Format Badge)
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = displayTitle,
+                        style = Typography.titleSmall.copy(fontSize = 13.5.sp, lineHeight = 18.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextCrisp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(3.dp))
+
+                    val qualityBadge = formatQualityBadge(task)
+                    if (qualityBadge.isNotBlank()) {
                         Surface(
-                            onClick = {
-                                HapticUtil.mediumClick(context)
-                                onRetry()
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            color = SurfaceElevated,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
-                            modifier = Modifier.defaultMinSize(minHeight = 32.dp)
+                            shape = RoundedCornerShape(4.dp),
+                            color = SurfaceHighlight
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                            Text(
+                                text = qualityBadge,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextCrisp,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // 1c. Per-job Action (Top-Right)
+                when (task.status) {
+                    DownloadStatus.ERROR -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                onClick = {
+                                    HapticUtil.mediumClick(context)
+                                    onRetry()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                color = SurfaceElevated,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderDark),
+                                modifier = Modifier.defaultMinSize(minHeight = 32.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = "Retry download $displayTitle",
+                                        tint = TextCrisp,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Retry",
+                                        style = Typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                        color = TextCrisp
+                                    )
+                                }
+                            }
+
+                            IconButton(
+                                onClick = {
+                                    HapticUtil.lightClick(context)
+                                    onDismiss()
+                                },
+                                modifier = Modifier.size(36.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Retry download ${task.title}",
-                                    tint = TextCrisp,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Retry",
-                                    style = Typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = TextCrisp
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Dismiss error for $displayTitle",
+                                    tint = TextTertiary,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
+                    }
 
+                    DownloadStatus.DOWNLOADING, DownloadStatus.RESOLVING, DownloadStatus.SAVING, DownloadStatus.PROCESSING -> {
                         IconButton(
-                            onClick = {
-                                HapticUtil.lightClick(context)
-                                onDismiss()
-                            },
+                            onClick = onCancel,
                             modifier = Modifier.size(36.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Dismiss error for ${task.title}",
+                                contentDescription = "Cancel download $displayTitle",
                                 tint = TextTertiary,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
                     }
+
+                    DownloadStatus.QUEUED -> {
+                        IconButton(
+                            onClick = onCancel,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Remove $displayTitle from queue",
+                                tint = TextTertiary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    else -> {}
+                }
+            }
+
+            // ─────────────────────────────────────────────────────────────
+            // 2. BELOW TOP ROW: Full Card Width Progress Bar & Transfer Details
+            // ─────────────────────────────────────────────────────────────
+            when (task.status) {
+                DownloadStatus.DOWNLOADING -> {
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    val effectiveProgress = if (task.totalBytes > 0L) {
+                        task.progress / 100f
+                    } else {
+                        -1f
+                    }
+
+                    val animatedProgress by animateFloatAsState(
+                        targetValue = if (effectiveProgress >= 0f) effectiveProgress else 0f,
+                        animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                        label = "queue_card_progress"
+                    )
+
+                    // Continuous read-only progress bar across FULL card width (NO detached dot)
+                    ContinuousProgressBar(
+                        progress = if (effectiveProgress >= 0f) animatedProgress else -1f,
+                        height = 4.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Transfer Details (Full Card Width, multi-line wrapping so no measurement is ellipsized)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        // Line 1: Percentage & Transferred / Total bytes + Speed
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val byteString = if (task.totalBytes > 0L) {
+                                "${formatByteSize(task.bytesDownloaded)} / ${formatByteSize(task.totalBytes)}"
+                            } else {
+                                "${formatByteSize(task.bytesDownloaded)} transferred"
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (task.totalBytes > 0L) {
+                                    Text(
+                                        text = "${task.progress}%",
+                                        style = Typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                                        color = TextCrisp
+                                    )
+                                    Text(
+                                        text = " • ",
+                                        style = Typography.bodySmall.copy(fontSize = 12.sp),
+                                        color = TextTertiary
+                                    )
+                                }
+                                Text(
+                                    text = byteString,
+                                    style = Typography.bodySmall.copy(fontSize = 12.sp),
+                                    color = TextSecondary
+                                )
+                            }
+
+                            if (task.speed.isNotBlank()) {
+                                Text(
+                                    text = task.speed,
+                                    style = Typography.bodySmall.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                                    color = TextCrisp
+                                )
+                            }
+                        }
+
+                        // Line 2: ETA when engine has a meaningful estimate
+                        val meaningfulEta = formatShortEta(task.eta)
+                        if (meaningfulEta.isNotBlank()) {
+                            Text(
+                                text = "Estimated time: $meaningfulEta",
+                                style = Typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = TextTertiary
+                            )
+                        }
+                    }
                 }
 
-                DownloadStatus.DOWNLOADING, DownloadStatus.RESOLVING -> {
-                    IconButton(
-                        onClick = onCancel,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cancel download ${task.title}",
-                            tint = TextTertiary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                DownloadStatus.PROCESSING, DownloadStatus.SAVING -> {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    ContinuousProgressBar(progress = -1f, height = 4.dp, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (task.status == DownloadStatus.SAVING) "Saving to storage..." else "Processing media...",
+                        style = Typography.bodySmall.copy(fontSize = 12.sp),
+                        color = TextSecondary
+                    )
+                }
+
+                DownloadStatus.RESOLVING -> {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    ContinuousProgressBar(progress = -1f, height = 4.dp, modifier = Modifier.fillMaxWidth())
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Preparing download...",
+                        style = Typography.bodySmall.copy(fontSize = 12.sp),
+                        color = TextSecondary
+                    )
+                }
+
+                DownloadStatus.ERROR -> {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = sanitizeQueueErrorMessage(task.error),
+                        style = Typography.bodySmall.copy(fontSize = 12.sp),
+                        color = StatusError
+                    )
                 }
 
                 DownloadStatus.QUEUED -> {
-                    IconButton(
-                        onClick = onCancel,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Remove ${task.title} from queue",
-                            tint = TextTertiary,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val subText = buildString {
+                        append("Waiting")
+                        if (queuePosition > 0) append(" • #$queuePosition in queue")
+                        if (task.totalBytes > 0) append(" • ~${formatByteSize(task.totalBytes)}")
                     }
+                    Text(
+                        text = subText,
+                        style = Typography.bodySmall.copy(fontSize = 12.sp),
+                        color = TextTertiary
+                    )
                 }
 
                 else -> {}

@@ -72,6 +72,8 @@ enum class DownloadStatus {
     QUEUED,
     RESOLVING,
     DOWNLOADING,
+    PROCESSING,
+    SAVING,
     SUCCESS,
     ERROR,
     CANCELLED
@@ -97,7 +99,17 @@ data class DownloadTask(
     val isAudio: Boolean = false,
     val startTime: String? = null,
     val endTime: String? = null
-)
+) {
+    val displayTitle: String
+        get() {
+            if (title.isNotBlank()) return title
+            if (!filePath.isNullOrBlank()) {
+                val name = java.io.File(filePath).nameWithoutExtension
+                if (name.isNotBlank()) return name
+            }
+            return "Media Download"
+        }
+}
 
 fun formatMediaDuration(raw: String?): String {
     if (raw.isNullOrBlank()) return ""
