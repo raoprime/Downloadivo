@@ -1969,29 +1969,30 @@ def test_no_resume_file(request: Request):
 @app.api_route("/api/version", methods=["GET", "HEAD"])
 def get_app_version():
     tunnel_url = _get_public_tunnel_url()
-    apk_url = f"{tunnel_url}/Downloadivo_v6.apk" if tunnel_url else "https://downloadivo.vercel.app/Downloadivo_v6.apk"
+    apk_url = f"{tunnel_url}/Downloadivo_v6.0.1.apk" if tunnel_url else "https://downloadivo.vercel.app/Downloadivo_v6.0.1.apk"
     return {
-        "version_code": 600,
-        "version_name": "6.0.0",
+        "version_code": 601,
+        "version_name": "6.0.1",
         "min_version_code": 10,
         "apk_url": apk_url,
         "changelog": (
-            "- Downloadivo v6.0.0 Major Release\n"
+            "- Downloadivo v6.0.1 Security & Progress Patch\n"
+            "- Security Patch: Anti-SSRF Protection & Path Traversal Guards\n"
+            "- HTTP Security Headers: nosniff, SAMEORIGIN, XSS & strict-origin\n"
+            "- Fix Active Download Progress: Eliminated 99% freeze & dynamic stream accounting\n"
+            "- Safe Explorer Execution: Fully sanitized list-based system commands\n"
             "- Gemini Liquid Glow: Ethereal dynamic fluid ambient background\n"
-            "- In-App Update: Clean percentage progress & reliable direct installer\n"
-            "- Fix 0% Download Lag: Live dynamic byte progress bar\n"
-            "- Fix Black Frame & Stutter: Direct progressive CDN download with zero latency\n"
-            "- Auto-Sync Cloud Engine: Zero-setup connection recovery\n"
-            "- Ultra-Fast Player: Zero-lag buffering for reels & short videos\n"
-            "- Playlist Auto-Play & Next/Prev playback controls\n"
-            "- Spotify Pro: High-fidelity audio extraction\n"
-            "- Library Contrast Fix: Crisp readable text & buttons"
+            "- In-App Update: Direct reliable package installer & live percentage\n"
+            "- Offline Auto-Sync: 'Waiting for connection' auto-recovery\n"
+            "- Settings: Dedicated 'Download on Wi-Fi only' toggle"
         ),
         "force_update": False,
         "release_date": datetime.now().strftime("%Y-%m-%d"),
     }
 
 
+@app.api_route("/Downloadivo_v6.0.1.apk", methods=["GET", "HEAD"])
+@app.api_route("/downloadivo-v6.0.1.apk", methods=["GET", "HEAD"])
 @app.api_route("/Downloadivo_v6.apk", methods=["GET", "HEAD"])
 @app.api_route("/Downloadivo-v6.0.0.apk", methods=["GET", "HEAD"])
 @app.api_route("/downloadivo.apk", methods=["GET", "HEAD"])
@@ -2008,15 +2009,19 @@ def get_app_version():
 @app.api_route("/downloadivo-v5.0.0.apk", methods=["GET", "HEAD"])
 def download_app_apk():
     apk_paths = [
+        ASSETS_DIR / "Downloadivo_v6.0.1.apk",
+        Path(__file__).parent / "Downloadivo_v6.0.1.apk",
         ASSETS_DIR / "Downloadivo_v6.apk",
         Path(__file__).parent / "Downloadivo_v6.apk",
+        ASSETS_DIR / "downloadivo-v6.0.1.apk",
         ASSETS_DIR / "downloadivo-v6.0.0.apk",
-        ASSETS_DIR / "downloadivo-v6.0.apk",
         ASSETS_DIR / "downloadivo.apk",
+        Path(__file__).parent / "assets" / "Downloadivo_v6.0.1.apk",
         Path(__file__).parent / "assets" / "Downloadivo_v6.apk",
         Path(__file__).parent / "assets" / "downloadivo-v6.0.0.apk",
         Path(__file__).parent / "assets" / "downloadivo.apk",
         Path(__file__).parent / "downloadivo.apk",
+        Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\Downloadivo_v6.apk"),
         Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\downloadivo-v6.0.0.apk"),
         Path(r"C:\Users\DELL\.gemini\antigravity\brain\1da08657-5391-4375-be16-0f191d65d02b\downloadivo.apk"),
     ]
@@ -2024,7 +2029,7 @@ def download_app_apk():
         if p.exists() and p.stat().st_size > 1000000:
             return FileResponse(
                 path=str(p),
-                filename="Downloadivo_v6.apk",
+                filename="Downloadivo_v6.0.1.apk",
                 media_type="application/vnd.android.package-archive",
                 headers={
                     "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
