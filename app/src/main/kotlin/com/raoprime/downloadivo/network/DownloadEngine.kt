@@ -1,9 +1,11 @@
 package com.raoprime.downloadivo.network
 
+import com.raoprime.downloadivo.BuildConfig
 import com.raoprime.downloadivo.model.FormatOption
 import com.raoprime.downloadivo.model.MediaInfo
 import com.raoprime.downloadivo.model.AppUpdateInfo
 import com.raoprime.downloadivo.model.formatMediaDuration
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -11,10 +13,22 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.io.RandomAccessFile
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+
+data class StreamTransferMetrics(
+    val initialSavedBytes: Long,
+    val offsetRequested: Long,
+    val bytesTransferredThisSession: Long,
+    val totalFileBytes: Long,
+    val isResumeSupported: Boolean,
+    val wasCleanRestart: Boolean
+)
 
 object DownloadEngine {
 
@@ -472,6 +486,267 @@ object DownloadEngine {
         }
     }
 
+    fun parseContentRangeStart(contentRange: String?): Long? {
+        if (contentRange.isNullOrBlank()) return null
+        val clean = contentRange.trim().removePrefix("bytes").trim()
+        val dashIdx = clean.indexOf('-')
+        if (dashIdx != -1) {
+            return clean.substring(0, dashIdx).trim().toLongOrNull()
+        }
+        return null
+    }
+
+    fun parseContentRangeTotal(contentRange: String?): Long? {
+        if (contentRange.isNullOrBlank()) return null
+        val slashIdx = contentRange.indexOf('/')
+        if (slashIdx != -1) {
+            val totalPart = contentRange.substring(slashIdx + 1).trim()
+            if (totalPart != "*") {
+                return totalPart.toLongOrNull()
+            }
+        }
+        return null
+    }
+
+    suspend fun downloadStreamToFile(
+        targetUrl: String,
+        format: String,
+        destinationFile: File,
+        startTime: String? = null,
+        endTime: String? = null,
+        expectedTotalBytes: Long = 0L,
+        onProgress: (percent: Int, speedStr: String, etaStr: String, currentBytes: Long, totalBytes: Long) -> Unit,
+        isCancelled: () -> Boolean = { false },
+        isPaused: () -> Boolean = { false },
+        onTransferMetrics: ((StreamTransferMetrics) -> Unit)? = null
+    ): Result<Long> = withContext(Dispatchers.IO) {
+        try {
+            syncLatestTunnelUrl()
+        } catch (_: Exception) {}
+
+        destinationFile.parentFile?.mkdirs()
+
+        val cleanUrl = sanitizeUrl(targetUrl)
+        val isDirectHttp = cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")
+        val isDirectEndpoint = isDirectHttp && (
+            cleanUrl.contains("/test/") ||
+            cleanUrl.endsWith(".apk") ||
+            cleanUrl.contains(".mp4") ||
+            cleanUrl.contains(".mp3") ||
+            cleanUrl.contains("/downloadivo.apk") ||
+            cleanUrl.contains("/stream")
+        )
+
+        val bases = (listOfNotNull(
+            directStreamBaseUrl.takeIf { it.isNotBlank() },
+            activeBaseUrl
+        ) + getCandidateBaseUrls()).filter { it.startsWith("http") }.distinct()
+
+        val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
+        val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
+
+        var lastError: Exception? = null
+        val maxAttempts = 3
+        var attempt = 0
+
+        while (attempt < maxAttempts) {
+            attempt++
+            if (isCancelled()) {
+                return@withContext Result.failure(CancellationException("Download cancelled by user"))
+            }
+            if (isPaused()) {
+                return@withContext Result.failure(IOException("Download paused by user"))
+            }
+
+            val streamUrl = if (isDirectEndpoint) {
+                cleanUrl
+            } else {
+                val currentBase = bases[(attempt - 1) % bases.size]
+                var u = "$currentBase/stream?url=$encodedUrl&format=$encodedFmt"
+                if (!startTime.isNullOrBlank() && !endTime.isNullOrBlank()) {
+                    val encStart = URLEncoder.encode(startTime.trim(), "UTF-8")
+                    val encEnd = URLEncoder.encode(endTime.trim(), "UTF-8")
+                    u += "&start_time=$encStart&end_time=$encEnd"
+                }
+                u
+            }
+
+            val initialSavedBytes = if (destinationFile.exists()) destinationFile.length() else 0L
+            var offsetToRequest = initialSavedBytes
+
+            val reqBuilder = Request.Builder()
+                .url(streamUrl)
+                .header("User-Agent", "Downloadivo-Android/${BuildConfig.VERSION_NAME}")
+                .header("Accept-Encoding", "identity")
+
+            if (offsetToRequest > 0L) {
+                reqBuilder.header("Range", "bytes=$offsetToRequest-")
+            }
+
+            var raf: RandomAccessFile? = null
+            var response: okhttp3.Response? = null
+
+            try {
+                response = streamClient.newCall(reqBuilder.build()).execute()
+
+                // Check 416 Range Not Satisfiable (e.g. file size exceeded or changed)
+                if (response.code == 416 && offsetToRequest > 0L) {
+                    response.close()
+                    destinationFile.delete()
+                    destinationFile.createNewFile()
+                    offsetToRequest = 0L
+                    continue
+                }
+
+                if (!response.isSuccessful && response.code != 206) {
+                    val code = response.code
+                    response.close()
+                    throw IOException("Server returned HTTP error code: $code")
+                }
+
+                val body = response.body ?: throw IOException("No response body received")
+                val is206 = response.code == 206
+                val contentRange = response.header("Content-Range")
+                val parsedStart = contentRange?.let { parseContentRangeStart(it) }
+
+                var isResumeSupported = false
+                var wasCleanRestart = false
+
+                if (offsetToRequest > 0L) {
+                    if (is206 && (parsedStart == null || parsedStart == offsetToRequest)) {
+                        // Server honored Range request from the exact requested offset
+                        isResumeSupported = true
+                        wasCleanRestart = false
+                        raf = RandomAccessFile(destinationFile, "rw")
+                        raf.seek(offsetToRequest)
+                    } else {
+                        // Server sent 200 OK or range mismatch -> Clean restart path
+                        // Never append a full response to a partial file
+                        isResumeSupported = false
+                        wasCleanRestart = true
+                        destinationFile.delete()
+                        destinationFile.createNewFile()
+                        offsetToRequest = 0L
+                        raf = RandomAccessFile(destinationFile, "rw")
+                        raf.setLength(0L)
+                        raf.seek(0L)
+                    }
+                } else {
+                    // Fresh initial download
+                    isResumeSupported = true
+                    wasCleanRestart = false
+                    if (!destinationFile.exists()) destinationFile.createNewFile()
+                    raf = RandomAccessFile(destinationFile, "rw")
+                    raf.setLength(0L)
+                    raf.seek(0L)
+                }
+
+                // Determine total expected length
+                val parsedTotal = contentRange?.let { parseContentRangeTotal(it) }
+                    ?: response.header("X-Expected-Total-Bytes")?.toLongOrNull()
+                    ?: response.header("X-Total-Content-Length")?.toLongOrNull()
+                    ?: if (is206) (offsetToRequest + body.contentLength()) else body.contentLength()
+                val totalLength = if (parsedTotal > 0L) parsedTotal else (if (expectedTotalBytes > 0L) expectedTotalBytes else -1L)
+
+                val inputStream = body.byteStream()
+                val buffer = ByteArray(64 * 1024)
+                var bytesRead: Int
+                var bytesThisSession = 0L
+                var lastTime = System.currentTimeMillis()
+                var bytesSinceLastTime = 0L
+
+                val currentFileLength = destinationFile.length()
+                if (totalLength > 0L) {
+                    val initialPercent = ((currentFileLength * 100) / totalLength).toInt().coerceIn(0, 99)
+                    onProgress(initialPercent, "", "", currentFileLength, totalLength)
+                }
+
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    if (isCancelled()) {
+                        raf.close()
+                        response.close()
+                        throw CancellationException("Download cancelled by user")
+                    }
+                    if (isPaused()) {
+                        raf.close()
+                        response.close()
+                        throw IOException("Download paused by user")
+                    }
+
+                    raf.write(buffer, 0, bytesRead)
+                    bytesThisSession += bytesRead
+                    bytesSinceLastTime += bytesRead
+
+                    val now = System.currentTimeMillis()
+                    val timeDiff = now - lastTime
+                    if (timeDiff >= 400) {
+                        val currentLen = destinationFile.length()
+                        val speedBytesPerSec = (bytesSinceLastTime * 1000.0) / timeDiff
+                        val speedStr = formatSpeed(speedBytesPerSec)
+                        val percent = if (totalLength > 0L) {
+                            ((currentLen * 100) / totalLength).toInt().coerceIn(1, 99)
+                        } else {
+                            -1
+                        }
+                        val etaStr = if (totalLength > currentLen && speedBytesPerSec > 1024) {
+                            val remainingBytes = totalLength - currentLen
+                            val secondsLeft = (remainingBytes / speedBytesPerSec).toLong()
+                            formatEta(secondsLeft)
+                        } else {
+                            ""
+                        }
+                        onProgress(percent, speedStr, etaStr, currentLen, totalLength)
+                        lastTime = now
+                        bytesSinceLastTime = 0L
+                    }
+                }
+
+                raf.fd.sync()
+                raf.close()
+                raf = null
+                response.close()
+                response = null
+
+                val finalLength = destinationFile.length()
+                if (totalLength > 0L && finalLength < totalLength) {
+                    throw IOException("Premature EOF: received $finalLength of $totalLength bytes")
+                }
+
+                if (finalLength > 0L) {
+                    onProgress(100, "Done", "0s", finalLength, finalLength)
+                    onTransferMetrics?.invoke(
+                        StreamTransferMetrics(
+                            initialSavedBytes = initialSavedBytes,
+                            offsetRequested = offsetToRequest,
+                            bytesTransferredThisSession = bytesThisSession,
+                            totalFileBytes = finalLength,
+                            isResumeSupported = isResumeSupported,
+                            wasCleanRestart = wasCleanRestart
+                        )
+                    )
+                    return@withContext Result.success(finalLength)
+                }
+            } catch (e: Exception) {
+                lastError = e
+                try { raf?.close() } catch (_: Exception) {}
+                try { response?.close() } catch (_: Exception) {}
+
+                if (e is CancellationException) {
+                    throw e
+                }
+                if (e.message?.contains("paused", ignoreCase = true) == true) {
+                    throw e
+                }
+
+                if (attempt < maxAttempts) {
+                    kotlinx.coroutines.delay(1000L)
+                }
+            }
+        }
+
+        Result.failure(lastError ?: IOException("Download failed after $maxAttempts attempts"))
+    }
+
     suspend fun downloadStream(
         targetUrl: String,
         format: String,
@@ -481,143 +756,28 @@ object DownloadEngine {
         outputStream: OutputStream,
         onProgress: (percent: Int, speedStr: String, etaStr: String, currentBytes: Long, totalBytes: Long) -> Unit
     ): Result<Long> = withContext(Dispatchers.IO) {
+        val tempFile = File.createTempFile("dld_stream_", ".tmp")
         try {
-            syncLatestTunnelUrl()
-        } catch (_: Exception) {}
-
-        val bases = (listOfNotNull(
-            directStreamBaseUrl.takeIf { it.isNotBlank() },
-            activeBaseUrl
-        ) + getCandidateBaseUrls()).filter { it.startsWith("http") }.distinct()
-
-        var totalBytesRead = 0L
-        var totalLength = if (expectedTotalBytes > 0L) expectedTotalBytes else -1L
-        var lastError: Exception? = null
-        val maxAttempts = 4
-        var attempt = 0
-
-        val cleanUrl = sanitizeUrl(targetUrl)
-        val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
-        val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
-
-        while (attempt < maxAttempts) {
-            attempt++
-            val currentBase = bases[(attempt - 1) % bases.size]
-            var streamUrl = "$currentBase/stream?url=$encodedUrl&format=$encodedFmt"
-
-            if (!startTime.isNullOrBlank() && !endTime.isNullOrBlank()) {
-                val encStart = URLEncoder.encode(startTime.trim(), "UTF-8")
-                val encEnd = URLEncoder.encode(endTime.trim(), "UTF-8")
-                streamUrl += "&start_time=$encStart&end_time=$encEnd"
-            }
-
-            try {
-                val reqBuilder = Request.Builder()
-                    .url(streamUrl)
-                    .header("User-Agent", "Downloadivo-Android/6.0.0")
-                    .header("Accept-Encoding", "identity")
-
-                if (totalBytesRead > 0L) {
-                    reqBuilder.header("Range", "bytes=$totalBytesRead-")
+            val res = downloadStreamToFile(
+                targetUrl = targetUrl,
+                format = format,
+                destinationFile = tempFile,
+                startTime = startTime,
+                endTime = endTime,
+                expectedTotalBytes = expectedTotalBytes,
+                onProgress = onProgress
+            )
+            if (res.isSuccess) {
+                tempFile.inputStream().use { input ->
+                    input.copyTo(outputStream)
                 }
-
-                val response = streamClient.newCall(reqBuilder.build()).execute()
-
-                if (!response.isSuccessful && response.code != 206) {
-                    val code = response.code
-                    response.close()
-                    throw Exception("Server returned HTTP error code: $code")
-                }
-
-                val body = response.body ?: throw Exception("No response body received")
-                val isPartial = response.code == 206 || response.header("Content-Range") != null
-
-                if (totalLength <= 0L) {
-                    val headerLength = response.header("X-Expected-Total-Bytes")?.toLongOrNull()
-                        ?: response.header("X-Total-Content-Length")?.toLongOrNull()
-                        ?: response.header("Content-Length")?.toLongOrNull()
-                        ?: body.contentLength()
-                    if (headerLength != null && headerLength > 0L) {
-                        totalLength = if (isPartial) totalBytesRead + headerLength else headerLength
-                    } else if (expectedTotalBytes > 0L) {
-                        totalLength = expectedTotalBytes
-                    } else {
-                        val fmtL = format.lowercase()
-                        totalLength = when {
-                            fmtL.contains("mp3") || fmtL.contains("audio") || fmtL.contains("m4a") -> 7 * 1024 * 1024L
-                            fmtL.contains("1080") -> 50 * 1024 * 1024L
-                            fmtL.contains("720") -> 25 * 1024 * 1024L
-                            fmtL.contains("480") -> 15 * 1024 * 1024L
-                            fmtL.contains("4k") || fmtL.contains("2160") -> 200 * 1024 * 1024L
-                            else -> 35 * 1024 * 1024L
-                        }
-                    }
-                }
-
-                val inputStream: InputStream = body.byteStream()
-                val buffer = ByteArray(256 * 1024)
-                var bytesRead: Int
-
-                var lastTime = System.currentTimeMillis()
-                var bytesSinceLastTime = 0L
-
-                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    outputStream.write(buffer, 0, bytesRead)
-                    totalBytesRead += bytesRead
-                    bytesSinceLastTime += bytesRead
-
-                    val now = System.currentTimeMillis()
-                    val timeDiff = now - lastTime
-
-                    if (timeDiff >= 400) {
-                        val speedBytesPerSec = (bytesSinceLastTime * 1000.0) / timeDiff
-                        val speedStr = formatSpeed(speedBytesPerSec)
-
-                        val percent = if (totalLength > 0L) {
-                            ((totalBytesRead * 100) / totalLength).toInt().coerceIn(1, 99)
-                        } else {
-                            -1 // Unknown total size -> indeterminate progress
-                        }
-
-                        val etaStr = if (totalLength > totalBytesRead && speedBytesPerSec > 1024) {
-                            val remainingBytes = totalLength - totalBytesRead
-                            val secondsLeft = (remainingBytes / speedBytesPerSec).toLong()
-                            formatEta(secondsLeft)
-                        } else {
-                            ""
-                        }
-
-                        onProgress(percent, speedStr, etaStr, totalBytesRead, totalLength)
-
-                        lastTime = now
-                        bytesSinceLastTime = 0L
-                    }
-                }
-
                 outputStream.flush()
-                response.close()
-
-                if (totalBytesRead > 0L) {
-                    onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
-                    return@withContext Result.success(totalBytesRead)
-                }
-            } catch (e: Exception) {
-                lastError = e
-                if (totalBytesRead > 0L && (e is java.io.EOFException || e.message?.contains("unexpected end of stream", ignoreCase = true) == true || e.message?.contains("closed", ignoreCase = true) == true)) {
-                    outputStream.flush()
-                    onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
-                    return@withContext Result.success(totalBytesRead)
-                }
-                kotlinx.coroutines.delay(1000L)
+                Result.success(tempFile.length())
+            } else {
+                res
             }
-        }
-
-        if (totalBytesRead > 0L) {
-            outputStream.flush()
-            onProgress(100, "Done", "0s", totalBytesRead, totalBytesRead)
-            Result.success(totalBytesRead)
-        } else {
-            Result.failure(lastError ?: Exception("Download aborted or zero bytes received"))
+        } finally {
+            try { tempFile.delete() } catch (_: Exception) {}
         }
     }
 
@@ -641,7 +801,7 @@ object DownloadEngine {
                         val json = org.json.JSONObject(body)
                         return@withContext AppUpdateInfo(
                             versionCode = json.optInt("version_code", 0),
-                            versionName = json.optString("version_name", "5.2"),
+                            versionName = json.optString("version_name", "6.0.0"),
                             apkUrl = json.optString("apk_url", ""),
                             changelog = json.optString("changelog", "Performance improvements & bug fixes"),
                             forceUpdate = json.optBoolean("force_update", false)

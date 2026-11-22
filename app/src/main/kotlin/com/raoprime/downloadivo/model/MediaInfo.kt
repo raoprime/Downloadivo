@@ -72,6 +72,8 @@ enum class DownloadStatus {
     QUEUED,
     RESOLVING,
     DOWNLOADING,
+    WAITING_FOR_CONNECTION,
+    PAUSED,
     PROCESSING,
     SAVING,
     SUCCESS,

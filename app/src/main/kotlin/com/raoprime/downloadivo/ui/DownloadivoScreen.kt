@@ -1176,7 +1176,9 @@ private fun ActiveDownloadFloatingBar(
         if (currentTask.status == DownloadStatus.DOWNLOADING ||
             currentTask.status == DownloadStatus.RESOLVING ||
             currentTask.status == DownloadStatus.SAVING ||
-            currentTask.status == DownloadStatus.PROCESSING
+            currentTask.status == DownloadStatus.PROCESSING ||
+            currentTask.status == DownloadStatus.WAITING_FOR_CONNECTION ||
+            currentTask.status == DownloadStatus.PAUSED
         ) {
             val displayTitle = currentTask.displayTitle
             val effectiveProgress = if (currentTask.totalBytes > 0L) {
@@ -1252,6 +1254,20 @@ private fun ActiveDownloadFloatingBar(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 when (currentTask.status) {
+                                    DownloadStatus.WAITING_FOR_CONNECTION -> {
+                                        Text(
+                                            text = "Waiting for connection",
+                                            style = Typography.labelMedium.copy(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
+                                            color = Color(0xFFF59E0B)
+                                        )
+                                    }
+                                    DownloadStatus.PAUSED -> {
+                                        Text(
+                                            text = "Paused",
+                                            style = Typography.labelMedium.copy(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold),
+                                            color = TextSecondary
+                                        )
+                                    }
                                     DownloadStatus.SAVING -> {
                                         Text(
                                             text = "Saving to storage...",
@@ -3241,7 +3257,7 @@ private fun QueueJobRow(
                         }
                     }
 
-                    DownloadStatus.DOWNLOADING, DownloadStatus.RESOLVING, DownloadStatus.SAVING, DownloadStatus.PROCESSING -> {
+                    DownloadStatus.DOWNLOADING, DownloadStatus.RESOLVING, DownloadStatus.SAVING, DownloadStatus.PROCESSING, DownloadStatus.WAITING_FOR_CONNECTION, DownloadStatus.PAUSED -> {
                         IconButton(
                             onClick = onCancel,
                             modifier = Modifier.size(36.dp)
@@ -3402,6 +3418,64 @@ private fun QueueJobRow(
                         style = Typography.bodySmall.copy(fontSize = 12.sp),
                         color = TextTertiary
                     )
+                }
+
+                DownloadStatus.WAITING_FOR_CONNECTION -> {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val effectiveProgress = if (task.totalBytes > 0L) task.progress / 100f else -1f
+                    ContinuousProgressBar(
+                        progress = effectiveProgress,
+                        height = 4.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Waiting for connection",
+                            style = Typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                            color = Color(0xFFF59E0B)
+                        )
+                        if (task.bytesDownloaded > 0L) {
+                            Text(
+                                text = "${formatByteSize(task.bytesDownloaded)} saved",
+                                style = Typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                }
+
+                DownloadStatus.PAUSED -> {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val effectiveProgress = if (task.totalBytes > 0L) task.progress / 100f else -1f
+                    ContinuousProgressBar(
+                        progress = effectiveProgress,
+                        height = 4.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Paused",
+                            style = Typography.labelMedium.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                            color = TextSecondary
+                        )
+                        if (task.bytesDownloaded > 0L) {
+                            Text(
+                                text = "${formatByteSize(task.bytesDownloaded)} saved",
+                                style = Typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = TextSecondary
+                            )
+                        }
+                    }
                 }
 
                 else -> {}
@@ -4411,6 +4485,11 @@ private fun SettingsTab(
         mutableStateOf(prefs.getBoolean("cloud_turbo_enabled", true))
     }
 
+    // Preference: Download on Wi-Fi only
+    var isWifiOnly by rememberSaveable {
+        mutableStateOf(prefs.getBoolean("download_only_on_wifi", false))
+    }
+
     // Default base URL
     val defaultUrl = "https://downloadivo.vercel.app"
 
@@ -4565,6 +4644,57 @@ private fun SettingsTab(
                         ),
                         modifier = Modifier.semantics {
                             contentDescription = "Cloud Turbo acceleration"
+                        }
+                    )
+                }
+
+                HorizontalDivider(color = BorderHairline)
+
+                // Wi-Fi Only Toggle Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            val next = !isWifiOnly
+                            isWifiOnly = next
+                            prefs.edit().putBoolean("download_only_on_wifi", next).apply()
+                        }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Download on Wi-Fi only",
+                            style = Typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            ),
+                            color = TextCrisp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Wait for Wi-Fi connection before transferring media",
+                            style = Typography.bodySmall.copy(fontSize = 11.5.sp),
+                            color = TextSecondary
+                        )
+                    }
+
+                    Switch(
+                        checked = isWifiOnly,
+                        onCheckedChange = { next ->
+                            isWifiOnly = next
+                            prefs.edit().putBoolean("download_only_on_wifi", next).apply()
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = CanvasDark,
+                            checkedTrackColor = TextCrisp,
+                            uncheckedThumbColor = TextTertiary,
+                            uncheckedTrackColor = SurfaceElevated
+                        ),
+                        modifier = Modifier.semantics {
+                            contentDescription = "Download on Wi-Fi only"
                         }
                     )
                 }
