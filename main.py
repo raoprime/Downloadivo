@@ -1844,7 +1844,7 @@ def health_check():
     return {
         "status": "healthy",
         "service": "Downloadivo",
-        "version": CURRENT_VERSION_NAME,
+        "version": "6.0.0",
         "timestamp": datetime.now().isoformat(),
     }
 
