@@ -195,15 +195,13 @@ fun UpdateDialog(
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            val curMb = String.format("%.1f", state.currentBytes / (1024.0 * 1024.0))
-                            val totMb = String.format("%.1f", state.totalBytes / (1024.0 * 1024.0))
-                            val pct = (state.progress * 100).toInt()
+                            val pct = (state.progress * 100).toInt().coerceIn(0, 100)
 
                             Text(
-                                text = "Downloading update: $pct% ($curMb MB / $totMb MB)",
-                                fontSize = 12.sp,
+                                text = "Downloading update: $pct%",
+                                fontSize = 13.sp,
                                 color = Color.White,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }

@@ -1334,7 +1334,7 @@ fun GeminiLiquidAmbientGlow(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 20000, easing = LinearEasing),
+            animation = tween(durationMillis = 18000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "phase1"
@@ -1344,17 +1344,17 @@ fun GeminiLiquidAmbientGlow(
         initialValue = 360f,
         targetValue = 0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 26000, easing = LinearEasing),
+            animation = tween(durationMillis = 24000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "phase2"
     )
 
     val breathPulse by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.12f,
+        initialValue = 0.90f,
+        targetValue = 1.15f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 8000, easing = FastOutSlowInEasing),
+            animation = tween(durationMillis = 7000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "breathPulse"
@@ -1368,16 +1368,17 @@ fun GeminiLiquidAmbientGlow(
         val rad1 = Math.toRadians(phase1.toDouble())
         val rad2 = Math.toRadians(phase2.toDouble())
 
-        // 1. Celestial Deep Blue / Electric Cyan Liquid Blob
-        val c1X = (w * 0.5f) + (w * 0.22f * Math.cos(rad1).toFloat())
-        val c1Y = (h * 0.36f) + (h * 0.12f * Math.sin(rad1).toFloat())
-        val r1 = (w * 0.65f) * breathPulse
+        // 1. Celestial Deep Blue / Electric Cyan Liquid Blob (Gemini Signature)
+        val c1X = (w * 0.5f) + (w * 0.28f * Math.cos(rad1).toFloat())
+        val c1Y = (h * 0.38f) + (h * 0.14f * Math.sin(rad1).toFloat())
+        val r1 = (w * 0.72f) * breathPulse
 
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0xFF2563EB).copy(alpha = 0.12f), // Gemini Electric Blue
-                    Color(0xFF00E5FF).copy(alpha = 0.05f), // Fluid Cyan
+                    Color(0xFF1E40AF).copy(alpha = 0.32f), // Gemini Deep Blue
+                    Color(0xFF00E5FF).copy(alpha = 0.20f), // Fluid Electric Cyan
+                    Color(0xFF0284C7).copy(alpha = 0.08f),
                     Color.Transparent
                 ),
                 center = androidx.compose.ui.geometry.Offset(c1X, c1Y),
@@ -1387,16 +1388,17 @@ fun GeminiLiquidAmbientGlow(
             center = androidx.compose.ui.geometry.Offset(c1X, c1Y)
         )
 
-        // 2. Cosmic Violet / Soft Orchid Liquid Blob
-        val c2X = (w * 0.5f) + (w * 0.24f * Math.sin(rad2).toFloat())
-        val c2Y = (h * 0.42f) + (h * 0.14f * Math.cos(rad2).toFloat())
-        val r2 = (w * 0.70f) * (2.04f - breathPulse)
+        // 2. Cosmic Violet / Deep Orchid Liquid Blob
+        val c2X = (w * 0.5f) + (w * 0.30f * Math.sin(rad2).toFloat())
+        val c2Y = (h * 0.44f) + (h * 0.16f * Math.cos(rad2).toFloat())
+        val r2 = (w * 0.75f) * (2.05f - breathPulse)
 
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0xFF7C3AED).copy(alpha = 0.10f), // Deep Violet
-                    Color(0xFFEC4899).copy(alpha = 0.04f), // Soft Orchid
+                    Color(0xFF7C3AED).copy(alpha = 0.28f), // Deep Violet
+                    Color(0xFFC026D3).copy(alpha = 0.16f), // Magenta / Orchid
+                    Color(0xFFF43F5E).copy(alpha = 0.06f),
                     Color.Transparent
                 ),
                 center = androidx.compose.ui.geometry.Offset(c2X, c2Y),
@@ -1406,15 +1408,16 @@ fun GeminiLiquidAmbientGlow(
             center = androidx.compose.ui.geometry.Offset(c2X, c2Y)
         )
 
-        // 3. Ambient Central Fluid Shimmer
+        // 3. Central Luminous Azure / Indigo Core
         val c3X = w * 0.5f
-        val c3Y = h * 0.38f
-        val r3 = w * 0.55f
+        val c3Y = h * 0.40f
+        val r3 = (w * 0.60f) * breathPulse
 
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
-                    Color(0xFF38BDF8).copy(alpha = 0.06f),
+                    Color(0xFF38BDF8).copy(alpha = 0.18f), // Electric Sky
+                    Color(0xFF4F46E5).copy(alpha = 0.10f), // Deep Indigo
                     Color.Transparent
                 ),
                 center = androidx.compose.ui.geometry.Offset(c3X, c3Y),
@@ -1486,20 +1489,26 @@ private fun HomeDownloaderTab(
     if (resolvedInfo == null && !isResolving) {
         val restingScrollState = rememberScrollState()
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .imePadding()
-                .verticalScroll(restingScrollState),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
+            // Fullscreen liquid glow anchored to screen coordinates
             GeminiLiquidAmbientGlow(modifier = Modifier.fillMaxSize())
-            Column(
+
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .imePadding()
+                    .verticalScroll(restingScrollState),
+                contentAlignment = Alignment.Center
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                 // ═══════════════════════════════════════════════════════════════
                 // 1. BRAND EMBLEM & INPUT FIELD UNIFIED CONTROL GROUP
                 // ═══════════════════════════════════════════════════════════════
@@ -1835,7 +1844,8 @@ private fun HomeDownloaderTab(
                 }
             }
         }
-    } else {
+    }
+} else {
         Box(modifier = Modifier.fillMaxSize()) {
             GeminiLiquidAmbientGlow(modifier = Modifier.fillMaxSize())
             Column(

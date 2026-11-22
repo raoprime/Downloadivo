@@ -2,9 +2,13 @@ package com.raoprime.downloadivo.network
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
+import android.util.Log
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.raoprime.downloadivo.BuildConfig
 import com.raoprime.downloadivo.model.AppUpdateInfo
@@ -118,6 +122,18 @@ object UpdateManager {
             inputStream.close()
             response.close()
 
+            // Also mirror a copy in public Downloads directory so user always has the APK
+            try {
+                val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (publicDownloads != null && (publicDownloads.exists() || publicDownloads.mkdirs())) {
+                    val publicApk = File(publicDownloads, "Downloadivo-v${updateInfo.versionName}.apk")
+                    apkFile.copyTo(publicApk, overwrite = true)
+                    Log.i("UpdateManager", "Mirrored APK to ${publicApk.absolutePath}")
+                }
+            } catch (e: Exception) {
+                Log.w("UpdateManager", "Could not mirror APK to Downloads: ${e.message}")
+            }
+
             _updateState.value = UpdateState.ReadyToInstall(apkFile, updateInfo)
             apkFile
         } catch (e: Exception) {
@@ -136,11 +152,17 @@ object UpdateManager {
             // On Android 8.0 (Oreo) and above, check if unknown app sources are allowed
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (!context.packageManager.canRequestPackageInstalls()) {
+                    Toast.makeText(
+                        context,
+                        "Please allow 'Install unknown apps' permission to update Downloadivo",
+                        Toast.LENGTH_LONG
+                    ).show()
                     val settingsIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
                         data = Uri.parse("package:${context.packageName}")
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                     context.startActivity(settingsIntent)
+                    return false
                 }
             }
 
@@ -154,6 +176,14 @@ object UpdateManager {
                 setDataAndType(apkUri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+
+            // Explicitly grant URI permission to installer package handlers
+            val resInfoList = context.packageManager.queryIntentActivities(installIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            for (resolveInfo in resInfoList) {
+                val packageName = resolveInfo.activityInfo.packageName
+                context.grantUriPermission(packageName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
             context.startActivity(installIntent)
