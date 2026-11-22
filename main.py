@@ -147,6 +147,45 @@ def _cleanup_temp_files(stem_prefix: str):
     except Exception:
         pass
 
+def _is_safe_file_path(target: Path, base_dir: Path = DOWNLOAD_DIR) -> bool:
+    """Security check: guarantees path cannot traverse outside base directory."""
+    try:
+        resolved_base = base_dir.resolve()
+        resolved_target = target.resolve()
+        return resolved_base in resolved_target.parents or resolved_base == resolved_target
+    except Exception:
+        return False
+
+def _is_ssrf_safe_url(raw_url: str, is_remote: bool) -> bool:
+    """Prevents Server-Side Request Forgery by rejecting localhost, loopback, and private IPv4/IPv6 ranges for remote clients."""
+    if not is_remote:
+        return True
+    try:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(raw_url.strip())
+        if parsed.scheme not in ("http", "https"):
+            return False
+        host = parsed.hostname
+        if not host:
+            return False
+        if host.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+        try:
+            ip = ipaddress.ip_address(host)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified:
+                return False
+        except ValueError:
+            try:
+                resolved_ip = socket.gethostbyname(host)
+                ip = ipaddress.ip_address(resolved_ip)
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified:
+                    return False
+            except Exception:
+                pass
+        return True
+    except Exception:
+        return False
+
 def _update_ytdlp():
     """Execute yt-dlp update and return (success, message)."""
     try:
@@ -342,6 +381,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
@@ -2090,6 +2138,8 @@ async def get_info(request: Request, url: Optional[str] = None):
         raise HTTPException(status_code=400, detail="URL is required")
 
     url = target_url.strip()
+    if not _is_ssrf_safe_url(url, _is_remote_request(request)):
+        raise HTTPException(status_code=400, detail="Restricted target URL: Private network access not allowed.")
     url_lower = url.lower()
 
     # Fast Cache Hit (Near 0ms instant response)
@@ -2471,8 +2521,8 @@ async def start_download(req: DownloadRequest, request: Request):
 
     extracted = _extract_urls(req.url)
     target_url = extracted[0] if extracted else req.url.strip()
-    if not target_url:
-        raise HTTPException(status_code=400, detail="Please provide a valid media URL")
+    if not target_url or not _is_ssrf_safe_url(target_url, _is_remote_request(request)):
+        raise HTTPException(status_code=400, detail="Please provide a valid, safe public media URL")
     task_id = _create_task(target_url, req.format)
     _executor.submit(_run_task_worker, task_id, target_url, req.format, req.start_time, req.end_time)
     return {"task_id": task_id}
@@ -2496,6 +2546,8 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
 
     extracted = _extract_urls(url)
     target_url = extracted[0] if extracted else url.strip()
+    if not target_url or not _is_ssrf_safe_url(target_url, _is_remote_request(request) if request else False):
+        raise HTTPException(status_code=400, detail="Restricted target URL: Private network access not allowed.")
 
     info = _get_cached_info(target_url, require_formats=True) or _get_cached_info(url, require_formats=True)
     if not info:
@@ -3036,7 +3088,7 @@ def download_file_by_id(task_id: str, request: Request):
                             target_path = item
                             break
 
-    if not target_path or not target_path.exists():
+    if not target_path or not target_path.exists() or not _is_safe_file_path(target_path):
         raise HTTPException(status_code=404, detail="File not found or has expired from server disk")
 
     ext = target_path.suffix.lower()
@@ -3096,13 +3148,13 @@ def open_file(req: FileActionRequest, request: Request):
                         target_path = item
                         break
 
-    if not target_path or not target_path.exists():
+    if not target_path or not target_path.exists() or not _is_safe_file_path(target_path):
         raise HTTPException(status_code=404, detail="File could not be found on disk")
 
     try:
         os.startfile(str(target_path.resolve()))
     except Exception:
-        subprocess.Popen(f'explorer "{target_path.resolve()}"', shell=True)
+        subprocess.Popen(["explorer", str(target_path.resolve())])
     return {"ok": True, "path": str(target_path)}
 
 
@@ -3129,9 +3181,9 @@ def open_folder(request: Request, req: Optional[FileActionRequest] = None):
                             target_path = item
                             break
 
-    if target_path and target_path.exists():
-        # Open Windows Explorer and highlight the exact downloaded file!
-        subprocess.Popen(f'explorer /select,"{str(target_path.resolve())}"', shell=True)
+    if target_path and target_path.exists() and _is_safe_file_path(target_path):
+        # Open Windows Explorer and highlight the exact downloaded file safely without shell=True
+        subprocess.Popen(["explorer", f"/select,{str(target_path.resolve())}"])
     else:
         os.startfile(str(DOWNLOAD_DIR.resolve()))
     return {"ok": True}
