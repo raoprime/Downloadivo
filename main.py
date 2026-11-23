@@ -156,10 +156,8 @@ def _is_safe_file_path(target: Path, base_dir: Path = DOWNLOAD_DIR) -> bool:
     except Exception:
         return False
 
-def _is_ssrf_safe_url(raw_url: str, is_remote: bool) -> bool:
-    """Prevents Server-Side Request Forgery by rejecting localhost, loopback, and private IPv4/IPv6 ranges for remote clients."""
-    if not is_remote:
-        return True
+def _is_ssrf_safe_url(raw_url: str, is_remote: bool = True) -> bool:
+    """Prevents Server-Side Request Forgery and recursive loopback deadlocks."""
     try:
         import urllib.parse
         parsed = urllib.parse.urlparse(raw_url.strip())
@@ -168,20 +166,22 @@ def _is_ssrf_safe_url(raw_url: str, is_remote: bool) -> bool:
         host = parsed.hostname
         if not host:
             return False
-        if host.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        # Always block loopback and local ports to prevent recursive self-deadlocks
+        if host.lower() in ("localhost", "127.0.0.1", "::1", "0.0.0.0", "metadata.google.internal"):
             return False
-        try:
-            ip = ipaddress.ip_address(host)
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified:
-                return False
-        except ValueError:
+        if is_remote:
             try:
-                resolved_ip = socket.gethostbyname(host)
-                ip = ipaddress.ip_address(resolved_ip)
+                ip = ipaddress.ip_address(host)
                 if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified:
                     return False
-            except Exception:
-                pass
+            except ValueError:
+                try:
+                    resolved_ip = socket.gethostbyname(host)
+                    ip = ipaddress.ip_address(resolved_ip)
+                    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified:
+                        return False
+                except Exception:
+                    pass
         return True
     except Exception:
         return False
@@ -283,7 +283,7 @@ def _get_real_client_ip(request: Request) -> str:
         return x_forwarded.split(",")[0].strip()
     return request.client.host if request.client else "127.0.0.1"
 
-def _check_rate_limit(client_ip: str, max_requests: int = 60, window_seconds: int = 60, is_local_exempt: bool = False) -> bool:
+def _check_rate_limit(client_ip: str, max_requests: int = 60, window_seconds: int = 60, is_local_exempt: bool = True) -> bool:
     """Sliding-window rate limiter per client IP address."""
     if is_local_exempt and client_ip in ["127.0.0.1", "localhost", "::1"]:
         return True
@@ -382,14 +382,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.middleware("http")
-async def add_security_headers(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "SAMEORIGIN"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    return response
+class SecurityHeadersMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                raw_headers = list(message.get("headers", []))
+                raw_headers.append((b"x-content-type-options", b"nosniff"))
+                raw_headers.append((b"x-frame-options", b"SAMEORIGIN"))
+                raw_headers.append((b"x-xss-protection", b"1; mode=block"))
+                raw_headers.append((b"referrer-policy", b"strict-origin-when-cross-origin"))
+                message = {**message, "headers": raw_headers}
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
@@ -498,19 +512,31 @@ def _canonical_key(url_str: str) -> str:
     return url_str.strip()
 
 
-def _get_cached_info(url_str: str, require_formats: bool = False) -> Optional[dict]:
+def _get_cached_info(url_str: str, require_formats: bool = False, require_response: bool = False) -> Optional[dict]:
     if not url_str:
         return None
     now = time.time()
     clean_k = url_str.strip()
-    canon_k = _canonical_key(clean_k)
-    keys = (canon_k, clean_k) if require_formats else (canon_k, clean_k, f"RESP:{canon_k}", f"RESP:{clean_k}")
+    is_resp_request = clean_k.startswith("RESP:") or require_response
+    if is_resp_request:
+        raw_target = clean_k[5:] if clean_k.startswith("RESP:") else clean_k
+        canon_target = _canonical_key(raw_target)
+        keys = (f"RESP:{canon_target}", f"RESP:{raw_target}", clean_k)
+    elif require_formats:
+        canon_k = _canonical_key(clean_k)
+        keys = (canon_k, clean_k)
+    else:
+        canon_k = _canonical_key(clean_k)
+        keys = (f"RESP:{canon_k}", f"RESP:{clean_k}", canon_k, clean_k)
+
     with _INFO_CACHE_LOCK:
         for k in keys:
             if k in _INFO_CACHE:
                 ts, val = _INFO_CACHE[k]
                 if now - ts < _INFO_CACHE_TTL:
                     if require_formats and (not isinstance(val, dict) or not val.get("formats")):
+                        continue
+                    if is_resp_request and (not isinstance(val, dict) or "resolutions" not in val):
                         continue
                     return val
                 del _INFO_CACHE[k]
@@ -520,16 +546,24 @@ def _get_cached_info(url_str: str, require_formats: bool = False) -> Optional[di
 def _set_cached_info(url_str: str, info_dict: dict):
     if not url_str or not info_dict:
         return
+    now = time.time()
     clean_k = url_str.strip()
-    canon_k = _canonical_key(clean_k)
+    is_resp = clean_k.startswith("RESP:") or "resolutions" in info_dict
+    raw_target = clean_k[5:] if clean_k.startswith("RESP:") else clean_k
+    canon_target = _canonical_key(raw_target)
     with _INFO_CACHE_LOCK:
         if len(_INFO_CACHE) > 500:
             oldest_k = min(_INFO_CACHE.keys(), key=lambda k: _INFO_CACHE[k][0])
             del _INFO_CACHE[oldest_k]
-        now = time.time()
-        _INFO_CACHE[clean_k] = (now, info_dict)
-        if canon_k:
-            _INFO_CACHE[canon_k] = (now, info_dict)
+        if is_resp:
+            resp_k = clean_k if clean_k.startswith("RESP:") else f"RESP:{clean_k}"
+            _INFO_CACHE[resp_k] = (now, info_dict)
+            if canon_target:
+                _INFO_CACHE[f"RESP:{canon_target}"] = (now, info_dict)
+        else:
+            _INFO_CACHE[clean_k] = (now, info_dict)
+            if canon_target:
+                _INFO_CACHE[canon_target] = (now, info_dict)
 
 
 def _safe_content_disposition(filename: str, ext: str) -> str:
@@ -2987,14 +3021,16 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
                 else:
                     start_b, end_b = 0, expected_video_bytes - 1
                 resp_headers["Content-Range"] = f"bytes {start_b}-{end_b}/{expected_video_bytes}"
-                resp_headers["Content-Length"] = str(end_b - start_b + 1)
 
         def iter_stream():
             import requests
-            with requests.get(chosen_url, stream=True, timeout=30, headers=p_headers) as r:
-                for chunk in r.iter_content(chunk_size=1024 * 256):
-                    if chunk:
-                        yield chunk
+            try:
+                with requests.get(chosen_url, stream=True, timeout=30, headers=p_headers) as r:
+                    for chunk in r.iter_content(chunk_size=1024 * 256):
+                        if chunk:
+                            yield chunk
+            except (ConnectionError, Exception):
+                pass
 
         return StreamingResponse(
             iter_stream(),
