@@ -33,10 +33,10 @@ data class StreamTransferMetrics(
 object DownloadEngine {
 
     // Default Edge Cloud Endpoint (Can be overridden in Settings)
-    var activeBaseUrl: String = "https://budgets-rate-thereby-custom.trycloudflare.com"
+    var activeBaseUrl: String = "https://downloadivo.onrender.com"
 
     // High-Speed Direct Tunnel Endpoint
-    var directStreamBaseUrl: String = "https://budgets-rate-thereby-custom.trycloudflare.com"
+    var directStreamBaseUrl: String = "https://downloadivo.onrender.com"
 
     // Cloud Turbo Acceleration Preference (Persisted in SharedPreferences)
     var isCloudTurboEnabled: Boolean = true
@@ -125,6 +125,7 @@ object DownloadEngine {
         if (directStreamBaseUrl.isNotBlank()) list.add(directStreamBaseUrl.trim().trimEnd('/'))
         if (activeBaseUrl.isNotBlank()) list.add(activeBaseUrl.trim().trimEnd('/'))
         list.add("https://budgets-rate-thereby-custom.trycloudflare.com")
+        list.add("https://downloadivo.onrender.com")
         list.add("https://downloadivo.vercel.app")
         return list.filter { it.startsWith("http") }.distinct()
     }
@@ -140,7 +141,7 @@ object DownloadEngine {
             if (resp.isSuccessful) {
                 val url = resp.body?.string()?.trim()
                 resp.close()
-                if (!url.isNullOrBlank() && url.startsWith("https://") && url.contains("trycloudflare.com")) {
+                if (!url.isNullOrBlank() && url.startsWith("https://")) {
                     try {
                         val healthReq = Request.Builder().url("$url/health").get().build()
                         val healthResp = apiClient.newCall(healthReq).execute()
