@@ -318,51 +318,79 @@ def _get_public_tunnel_url() -> str:
     url_file = Path(__file__).parent / "tunnel_url.txt"
     cf_log = Path(__file__).parent / "cloudflared.log"
 
-    # Prefer the explicit tunnel_url.txt first
-    if url_file.exists():
-        try:
-            txt = url_file.read_text("utf-8").strip()
-            if txt.startswith("http") and "trycloudflare.com" in txt:
-                with _tunnel_lock:
-                    _cached_tunnel_url = txt
-                return txt
-        except Exception:
-            pass
-
-    # Fallback to cloudflared.log
+    # 1. Check cloudflared.log for latest tunnel creation
+    active_tunnel = ""
     if cf_log.exists():
         try:
             content = cf_log.read_text("utf-8", errors="ignore")
             matches = re.findall(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", content)
             if matches:
-                url = matches[-1]
-                with _tunnel_lock:
-                    _cached_tunnel_url = url
-                return url
+                active_tunnel = matches[-1]
         except Exception:
             pass
-    return ""
+
+    # 2. Check tunnel_url.txt
+    file_tunnel = ""
+    if url_file.exists():
+        try:
+            txt = url_file.read_text("utf-8").strip()
+            if txt.startswith("http") and "trycloudflare.com" in txt:
+                file_tunnel = txt
+        except Exception:
+            pass
+
+    # Prefer active tunnel from live cloudflared log, then stored file tunnel
+    chosen = active_tunnel or file_tunnel
+    if chosen:
+        if active_tunnel and active_tunnel != file_tunnel:
+            try:
+                url_file.write_text(active_tunnel, encoding="utf-8")
+            except Exception:
+                pass
+        with _tunnel_lock:
+            _cached_tunnel_url = chosen
+        return chosen
+
+    # 3. Fallback to permanent cloud deployment URLs (e.g. Render / Hugging Face / Vercel)
+    cloud_url = os.environ.get("RENDER_EXTERNAL_URL") or os.environ.get("PUBLIC_URL") or "https://downloadivo.onrender.com"
+    return cloud_url.rstrip("/")
 
 def _cleanup_old_files_daemon():
-    """Background storage pruner and tunnel sync daemon."""
+    """Background storage pruner, tunnel sync, and cloud keep-alive daemon."""
+    last_keepalive = 0.0
     while True:
         try:
             time.sleep(15)  # Quick check every 15 seconds
             now = time.time()
             
-            # Sync tunnel URL if needed
+            # 1. Sync tunnel URL
             _get_public_tunnel_url()
 
+            # 2. Keep Render cloud instance warm so there is zero cold-start latency
+            if now - last_keepalive > 600:
+                last_keepalive = now
+                try:
+                    import urllib.request
+                    req = urllib.request.Request(
+                        "https://downloadivo.onrender.com/health",
+                        headers={"User-Agent": "Downloadivo-KeepAlive/6.0"}
+                    )
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        pass
+                except Exception:
+                    pass
+
+            # 3. Clean temporary files
             if DOWNLOAD_DIR.exists():
                 for f in DOWNLOAD_DIR.glob("*"):
                     if not f.is_file() or f.name.endswith(".gitkeep"):
                         continue
                     try:
                         age = now - f.stat().st_mtime
-                        # 1. Prune orphaned partial temp files older than 30 mins
+                        # Prune orphaned partial temp files older than 30 mins
                         if (f.name.endswith(".part") or f.name.endswith(".ytdl")) and age > 1800:
                             f.unlink(missing_ok=True)
-                        # 2. Only prune finished media files in cloud / ephemeral deployments
+                        # Only prune finished media files in cloud / ephemeral deployments
                         elif IS_EPHEMERAL and age > FILE_RETENTION_SECONDS:
                             f.unlink(missing_ok=True)
                     except Exception:
@@ -1945,7 +1973,7 @@ def health_check():
     return {
         "status": "healthy",
         "service": "Downloadivo",
-        "version": "6.0.0",
+        "version": "6.0.3",
         "timestamp": datetime.now().isoformat(),
     }
 
