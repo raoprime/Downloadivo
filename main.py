@@ -494,10 +494,28 @@ def _clean_filename(text: str) -> str:
     return "".join(c for c in text if c.isalnum() or c in (" ", "-", "_", ".", "(", ")")).strip()[:90]
 
 
+# Standard video resolution bitrates & size benchmarks
+_STANDARD_BITRATES = {4320: 35000, 2160: 18000, 1440: 9000, 1080: 4200, 720: 2200, 480: 1000, 360: 500, 240: 300, 144: 150}
+_STANDARD_DEFAULT_MB = {4320: 750, 2160: 350, 1440: 180, 1080: 85, 720: 42, 480: 22, 360: 12, 240: 7, 144: 4}
+
 # Video metadata cache with 30-minute TTL to accelerate streaming and eliminate duplicate extraction latency
 _INFO_CACHE: Dict[str, Tuple[float, dict]] = {}
 _INFO_CACHE_LOCK = threading.Lock()
 _INFO_CACHE_TTL = 1800.0  # 30 minutes
+
+
+def _normalize_media_url(url_str: str) -> str:
+    if not url_str:
+        return ""
+    clean = url_str.strip()
+    # Normalize Instagram URLs (handles /share/reel/, /share/p/, /share/r/, /reels/, /p/, /tv/, query params)
+    m_ig = re.search(r"instagram\.com/(?:[a-zA-Z0-9_\.]+/)?(?:reel|reels|p|tv|share/reel|share/p|share/r)/([A-Za-z0-9_-]+)", clean)
+    if m_ig:
+        shortcode = m_ig.group(1)
+        if "reel" in clean.lower():
+            return f"https://www.instagram.com/reel/{shortcode}/"
+        return f"https://www.instagram.com/p/{shortcode}/"
+    return clean
 
 
 def _canonical_key(url_str: str) -> str:
@@ -506,7 +524,7 @@ def _canonical_key(url_str: str) -> str:
     m = re.search(r"(?:v=|\/embed\/|\/shorts\/|youtu\.be\/|\/v\/)([a-zA-Z0-9_-]{11})", url_str)
     if m:
         return f"YT:{m.group(1)}"
-    m_ig = re.search(r"instagram\.com\/(?:p|reel|tv)\/([a-zA-Z0-9_-]+)", url_str)
+    m_ig = re.search(r"instagram\.com/(?:[a-zA-Z0-9_\.]+/)?(?:reel|reels|p|tv|share/reel|share/p|share/r)/([A-Za-z0-9_-]+)", url_str)
     if m_ig:
         return f"IG:{m_ig.group(1)}"
     return url_str.strip()
@@ -761,15 +779,16 @@ _insta_loader = instaloader.Instaloader(
 )
 
 def _get_instagram_shortcode(url: str) -> Optional[str]:
-    # Strictly match post/reel shortcodes: /p/<id>, /reel/<id>, /reels/<id>, /share/p/<id>, /tv/<id>
-    match = re.search(r"instagram\.com/(?:[a-zA-Z0-9_\.]+/)?(?:p|reel|reels|tv|share/p|share/reel)/([A-Za-z0-9_-]+)", url)
+    # Strictly match post/reel shortcodes: /p/<id>, /reel/<id>, /reels/<id>, /share/p/<id>, /share/reel/<id>, /share/r/<id>, /tv/<id>
+    match = re.search(r"instagram\.com/(?:[a-zA-Z0-9_\.]+/)?(?:p|reel|reels|tv|share/p|share/reel|share/r)/([A-Za-z0-9_-]+)", url)
     if match:
         return match.group(1)
     return None
 
 
 def _download_instagram(task_id: str, url: str, fmt: str):
-    shortcode = _get_instagram_shortcode(url) or "post"
+    clean_url = _normalize_media_url(url)
+    shortcode = _get_instagram_shortcode(clean_url) or "post"
     downloads[task_id].update({
         "status": "downloading",
         "progress": 20,
@@ -2185,7 +2204,8 @@ async def get_info(request: Request, url: Optional[str] = None):
     if not target_url:
         raise HTTPException(status_code=400, detail="URL is required")
 
-    url = target_url.strip()
+    target_url = _normalize_media_url(target_url.strip())
+    url = target_url
     if not _is_ssrf_safe_url(url, _is_remote_request(request)):
         raise HTTPException(status_code=400, detail="Restricted target URL: Private network access not allowed.")
     url_lower = url.lower()
@@ -2278,6 +2298,10 @@ async def get_info(request: Request, url: Optional[str] = None):
             ydl = yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True, 'no_warnings': True})
             ie = yt_dlp.extractor.instagram.InstagramIE(ydl)
             info = ie.extract(url)
+            _set_cached_info(url, info)
+            if target_url and target_url != url:
+                _set_cached_info(target_url, info)
+
             entries = info.get("entries") or [info]
             count = len(entries)
             is_carousel = count > 1
@@ -2301,7 +2325,7 @@ async def get_info(request: Request, url: Optional[str] = None):
             duration_str = f"{count} items" if is_carousel else ("Reel" if has_video else "Photo")
             resolutions = ["1080p Full HD"] if has_video else [f"Original HD ({count} Photos)"]
 
-            return {
+            resp_data = {
                 "title": title,
                 "thumbnail": thumb,
                 "duration": duration_str,
@@ -2314,9 +2338,44 @@ async def get_info(request: Request, url: Optional[str] = None):
                 "item_count": count,
                 "has_video": has_video,
                 "resolutions": resolutions,
+                "format_sizes": {"1080p": "1080p Full HD", "best": "Best Quality"},
+                "tunnel_url": _get_public_tunnel_url(),
+                "direct_stream_url": _get_public_tunnel_url(),
             }
+            _set_cached_info(f"RESP:{url}", resp_data)
+            if target_url and target_url != url:
+                _set_cached_info(f"RESP:{target_url}", resp_data)
+            return resp_data
         except Exception:
-            pass
+            # Fallback to Instagram oEmbed
+            try:
+                shortcode = _get_instagram_shortcode(url)
+                if shortcode:
+                    oembed_url = f"https://www.instagram.com/api/v1/oembed/?url=https://www.instagram.com/reel/{shortcode}/"
+                    req_o = urllib.request.Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req_o, timeout=5) as r_o:
+                        o_data = json.loads(r_o.read().decode())
+                        o_title = o_data.get("title") or f"Instagram Post by @{o_data.get('author_name', 'creator')}"
+                        o_author = o_data.get("author_name") or "Instagram"
+                        o_thumb = o_data.get("thumbnail_url") or ""
+                        resp_data = {
+                            "title": o_title[:80],
+                            "thumbnail": o_thumb,
+                            "duration": "Reel" if "reel" in url.lower() else "Photo",
+                            "uploader": f"@{o_author}",
+                            "extractor": "Instagram",
+                            "is_youtube": False,
+                            "is_8k": False,
+                            "is_4k": False,
+                            "resolutions": ["1080p Full HD"],
+                            "format_sizes": {"1080p": "1080p Full HD", "best": "Best Quality"},
+                            "tunnel_url": _get_public_tunnel_url(),
+                            "direct_stream_url": _get_public_tunnel_url(),
+                        }
+                        _set_cached_info(f"RESP:{url}", resp_data)
+                        return resp_data
+            except Exception:
+                pass
 
         # Second try Instaloader fallback
         shortcode = _get_instagram_shortcode(url)
@@ -2416,10 +2475,10 @@ async def get_info(request: Request, url: Optional[str] = None):
                         if tbr and duration and duration > 0:
                             sz = int(tbr * 1000 * duration / 8)
                         elif duration and duration > 0:
-                            kbps = standard_bitrates.get(h, 2500)
+                            kbps = _STANDARD_BITRATES.get(h, 2500)
                             sz = int(kbps * 1000 * duration / 8)
                         else:
-                            sz = standard_default_mb.get(h, 45) * 1024 * 1024
+                            sz = _STANDARD_DEFAULT_MB.get(h, 45) * 1024 * 1024
                     if f.get("acodec") == "none":
                         sz += best_a_size
                     if str(h) not in format_sizes or sz > format_sizes[str(h)]["bytes"]:
@@ -2433,13 +2492,13 @@ async def get_info(request: Request, url: Optional[str] = None):
 
             # Only populate standard resolution size estimates up to the actual max available height
             max_avail_h = max(heights) if heights else 720
-            for std_h, std_kbps in standard_bitrates.items():
+            for std_h, std_kbps in _STANDARD_BITRATES.items():
                 if std_h <= max_avail_h:
                     if str(std_h) not in format_sizes:
                         if duration and duration > 0:
                             calc_sz = int(std_kbps * 1000 * duration / 8)
                         else:
-                            calc_sz = standard_default_mb.get(std_h, 45) * 1024 * 1024
+                            calc_sz = _STANDARD_DEFAULT_MB.get(std_h, 45) * 1024 * 1024
                         if calc_sz >= 1024 * 1024 * 1024:
                             calc_lbl = f"{calc_sz / (1024 * 1024 * 1024):.2f} GB"
                         elif calc_sz >= 1024 * 1024:
@@ -2593,7 +2652,8 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
             format = "mp3"
 
     extracted = _extract_urls(url)
-    target_url = extracted[0] if extracted else url.strip()
+    raw_target = extracted[0] if extracted else url.strip()
+    target_url = _normalize_media_url(raw_target)
     if not target_url or not _is_ssrf_safe_url(target_url, _is_remote_request(request) if request else False):
         raise HTTPException(status_code=400, detail="Restricted target URL: Private network access not allowed.")
 
@@ -2919,11 +2979,12 @@ def stream_media(url: str, format: Optional[str] = None, start_time: Optional[st
     # Guaranteed realistic non-zero byte size for progress reporting on Android
     if not expected_video_bytes or expected_video_bytes <= 0:
         h = (chosen_v_fmt.get("height") if chosen_v_fmt else 0) or (chosen_prog_fmt.get("height") if chosen_prog_fmt else 0) or 720
-        kbps = standard_bitrates.get(h, 2500)
-        if dur_sec and dur_sec > 0:
-            expected_video_bytes = int((kbps * 1000 * dur_sec) / 8)
+        kbps = _STANDARD_BITRATES.get(h, 2500)
+        dur_val = info.get("duration") or 0
+        if dur_val and dur_val > 0:
+            expected_video_bytes = int((kbps * 1000 * dur_val) / 8)
         else:
-            expected_video_bytes = standard_default_mb.get(h, 35) * 1024 * 1024
+            expected_video_bytes = _STANDARD_DEFAULT_MB.get(h, 35) * 1024 * 1024
 
     video_headers = {
         "Content-Disposition": _safe_content_disposition(safe_name, "mp4"),
