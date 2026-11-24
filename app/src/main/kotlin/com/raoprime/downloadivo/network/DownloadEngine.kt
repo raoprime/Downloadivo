@@ -33,10 +33,10 @@ data class StreamTransferMetrics(
 object DownloadEngine {
 
     // Default Edge Cloud Endpoint (Can be overridden in Settings)
-    var activeBaseUrl: String = "https://sounds-hazards-mood-pee.trycloudflare.com"
+    var activeBaseUrl: String = "https://budgets-rate-thereby-custom.trycloudflare.com"
 
     // High-Speed Direct Tunnel Endpoint
-    var directStreamBaseUrl: String = "https://sounds-hazards-mood-pee.trycloudflare.com"
+    var directStreamBaseUrl: String = "https://budgets-rate-thereby-custom.trycloudflare.com"
 
     // Cloud Turbo Acceleration Preference (Persisted in SharedPreferences)
     var isCloudTurboEnabled: Boolean = true
@@ -110,7 +110,7 @@ object DownloadEngine {
         val list = mutableListOf<String>()
         if (directStreamBaseUrl.isNotBlank()) list.add(directStreamBaseUrl.trim().trimEnd('/'))
         if (activeBaseUrl.isNotBlank()) list.add(activeBaseUrl.trim().trimEnd('/'))
-        list.add("https://sounds-hazards-mood-pee.trycloudflare.com")
+        list.add("https://budgets-rate-thereby-custom.trycloudflare.com")
         list.add("https://downloadivo.vercel.app")
         return list.filter { it.startsWith("http") }.distinct()
     }
