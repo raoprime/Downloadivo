@@ -99,6 +99,20 @@ object DownloadEngine {
         return match.trimEnd('.', ',', '!', '?', ')', ']', '}', '>', ';', '"', '\'')
     }
 
+    fun normalizeMediaUrl(rawUrl: String): String {
+        val clean = sanitizeUrl(rawUrl)
+        val igMatch = Regex("""instagram\.com/(?:[a-zA-Z0-9_\.]+/)?(?:reel|reels|p|tv|share/reel|share/p|share/r)/([a-zA-Z0-9_-]+)""").find(clean)
+        if (igMatch != null) {
+            val shortcode = igMatch.groupValues[1]
+            return if (clean.contains("reel", ignoreCase = true)) {
+                "https://www.instagram.com/reel/$shortcode/"
+            } else {
+                "https://www.instagram.com/p/$shortcode/"
+            }
+        }
+        return clean
+    }
+
     fun extractAllUrls(rawText: String): List<String> {
         val regex = Regex("""https?://[^\s<>"'{}|\\^`]+""")
         return regex.findAll(rawText).map { match ->
@@ -171,7 +185,7 @@ object DownloadEngine {
     }
 
     suspend fun fetchMediaInfo(targetUrl: String): Result<MediaInfo> = withContext(Dispatchers.IO) {
-        val cleanUrl = sanitizeUrl(targetUrl)
+        val cleanUrl = normalizeMediaUrl(targetUrl)
         if (cleanUrl.isBlank()) {
             return@withContext Result.failure(Exception("Please provide a valid URL"))
         }
@@ -465,7 +479,7 @@ object DownloadEngine {
     }
 
     fun getStreamUrl(targetUrl: String, format: String = "best", audioLang: String? = null, online: Boolean = true): String {
-        val cleanUrl = sanitizeUrl(targetUrl)
+        val cleanUrl = normalizeMediaUrl(targetUrl)
         val encodedUrl = URLEncoder.encode(cleanUrl, "UTF-8")
         val encodedFmt = URLEncoder.encode(format.trim(), "UTF-8")
         val endpoint = if (format.trim().lowercase() in listOf("mp3", "m4a", "audio", "wav", "320k", "256k", "192k", "128k")) "stream.mp3" else "stream.mp4"
@@ -526,7 +540,7 @@ object DownloadEngine {
 
         destinationFile.parentFile?.mkdirs()
 
-        val cleanUrl = sanitizeUrl(targetUrl)
+        val cleanUrl = normalizeMediaUrl(targetUrl)
         val isDirectHttp = cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")
         val isDirectEndpoint = isDirectHttp && (
             cleanUrl.contains("/test/") ||

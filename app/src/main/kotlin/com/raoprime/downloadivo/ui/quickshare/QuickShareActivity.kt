@@ -953,7 +953,7 @@ private fun extractMediaKey(rawUrl: String): String {
     val ytMatch = Regex("""(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|shorts/|v/))([a-zA-Z0-9_-]{11})""").find(clean)
     if (ytMatch != null) return "yt:${ytMatch.groupValues[1]}"
 
-    val igMatch = Regex("""instagram\.com/(?:reel|p|tv)/([a-zA-Z0-9_-]+)""").find(clean)
+    val igMatch = Regex("""instagram\.com/(?:[a-zA-Z0-9_\.]+/)?(?:reel|reels|p|tv|share/reel|share/p|share/r)/([a-zA-Z0-9_-]+)""").find(clean)
     if (igMatch != null) return "ig:${igMatch.groupValues[1]}"
 
     val ttMatch = Regex("""tiktok\.com/(?:@[^/]+/video/|v/|t/)?([0-9a-zA-Z_-]+)""").find(clean)
